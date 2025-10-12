@@ -8,8 +8,11 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Static file serving for certificate downloads
+app.use('/uploads', express.static('src/uploads'));
 
 // Connect to Database
 connectDB();
@@ -21,7 +24,12 @@ app.get('/', (req, res) => {
 
 // API Routes
 const analysisRoutes = require('./api/routes/analysisRoutes');
+const eventRoutes = require('./api/routes/eventRoutes');
+const certificateRoutes = require('./api/routes/certificateRoutes');
+
 app.use('/api/analysis', analysisRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/certificates', certificateRoutes);
 
 const PORT = process.env.PORT || 5000;
 
