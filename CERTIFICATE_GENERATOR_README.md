@@ -113,6 +113,36 @@ GET /api/certificates/stats
 - `completion`: For completed courses or programs
 - `achievement`: For special achievements or awards
 
+## Dynamic Content
+
+The certificate system generates dynamic, context-aware descriptions based on:
+
+- **Event Name**: Automatically included in the certificate text
+- **Event Date**: Formatted and included in the description
+- **Certificate Type**: Different wording for participation, completion, or achievement
+- **Custom Messages**: Optional custom text that overrides the default description
+- **Institution**: Always includes "La Verdad Christian College - Apalit, Pampanga"
+
+### Default Descriptions by Type
+
+**Participation Certificate:**
+```
+"For outstanding participation and valuable contribution to [Event Name] held on [Date] at La Verdad Christian College - Apalit, Pampanga. This certificate recognizes dedication, enthusiasm, and commitment demonstrated throughout the event."
+```
+
+**Completion Certificate:**
+```
+"For successfully completing [Event Name] held on [Date] at La Verdad Christian College - Apalit, Pampanga. This certificate acknowledges the successful fulfillment of all requirements and active engagement throughout the program."
+```
+
+**Achievement Certificate:**
+```
+"For exceptional achievement and distinguished performance in [Event Name] held on [Date] at La Verdad Christian College - Apalit, Pampanga. This certificate honors the remarkable accomplishments and dedication shown during the event."
+```
+
+**Custom Message:**
+When `customMessage` is provided in the API request, it completely replaces the default description with your custom text.
+
 ## Certificate Design Features
 
 - **Professional Layout**: Landscape A4 format with gold decorative corner elements

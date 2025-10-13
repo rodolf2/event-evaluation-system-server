@@ -1,20 +1,20 @@
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
-const path = require('path');
-const nodemailer = require('nodemailer');
-const Certificate = require('../../models/Certificate');
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
+const nodemailer = require("nodemailer");
+const Certificate = require("../../models/Certificate");
 
 class CertificateService {
   constructor() {
     // Create uploads directory if it doesn't exist
-    this.certificatesDir = path.join(__dirname, '../../uploads/certificates');
+    this.certificatesDir = path.join(__dirname, "../../uploads/certificates");
     if (!fs.existsSync(this.certificatesDir)) {
       fs.mkdirSync(this.certificatesDir, { recursive: true });
     }
 
     // Configure nodemailer transporter
     this.transporter = nodemailer.createTransport({
-      service: 'gmail',
+      service: "gmail",
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
@@ -35,16 +35,20 @@ class CertificateService {
    * Create certificate PDF
    */
   async generateCertificatePDF(certificateData) {
-    const { user, event, certificateType, customMessage, certificateId } = certificateData;
+    const { user, event, certificateType, customMessage, certificateId } =
+      certificateData;
 
     return new Promise((resolve, reject) => {
       try {
-        const fileName = `${certificateId}_${user.name.replace(/\s+/g, '_')}.pdf`;
+        const fileName = `${certificateId}_${user.name.replace(
+          /\s+/g,
+          "_"
+        )}.pdf`;
         const filePath = path.join(this.certificatesDir, fileName);
 
         const doc = new PDFDocument({
-          size: 'A4',
-          layout: 'landscape',
+          size: "A4",
+          layout: "landscape",
           margin: 40,
         });
 
@@ -67,17 +71,16 @@ class CertificateService {
 
         doc.end();
 
-        stream.on('finish', () => {
+        stream.on("finish", () => {
           resolve({
             filePath,
             fileName,
           });
         });
 
-        stream.on('error', (error) => {
+        stream.on("error", (error) => {
           reject(error);
         });
-
       } catch (error) {
         reject(error);
       }
@@ -85,293 +88,352 @@ class CertificateService {
   }
 
   /**
-   * Draw certificate background and border
+   * Draw certificate background and border (replicates provided design)
    */
   drawCertificateBackground(doc) {
     const width = doc.page.width;
     const height = doc.page.height;
-    const margin = 40;
 
-    // Fill background with white
-    doc.rect(0, 0, width, height)
-       .fill('#FFFFFF');
-
-    // Draw decorative corner curves (top-left)
+    // White base
     doc.save();
-    doc.translate(margin, margin);
-    this.drawDecorativeCorner(doc, 0, 0, true);
+    doc.rect(0, 0, width, height).fill("#FFFFFF");
     doc.restore();
 
-    // Draw decorative corner curves (top-right)
+    // Top deep-blue wave
     doc.save();
-    doc.translate(width - margin, margin);
-    this.drawDecorativeCorner(doc, 0, 0, false);
+    doc
+      .moveTo(0, 0)
+      .lineTo(width, 0)
+      .lineTo(width, 110)
+      .bezierCurveTo(width * 0.72, 150, width * 0.28, 60, 0, 110)
+      .closePath();
+    doc.fillColor("#0f3b66").fill();
     doc.restore();
 
-    // Draw decorative corner curves (bottom-left)
+    // Top gold accent curve under blue
     doc.save();
-    doc.translate(margin, height - margin);
-    this.drawDecorativeCorner(doc, 0, 0, true);
+    doc
+      .moveTo(0, 40)
+      .lineTo(width, 0)
+      .lineTo(width, 80)
+      .bezierCurveTo(width * 0.7, 120, width * 0.3, 40, 0, 80)
+      .closePath();
+    doc.fillColor("#e9c779").fill();
     doc.restore();
 
-    // Draw decorative corner curves (bottom-right)
+    // Bottom deep-blue wave
     doc.save();
-    doc.translate(width - margin, height - margin);
-    this.drawDecorativeCorner(doc, 0, 0, false);
+    doc
+      .moveTo(0, height)
+      .lineTo(width, height)
+      .lineTo(width, height - 110)
+      .bezierCurveTo(
+        width * 0.72,
+        height - 150,
+        width * 0.28,
+        height - 60,
+        0,
+        height - 110
+      )
+      .closePath();
+    doc.fillColor("#0f3b66").fill();
     doc.restore();
 
-    // Draw main navy border
-    doc.lineWidth(4)
-       .rect(margin, margin, width - (2 * margin), height - (2 * margin))
-       .stroke('#1e3a8a');
+    // Bottom gold accent over blue
+    doc.save();
+    doc
+      .moveTo(0, height - 40)
+      .lineTo(width, height)
+      .lineTo(width, height - 80)
+      .bezierCurveTo(
+        width * 0.7,
+        height - 120,
+        width * 0.3,
+        height - 40,
+        0,
+        height - 80
+      )
+      .closePath();
+    doc.fillColor("#ecd6a3").fill();
+    doc.restore();
 
-    // Draw gold seal/medal on left side
-    this.drawGoldSeal(doc, 80, height / 2 - 40);
+    // Thin inner gold border inset
+    doc.save();
+    doc.lineWidth(3);
+    doc.strokeColor("#d7b65b");
+    const inset = 28;
+    doc.rect(inset, inset, width - inset * 2, height - inset * 2).stroke();
+    doc.restore();
+
+    // Draw gold ribbon seal (top-left)
+    // place at about x=70,y=80 to match design proportion on A4 landscape
+    this.drawGoldSeal(doc, 70, 80);
   }
 
   /**
-   * Draw decorative corner elements
+   * Draw gold ribbon seal (circle + ribbon) closely matching the uploaded image
+   */
+  drawGoldSeal(doc, x, y) {
+    // Colors
+    const shadow = "#c17b06";
+    const outer = "#f0b83a";
+    const inner = "#f8d67a";
+    const centerHighlight = "#fff6d9";
+
+    doc.save();
+
+    // little drop shadow behind badge
+    doc.circle(x + 3, y + 3, 36).fill(shadow);
+
+    // outer ring
+    doc.circle(x, y, 36).fill(outer);
+
+    // inner ring (slightly offset highlight)
+    doc.circle(x - 4, y - 4, 26).fill(inner);
+
+    // small center dot
+    doc.circle(x - 4, y - 4, 8).fill(outer);
+
+    // ribbon tails (two small downward ribbons)
+    doc
+      .moveTo(x - 18, y + 34)
+      .lineTo(x - 6, y + 70)
+      .lineTo(x + 6, y + 34)
+      .closePath();
+    doc.fillColor("#d6a638").fill();
+
+    doc
+      .moveTo(x + 6, y + 34)
+      .lineTo(x + 18, y + 70)
+      .lineTo(x + 30, y + 34)
+      .closePath();
+    doc.fillColor("#d6a638").fill();
+
+    // star-like lines (subtle)
+    doc.translate(x - 4, y - 4);
+    doc.strokeColor(outer).lineWidth(1.2);
+    for (let i = 0; i < 8; i++) {
+      doc.rotate((Math.PI * 2) / 8);
+      doc.moveTo(14, 0).lineTo(20, 0).stroke();
+    }
+    // restore translation and state
+    doc.restore();
+  }
+
+  /**
+   * Draw certificate content (title, name with underline, centered paragraph, signatories)
+   */
+  drawCertificateContent(doc, data) {
+    const {
+      userName,
+      eventName,
+      eventDate,
+      certificateType,
+      customMessage,
+      certificateId,
+      issuedDate,
+    } = data;
+
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+    const centerX = pageWidth / 2;
+
+    doc.save();
+
+    // Title lines
+    doc.font("Helvetica-Bold").fontSize(36).fillColor("#0f3b66");
+    // Big word CERTIFICATE centered (top area)
+    doc.text("CERTIFICATE", 0, 120, { align: "center", width: pageWidth });
+
+    // OF PARTICIPATION in blue uppercase under CERTIFICATE
+    doc.font("Helvetica").fontSize(18).fillColor("#0f3b66");
+    doc.text("OF PARTICIPATION", 0, 160, {
+      align: "center",
+      width: pageWidth,
+      characterSpacing: 1.2,
+    });
+
+    // Subtitle small
+    doc.font("Helvetica").fontSize(15).fillColor("#374151");
+    doc.text("This certificate is proudly presented to", 0, 220, {
+      align: "center",
+      width: pageWidth,
+    });
+
+    // Participant name (large, gold, bold) - centered
+    const nameText = (userName || "Participant Name").toUpperCase();
+    doc.font("Helvetica-Bold").fontSize(34).fillColor("#c89d28");
+
+    // we place name starting at y=195 to match design spacing
+    const nameY = 270;
+    doc.text(nameText, 0, nameY, { align: "center", width: pageWidth });
+
+    // Draw black underline centered directly under the name
+    const nameWidth = doc.widthOfString(nameText);
+    const underlineX = centerX - nameWidth / 2;
+    // place a little gap under the text
+    const underlineY = nameY + doc.currentLineHeight() + 6;
+    doc.save();
+    doc
+      .moveTo(underlineX, underlineY)
+      .lineTo(underlineX + nameWidth, underlineY)
+      .lineWidth(1)
+      .strokeColor("#000000")
+      .stroke();
+    doc.restore();
+
+    // Dynamic description paragraph under the underline
+    const paraY = underlineY + 18;
+
+    // Generate dynamic description based on event details
+    let dynamicDescription;
+    if (customMessage) {
+      dynamicDescription = customMessage;
+    } else {
+      // Create meaningful description from event data
+      const eventDateStr = new Date(eventDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      dynamicDescription = `For outstanding participation and valuable contribution to ${eventName} held on ${eventDateStr} at La Verdad Christian College - Apalit, Pampanga. This certificate recognizes dedication, enthusiasm, and commitment demonstrated throughout the event.`;
+
+      // Add specific details based on certificate type
+      if (certificateType === 'achievement') {
+        dynamicDescription = `For exceptional achievement and distinguished performance in ${eventName} held on ${eventDateStr} at La Verdad Christian College - Apalit, Pampanga. This certificate honors the remarkable accomplishments and dedication shown during the event.`;
+      } else if (certificateType === 'completion') {
+        dynamicDescription = `For successfully completing ${eventName} held on ${eventDateStr} at La Verdad Christian College - Apalit, Pampanga. This certificate acknowledges the successful fulfillment of all requirements and active engagement throughout the program.`;
+      }
+    }
+
+    // Give paragraph a comfortable column width (leave margins)
+    const paraWidth = pageWidth - 200;
+    doc.font("Helvetica").fontSize(15).fillColor("#4b5563");
+    doc.text(dynamicDescription, (pageWidth - paraWidth) / 2, paraY, {
+      align: "center",
+      width: paraWidth,
+      lineGap: 4,
+    });
+
+    // Signature area (no horizontal line above signatures)
+    this.drawSignatureArea(doc);
+
+    doc.restore();
+  }
+
+  /**
+   * Draw signature area - names and titles centered under name columns, NO lines
+   */
+  drawSignatureArea(doc) {
+    const width = doc.page.width;
+    const height = doc.page.height;
+    const signatureY = height - 150; // slightly higher so there's space for issued date above
+
+    const colWidth = 220;
+    const leftX = width / 2 - colWidth - 20; // left column x
+    const rightX = width / 2 + 20; // right column x
+
+    // Left signatory name (bold), no horizontal line
+    doc.font("Helvetica-Bold").fontSize(15).fillColor("#0f3b66");
+    doc.text("Dr. Sharene T. Labung", leftX, signatureY, {
+      width: colWidth,
+      align: "center",
+    });
+    doc.font("Helvetica").fontSize(12).fillColor("#374151");
+    doc.text("Chancellor / Administrator", leftX, signatureY + 18, {
+      width: colWidth,
+      align: "center",
+    });
+
+    // Right signatory name (bold), no horizontal line
+    doc.font("Helvetica-Bold").fontSize(15).fillColor("#0f3b66");
+    doc.text("Luckie Kristine Villanueva", rightX, signatureY, {
+      width: colWidth,
+      align: "center",
+    });
+    doc.font("Helvetica").fontSize(12).fillColor("#374151");
+    doc.text("PSAS Department Head", rightX, signatureY + 18, {
+      width: colWidth,
+      align: "center",
+    });
+
+  }
+
+  /**
+   * Draw decorative corner elements (kept in case used elsewhere)
    */
   drawDecorativeCorner(doc, x, y, isLeft) {
     const curveSize = 60;
-    const goldColor = '#f59e0b';
+    const goldColor = "#f59e0b";
 
     doc.save();
 
     if (isLeft) {
       // Top-left corner curves
-      doc.strokeColor(goldColor)
-         .lineWidth(6)
-         .moveTo(x + curveSize, y)
-         .lineTo(x + curveSize - 20, y)
-         .quadraticCurveTo(x + curveSize - 30, y, x + curveSize - 30, y + 10)
-         .quadraticCurveTo(x + curveSize - 30, y + 20, x + curveSize - 20, y + 20)
-         .lineTo(x + curveSize, y + 20)
-         .stroke();
+      doc
+        .strokeColor(goldColor)
+        .lineWidth(6)
+        .moveTo(x + curveSize, y)
+        .lineTo(x + curveSize - 20, y)
+        .quadraticCurveTo(x + curveSize - 30, y, x + curveSize - 30, y + 10)
+        .quadraticCurveTo(
+          x + curveSize - 30,
+          y + 20,
+          x + curveSize - 20,
+          y + 20
+        )
+        .lineTo(x + curveSize, y + 20)
+        .stroke();
 
-      doc.strokeColor(goldColor)
-         .lineWidth(6)
-         .moveTo(x, y + curveSize)
-         .lineTo(x, y + curveSize - 20)
-         .quadraticCurveTo(x, y + curveSize - 30, x + 10, y + curveSize - 30)
-         .quadraticCurveTo(x + 20, y + curveSize - 30, x + 20, y + curveSize - 20)
-         .lineTo(x + 20, y + curveSize)
-         .stroke();
+      doc
+        .strokeColor(goldColor)
+        .lineWidth(6)
+        .moveTo(x, y + curveSize)
+        .lineTo(x, y + curveSize - 20)
+        .quadraticCurveTo(x, y + curveSize - 30, x + 10, y + curveSize - 30)
+        .quadraticCurveTo(
+          x + 20,
+          y + curveSize - 30,
+          x + 20,
+          y + curveSize - 20
+        )
+        .lineTo(x + 20, y + curveSize)
+        .stroke();
     } else {
       // Top-right corner curves (mirrored)
-      doc.strokeColor(goldColor)
-         .lineWidth(6)
-         .moveTo(x - curveSize, y)
-         .lineTo(x - curveSize + 20, y)
-         .quadraticCurveTo(x - curveSize + 30, y, x - curveSize + 30, y + 10)
-         .quadraticCurveTo(x - curveSize + 30, y + 20, x - curveSize + 20, y + 20)
-         .lineTo(x - curveSize, y + 20)
-         .stroke();
+      doc
+        .strokeColor(goldColor)
+        .lineWidth(6)
+        .moveTo(x - curveSize, y)
+        .lineTo(x - curveSize + 20, y)
+        .quadraticCurveTo(x - curveSize + 30, y, x - curveSize + 30, y + 10)
+        .quadraticCurveTo(
+          x - curveSize + 30,
+          y + 20,
+          x - curveSize + 20,
+          y + 20
+        )
+        .lineTo(x - curveSize, y + 20)
+        .stroke();
 
-      doc.strokeColor(goldColor)
-         .lineWidth(6)
-         .moveTo(x, y + curveSize)
-         .lineTo(x, y + curveSize - 20)
-         .quadraticCurveTo(x, y + curveSize - 30, x - 10, y + curveSize - 30)
-         .quadraticCurveTo(x - 20, y + curveSize - 30, x - 20, y + curveSize - 20)
-         .lineTo(x - 20, y + curveSize)
-         .stroke();
+      doc
+        .strokeColor(goldColor)
+        .lineWidth(6)
+        .moveTo(x, y + curveSize)
+        .lineTo(x, y + curveSize - 20)
+        .quadraticCurveTo(x, y + curveSize - 30, x - 10, y + curveSize - 30)
+        .quadraticCurveTo(
+          x - 20,
+          y + curveSize - 30,
+          x - 20,
+          y + curveSize - 20
+        )
+        .lineTo(x - 20, y + curveSize)
+        .stroke();
     }
 
     doc.restore();
-  }
-
-  /**
-   * Draw gold seal/medal
-   */
-  drawGoldSeal(doc, x, y) {
-    const goldColor = '#f59e0b';
-    const innerGold = '#fbbf24';
-    const shadowColor = '#d97706';
-
-    // Outer shadow/border
-    doc.circle(x + 2, y + 2, 35)
-       .fill(shadowColor);
-
-    // Main seal circle
-    doc.circle(x, y, 35)
-       .fill(goldColor);
-
-    // Inner highlight circle
-    doc.circle(x - 5, y - 5, 25)
-       .fill(innerGold);
-
-    // Center dot for medal effect
-    doc.circle(x - 5, y - 5, 8)
-       .fill(goldColor);
-
-    // Add star-like effect
-    doc.save();
-    doc.translate(x - 5, y - 5);
-    doc.strokeColor(goldColor).lineWidth(2);
-    for (let i = 0; i < 8; i++) {
-      doc.rotate((Math.PI * 2) / 8);
-      doc.moveTo(15, 0)
-         .lineTo(20, 0)
-         .stroke();
-    }
-    doc.restore();
-  }
-
-  /**
-   * Draw certificate content
-   */
-  drawCertificateContent(doc, data) {
-    const { userName, eventName, eventDate, certificateType, customMessage, certificateId, issuedDate } = data;
-
-    // Save initial state
-    doc.save();
-
-    // Title
-    doc.fontSize(32)
-       .fillColor('#1e3a8a')
-       .font('Helvetica-Bold')
-       .text('CERTIFICATE', 0, 80, {
-         align: 'center',
-         width: doc.page.width,
-       })
-       .fontSize(24)
-       .text('OF PARTICIPATION', 0, 115, {
-         align: 'center',
-         width: doc.page.width,
-       });
-
-    // Subtitle
-    doc.fontSize(14)
-       .fillColor('#374151')
-       .font('Helvetica')
-       .text('This certificate is proudly presented to', 0, 180, {
-         align: 'center',
-         width: doc.page.width,
-       });
-
-    // Participant name (large and gold)
-    doc.fontSize(36)
-       .fillColor('#b45309')
-       .font('Helvetica-Bold')
-       .text(userName.toUpperCase(), 0, 220, {
-         align: 'center',
-         width: doc.page.width,
-       });
-
-    // Event description (centered paragraph)
-    const descriptionText = `For successfully participating in ${eventName} held on ${new Date(eventDate).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })} at La Verdad Christian College - Apalit, Pampanga.`;
-
-    doc.fontSize(12)
-       .fillColor('#4b5563')
-       .font('Helvetica')
-       .text(descriptionText, 0, 320, {
-         align: 'center',
-         width: doc.page.width - 200,
-         x: 100, // Indent from sides
-       });
-
-    // Custom message if provided
-    if (customMessage) {
-      doc.fontSize(11)
-         .fillColor('#6b7280')
-         .font('Helvetica-Oblique')
-         .text(`"${customMessage}"`, 0, 400, {
-           align: 'center',
-           width: doc.page.width - 200,
-           x: 100,
-         });
-    }
-
-    // Certificate ID (small, bottom center)
-    doc.fontSize(8)
-       .fillColor('#6b7280')
-       .font('Helvetica')
-       .text(`Certificate ID: ${certificateId}`, 0, doc.page.height - 120, {
-         align: 'center',
-         width: doc.page.width,
-       });
-
-    // Issued date
-    doc.fontSize(8)
-       .fillColor('#6b7280')
-       .font('Helvetica')
-       .text(`Issued on: ${issuedDate.toLocaleDateString()}`, 0, doc.page.height - 100, {
-         align: 'center',
-         width: doc.page.width,
-       });
-
-    // Signature area
-    this.drawSignatureArea(doc);
-
-    // Restore graphics state
-    doc.restore();
-  }
-
-  /**
-   * Draw signature area
-   */
-  drawSignatureArea(doc) {
-    const width = doc.page.width;
-    const height = doc.page.height;
-    const signatureY = height - 160;
-
-    // Left signature section
-    this.drawSignatureLine(doc, 120, signatureY, 'Dr. Sharene T. Labung');
-    doc.fontSize(10)
-       .fillColor('#374151')
-       .font('Helvetica')
-       .text('Chancellor / Administrator', 70, signatureY + 25, {
-         align: 'center',
-         width: 100,
-       });
-
-    // Right signature section
-    this.drawSignatureLine(doc, width - 120, signatureY, 'Luckie Kristine Villanueva');
-    doc.fontSize(10)
-       .fillColor('#374151')
-       .font('Helvetica')
-       .text('PSAS Department Head', width - 170, signatureY + 25, {
-         align: 'center',
-         width: 100,
-       });
-
-    // Organization name at bottom center
-    doc.fontSize(12)
-       .fillColor('#1e3a8a')
-       .font('Helvetica-Bold')
-       .text('La Verdad Christian College - Apalit, Pampanga', 0, height - 60, {
-         align: 'center',
-         width: width,
-       });
-  }
-
-  /**
-   * Draw individual signature line
-   */
-  drawSignatureLine(doc, centerX, y, name) {
-    const lineWidth = 100;
-    const startX = centerX - (lineWidth / 2);
-
-    // Signature line
-    doc.strokeColor('#374151')
-       .lineWidth(1)
-       .moveTo(startX, y)
-       .lineTo(startX + lineWidth, y)
-       .stroke();
-
-    // Name below the line
-    doc.fontSize(11)
-       .fillColor('#1f2937')
-       .font('Helvetica-Bold')
-       .text(name, centerX - (lineWidth / 2), y + 8, {
-         align: 'center',
-         width: lineWidth,
-       });
   }
 
   /**
@@ -407,7 +469,7 @@ class CertificateService {
 
       return result;
     } catch (error) {
-      console.error('Error sending certificate email:', error);
+      console.error("Error sending certificate email:", error);
       throw error;
     }
   }
@@ -425,8 +487,12 @@ class CertificateService {
         <p>Congratulations! We are pleased to present you with your certificate for participating in:</p>
         <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
           <h3 style="margin-top: 0; color: #2C3E50;">${event.name}</h3>
-          <p><strong>Date:</strong> ${new Date(event.date).toLocaleDateString()}</p>
-          <p><strong>Type:</strong> ${certificateType.charAt(0).toUpperCase() + certificateType.slice(1)} Certificate</p>
+          <p><strong>Date:</strong> ${new Date(
+            event.date
+          ).toLocaleDateString()}</p>
+          <p><strong>Type:</strong> ${
+            certificateType.charAt(0).toUpperCase() + certificateType.slice(1)
+          } Certificate</p>
         </div>
         <p>Your certificate is attached to this email as a PDF file. You can also download it from your dashboard at any time.</p>
         <p>If you have any questions about your certificate, please don't hesitate to contact us.</p>
@@ -440,8 +506,8 @@ class CertificateService {
    */
   async generateCertificate(userId, eventId, options = {}) {
     try {
-      const User = require('../../models/User');
-      const Event = require('../../models/Event');
+      const User = require("../../models/User");
+      const Event = require("../../models/Event");
 
       const [user, event] = await Promise.all([
         User.findById(userId),
@@ -449,7 +515,7 @@ class CertificateService {
       ]);
 
       if (!user || !event) {
-        throw new Error('User or Event not found');
+        throw new Error("User or Event not found");
       }
 
       const certificateId = this.generateCertificateId();
@@ -458,7 +524,7 @@ class CertificateService {
         user,
         event,
         certificateId,
-        certificateType: options.certificateType || 'participation',
+        certificateType: options.certificateType || "participation",
         customMessage: options.customMessage,
       };
 
@@ -484,9 +550,12 @@ class CertificateService {
       // Send email if requested
       if (options.sendEmail !== false) {
         try {
-          await this.sendCertificateByEmail(certificateData, pdfResult.filePath);
+          await this.sendCertificateByEmail(
+            certificateData,
+            pdfResult.filePath
+          );
         } catch (emailError) {
-          console.error('Failed to send certificate email:', emailError);
+          console.error("Failed to send certificate email:", emailError);
           // Don't throw error here, certificate is already generated
         }
       }
@@ -497,9 +566,8 @@ class CertificateService {
         filePath: pdfResult.filePath,
         downloadUrl: `/api/certificates/download/${certificateId}`,
       };
-
     } catch (error) {
-      console.error('Error generating certificate:', error);
+      console.error("Error generating certificate:", error);
       throw error;
     }
   }
@@ -510,11 +578,11 @@ class CertificateService {
   async getCertificate(certificateId) {
     try {
       const certificate = await Certificate.findOne({ certificateId })
-        .populate('userId', 'name email')
-        .populate('eventId', 'name date');
+        .populate("userId", "name email")
+        .populate("eventId", "name date");
 
       if (!certificate) {
-        throw new Error('Certificate not found');
+        throw new Error("Certificate not found");
       }
 
       return certificate;
@@ -532,7 +600,11 @@ class CertificateService {
 
       for (const userId of participantIds) {
         try {
-          const result = await this.generateCertificate(userId, eventId, options);
+          const result = await this.generateCertificate(
+            userId,
+            eventId,
+            options
+          );
           results.push({
             userId,
             success: true,
