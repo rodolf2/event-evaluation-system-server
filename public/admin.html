@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Event Evaluation System - Admin Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f5f5f5;
+        color: #333;
+      }
+
+      .header {
+        background-color: #2c3e50;
+        color: white;
+        padding: 1rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .stat-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        text-align: center;
+      }
+
+      .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #2c3e50;
+      }
+
+      .stat-label {
+        color: #7f8c8d;
+        margin-top: 5px;
+      }
+
+      .controls {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+
+      .form-group {
+        margin-bottom: 15px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+      }
+
+      .form-control {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+
+      .btn {
+        background-color: #3498db;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 10px;
+        margin-bottom: 10px;
+      }
+
+      .btn:hover {
+        background-color: #2980b9;
+      }
+
+      .btn-danger {
+        background-color: #e74c3c;
+      }
+
+      .btn-danger:hover {
+        background-color: #c0392b;
+      }
+
+      .btn-success {
+        background-color: #2ecc71;
+      }
+
+      .btn-success:hover {
+        background-color: #27ae60;
+      }
+
+      .users-table {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+
+      .table-header {
+        background-color: #34495e;
+        color: white;
+        padding: 15px;
+        font-weight: 500;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+      }
+
+      th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+      }
+
+      tr:hover {
+        background-color: #f8f9fa;
+      }
+
+      .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+      }
+
+      .status-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .status-active {
+        background-color: #d4edda;
+        color: #155724;
+      }
+
+      .status-inactive {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+
+      .role-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .role-admin {
+        background-color: #cce7ff;
+        color: #004085;
+      }
+
+      .role-user {
+        background-color: #e2e3e5;
+        color: #383d41;
+      }
+
+      .role-student {
+        background-color: #d4edda;
+        color: #155724;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 20px;
+        color: #7f8c8d;
+      }
+
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+      }
+
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+      }
+
+      .auth-section {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        text-align: center;
+      }
+
+      .google-login-btn {
+        background-color: #4285f4;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        text-decoration: none;
+        display: inline-block;
+        margin: 10px 0;
+      }
+
+      .google-login-btn:hover {
+        background-color: #3367d6;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Event Evaluation System - Admin Dashboard</h1>
+    </div>
+
+    <div class="container">
+      <!-- Authentication Section -->
+      <div id="authSection" class="auth-section">
+        <h2>Authentication Required</h2>
+        <p>
+          Please log in with your Google account to access the admin dashboard.
+        </p>
+
+        <a href="/api/auth/google" class="google-login-btn">
+          Sign in with Google
+        </a>
+
+        <div
+          style="
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+          "
+        >
+          <p style="color: #666; font-size: 14px; margin-bottom: 10px">
+            🔧 Development Mode:
+          </p>
+          <input
+            type="email"
+            id="devEmail"
+            placeholder="admin@test.com"
+            style="
+              width: 100%;
+              padding: 10px;
+              margin-bottom: 10px;
+              border: 1px solid #ddd;
+              border-radius: 4px;
+            "
+          />
+          <button
+            onclick="devLogin()"
+            class="btn"
+            style="background-color: #28a745"
+          >
+            Development Login (Bypass Google)
+          </button>
+          <p style="color: #888; font-size: 12px; margin-top: 5px">
+            Use this for testing without Google OAuth
+          </p>
+        </div>
+      </div>
+
+      <!-- Main Dashboard -->
+      <div id="dashboard" class="hidden">
+        <!-- User Statistics -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-number" id="totalUsers">0</div>
+            <div class="stat-label">Total Users</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="activeUsers">0</div>
+            <div class="stat-label">Active Users</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="adminUsers">0</div>
+            <div class="stat-label">Administrators</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="recentUsers">0</div>
+            <div class="stat-label">Recent Users (30d)</div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+          <h3>User Management</h3>
+          <div style="margin-bottom: 15px">
+            <button class="btn" onclick="refreshUsers()">Refresh Users</button>
+            <button class="btn btn-success" onclick="showAddUserModal()">
+              Add User
+            </button>
+          </div>
+
+          <!-- Filters -->
+          <div style="display: flex; gap: 10px; flex-wrap: wrap">
+            <div class="form-group">
+              <input
+                type="text"
+                id="searchInput"
+                class="form-control"
+                placeholder="Search users..."
+                onkeyup="filterUsers()"
+              />
+            </div>
+            <div class="form-group">
+              <select
+                id="roleFilter"
+                class="form-control"
+                onchange="filterUsers()"
+              >
+                <option value="">All Roles</option>
+                <option value="admin">Administrators</option>
+                <option value="student">Students</option>
+                <option value="user">Users</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <select
+                id="statusFilter"
+                class="form-control"
+                onchange="filterUsers()"
+              >
+                <option value="">All Status</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="users-table">
+          <div class="table-header">
+            <h3>Users Management</h3>
+          </div>
+          <div id="usersTableContainer">
+            <div class="loading">Loading users...</div>
+          </div>
+        </div>
+
+        <!-- User Modal -->
+        <div
+          id="userModal"
+          class="hidden"
+          style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+          "
+        >
+          <div
+            style="
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              background: white;
+              padding: 20px;
+              border-radius: 8px;
+              width: 90%;
+              max-width: 500px;
+            "
+          >
+            <h3 id="modalTitle">Add/Edit User</h3>
+            <form id="userForm">
+              <div class="form-group">
+                <label for="userName">Name:</label>
+                <input
+                  type="text"
+                  id="userName"
+                  class="form-control"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="userEmail">Email:</label>
+                <input
+                  type="email"
+                  id="userEmail"
+                  class="form-control"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="userRole">Role:</label>
+                <select id="userRole" class="form-control">
+                  <option value="user">User</option>
+                  <option value="student">Student</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>
+                  <input type="checkbox" id="userActive" /> Active
+                </label>
+              </div>
+              <div style="margin-top: 20px">
+                <button type="submit" class="btn">Save</button>
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  onclick="closeUserModal()"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentUser = null;
+      let allUsers = [];
+      let filteredUsers = [];
+
+      // Check authentication status
+      async function checkAuth() {
+        try {
+          const token = localStorage.getItem("authToken");
+
+          if (!token) {
+            document.getElementById("authSection").classList.remove("hidden");
+            document.getElementById("dashboard").classList.add("hidden");
+            return;
+          }
+
+          const response = await fetch("/api/auth/check", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          const data = await response.json();
+
+          if (data.success && data.data.authenticated) {
+            currentUser = data.data.user;
+            document.getElementById("authSection").classList.add("hidden");
+            document.getElementById("dashboard").classList.remove("hidden");
+
+            if (currentUser.role === "admin") {
+              loadDashboard();
+            } else {
+              alert("Access denied. Admin privileges required.");
+              window.location.href = "/api/auth/google";
+            }
+          } else {
+            document.getElementById("authSection").classList.remove("hidden");
+            document.getElementById("dashboard").classList.add("hidden");
+          }
+        } catch (error) {
+          console.error("Auth check failed:", error);
+          document.getElementById("authSection").classList.remove("hidden");
+          document.getElementById("dashboard").classList.add("hidden");
+        }
+      }
+
+      // Load dashboard data
+      async function loadDashboard() {
+        await Promise.all([loadUserStats(), loadUsers()]);
+      }
+
+      // Load user statistics
+      async function loadUserStats() {
+        try {
+          console.log("📊 Loading user statistics...");
+          const response = await apiCall("/api/users/stats/overview");
+          const data = await response.json();
+
+          console.log("📊 Stats response:", data);
+
+          if (data.success) {
+            document.getElementById("totalUsers").textContent =
+              data.data.totalUsers || 0;
+            document.getElementById("activeUsers").textContent =
+              data.data.activeUsers || 0;
+            document.getElementById("adminUsers").textContent =
+              data.data.adminUsers || 0;
+            document.getElementById("recentUsers").textContent =
+              data.data.recentUsers || 0;
+            console.log("✅ Statistics loaded successfully");
+          } else {
+            console.error("❌ Stats API failed:", data.message);
+            showMessage("Failed to load statistics: " + data.message, "error");
+          }
+        } catch (error) {
+          console.error("❌ Failed to load user stats:", error);
+          showMessage(
+            "Error loading statistics. Check console for details.",
+            "error"
+          );
+        }
+      }
+
+      // Load users
+      async function loadUsers() {
+        try {
+          const response = await apiCall("/api/users");
+          const data = await response.json();
+
+          if (data.success) {
+            allUsers = data.data.users;
+            filteredUsers = [...allUsers];
+            renderUsersTable();
+          }
+        } catch (error) {
+          console.error("Failed to load users:", error);
+          document.getElementById("usersTableContainer").innerHTML =
+            '<div class="error">Failed to load users</div>';
+        }
+      }
+
+      // Render users table
+      function renderUsersTable() {
+        const container = document.getElementById("usersTableContainer");
+
+        if (filteredUsers.length === 0) {
+          container.innerHTML = '<div class="loading">No users found</div>';
+          return;
+        }
+
+        let html = "<table>";
+        html += "<thead>";
+        html += "<tr>";
+        html += "<th>Name</th>";
+        html += "<th>Email</th>";
+        html += "<th>Role</th>";
+        html += "<th>Status</th>";
+        html += "<th>Created</th>";
+        html += "<th>Actions</th>";
+        html += "</tr>";
+        html += "</thead>";
+        html += "<tbody>";
+
+        filteredUsers.forEach((user) => {
+          html += "<tr>";
+          html += `<td>${user.name}</td>`;
+          html += `<td>${user.email}</td>`;
+          html += `<td><span class="role-badge role-${user.role}">${
+            user.role === "admin"
+              ? "Administrator"
+              : user.role === "student"
+              ? "Student"
+              : "User"
+          }</span></td>`;
+          html += `<td><span class="status-badge ${
+            user.isActive ? "status-active" : "status-inactive"
+          }">${user.isActive ? "Active" : "Inactive"}</span></td>`;
+          html += `<td>${new Date(user.createdAt).toLocaleDateString()}</td>`;
+          html += "<td>";
+          html += `<button class="btn" onclick="editUser('${user._id}')">Edit</button>`;
+          html += `<button class="btn btn-danger" onclick="deleteUser('${user._id}')">Delete</button>`;
+          html += "</td>";
+          html += "</tr>";
+        });
+
+        html += "</tbody>";
+        html += "</table>";
+
+        container.innerHTML = html;
+      }
+
+      // Filter users
+      function filterUsers() {
+        const searchTerm = document
+          .getElementById("searchInput")
+          .value.toLowerCase();
+        const roleFilter = document.getElementById("roleFilter").value;
+        const statusFilter = document.getElementById("statusFilter").value;
+
+        filteredUsers = allUsers.filter((user) => {
+          const matchesSearch =
+            user.name.toLowerCase().includes(searchTerm) ||
+            user.email.toLowerCase().includes(searchTerm);
+          const matchesRole = !roleFilter || user.role === roleFilter;
+          const matchesStatus =
+            statusFilter === "" ||
+            (statusFilter === "true" && user.isActive) ||
+            (statusFilter === "false" && !user.isActive);
+
+          return matchesSearch && matchesRole && matchesStatus;
+        });
+
+        renderUsersTable();
+      }
+
+      // Global variable to track current editing user ID
+      let currentEditingUserId = null;
+
+      // Show add user modal
+      function showAddUserModal() {
+        currentEditingUserId = null; // Reset editing state
+        document.getElementById("modalTitle").textContent = "Add User";
+        document.getElementById("userForm").reset();
+        document.getElementById("userModal").classList.remove("hidden");
+      }
+
+      // Edit user
+      async function editUser(userId) {
+          try {
+              console.log('✏️ Loading user for edit:', userId);
+              const response = await apiCall(`/api/users/${userId}`);
+              const data = await response.json();
+
+          if (data.success) {
+            const user = data.data.user;
+            currentEditingUserId = userId; // Store the user ID for editing
+            document.getElementById("modalTitle").textContent = "Edit User";
+            document.getElementById("userName").value = user.name;
+            document.getElementById("userEmail").value = user.email;
+            document.getElementById("userRole").value = user.role;
+            document.getElementById("userActive").checked = user.isActive;
+            document.getElementById("userModal").classList.remove("hidden");
+          }
+        } catch (error) {
+          console.error("Failed to load user:", error);
+        }
+      }
+
+      // Close user modal
+      function closeUserModal() {
+        currentEditingUserId = null; // Reset editing state
+        document.getElementById("userModal").classList.add("hidden");
+      }
+
+      // Handle form submission
+      document
+        .getElementById("userForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const formData = {
+            name: document.getElementById("userName").value,
+            email: document.getElementById("userEmail").value,
+            role: document.getElementById("userRole").value,
+            isActive: document.getElementById("userActive").checked,
+          };
+
+          try {
+            let response;
+            let successMessage;
+
+            if (currentEditingUserId) {
+              // Edit existing user
+              console.log('✏️ Updating user:', currentEditingUserId);
+              response = await apiCall(`/api/users/${currentEditingUserId}`, {
+                method: "PUT",
+                body: JSON.stringify(formData),
+              });
+              successMessage = 'User updated successfully!';
+            } else {
+              // Create new user
+              console.log('➕ Creating new user');
+              response = await apiCall("/api/users", {
+                method: "POST",
+                body: JSON.stringify(formData),
+              });
+              successMessage = 'User created successfully!';
+            }
+
+            const data = await response.json();
+            console.log('📝 Form response:', data);
+
+            if (data.success) {
+                closeUserModal();
+                currentEditingUserId = null; // Reset editing state
+                loadUsers();
+                loadUserStats();
+                showMessage(successMessage, 'success');
+            } else {
+                console.error('❌ Operation failed:', data.message);
+                showMessage('Operation failed: ' + data.message, 'error');
+            }
+          } catch (error) {
+            console.error("Failed to save user:", error);
+            alert("Failed to save user");
+          }
+        });
+
+      // Delete user
+      async function deleteUser(userId) {
+        if (confirm("Are you sure you want to delete this user?")) {
+          try {
+            const response = await apiCall(`/api/users/${userId}`, {
+              method: "DELETE",
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log('✅ Delete successful:', data.message);
+                loadUsers();
+                loadUserStats();
+                showMessage(data.message, 'success');
+            } else {
+                console.error('❌ Delete failed:', data.message);
+                showMessage('Delete failed: ' + data.message, 'error');
+            }
+          } catch (error) {
+            console.error("Failed to delete user:", error);
+            alert("Failed to delete user");
+          }
+        }
+      }
+
+      // Refresh users
+      async function refreshUsers() {
+        await loadUsers();
+        await loadUserStats();
+      }
+
+      // Get token from localStorage
+      function getToken() {
+        return localStorage.getItem("authToken");
+      }
+
+      // Updated API call function with proper headers
+      async function apiCall(url, options = {}) {
+        const token = getToken();
+        const defaultOptions = {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        };
+
+        return fetch(url, { ...defaultOptions, ...options });
+      }
+
+      // Show message function
+      function showMessage(message, type) {
+        // Create message element if it doesn't exist
+        let messageDiv = document.getElementById("message");
+        if (!messageDiv) {
+          messageDiv = document.createElement("div");
+          messageDiv.id = "message";
+          messageDiv.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 15px;
+                    border-radius: 5px;
+                    color: white;
+                    font-weight: bold;
+                    z-index: 1000;
+                    max-width: 300px;
+                `;
+          document.body.appendChild(messageDiv);
+        }
+
+        if (type === "error") {
+          messageDiv.style.backgroundColor = "#e74c3c";
+        } else if (type === "success") {
+          messageDiv.style.backgroundColor = "#2ecc71";
+        } else {
+          messageDiv.style.backgroundColor = "#3498db";
+        }
+
+        messageDiv.textContent = message;
+        messageDiv.style.display = "block";
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+          messageDiv.style.display = "none";
+        }, 5000);
+      }
+
+      // Development login function
+      async function devLogin() {
+        const email = document.getElementById("devEmail").value;
+
+        if (!email) {
+          alert("Please enter an email address");
+          return;
+        }
+
+        if (!email.includes("admin") && !email.endsWith("@laverdad.edu.ph")) {
+          alert('Email must contain "admin" or end with @laverdad.edu.ph');
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `/dev-login/${encodeURIComponent(email)}`
+          );
+          const data = await response.json();
+
+          if (data.success) {
+            // Store token in localStorage
+            localStorage.setItem("authToken", data.data.token);
+
+            // Hide auth section and show dashboard
+            document.getElementById("authSection").classList.add("hidden");
+            document.getElementById("dashboard").classList.remove("hidden");
+
+            // Load dashboard data
+            loadDashboard();
+
+            alert(
+              `Development login successful! Logged in as: ${data.data.user.email}`
+            );
+          } else {
+            alert("Development login failed: " + data.message);
+          }
+        } catch (error) {
+          console.error("Development login error:", error);
+          alert("Development login failed. Make sure user exists.");
+        }
+      }
+
+      // Initialize on page load
+      window.addEventListener("load", () => {
+        console.log("🚀 Admin dashboard loaded");
+        checkAuth();
+      });
+    </script>
+  </body>
+</html>

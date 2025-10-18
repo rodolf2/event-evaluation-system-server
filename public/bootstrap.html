@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Evaluation System - Bootstrap Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #eee;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .domain-note {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .features {
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .features ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .features li {
+            padding: 8px 0;
+            color: #555;
+        }
+
+        .features li::before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">Event Evaluation System</div>
+        <div class="subtitle">Bootstrap Your First Administrator</div>
+
+        <div id="statusMessage"></div>
+
+        <form id="bootstrapForm">
+            <div class="form-group">
+                <label for="adminName">Full Name:</label>
+                <input type="text" id="adminName" class="form-control" placeholder="Enter your full name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="adminEmail">Email Address:</label>
+                <input type="email" id="adminEmail" class="form-control" placeholder="your.name@laverdad.edu.ph" required>
+            </div>
+
+            <div class="domain-note">
+                <strong>Note:</strong> For production: Only @laverdad.edu.ph email addresses are allowed for administrators.
+                For development/testing: Email addresses containing "admin" also work (e.g., admin@gmail.com).
+                Make sure NODE_ENV=development in your .env file for testing mode.
+                Student emails (@student.laverdad.edu.ph) will be assigned student roles.
+            </div>
+
+            <button type="submit" class="btn" id="bootstrapBtn">Create Administrator Account</button>
+        </form>
+
+        <div class="features">
+            <h3>System Features:</h3>
+            <ul>
+                <li>Google SSO Integration</li>
+                <li>Domain-based Role Assignment</li>
+                <li>Super Admin User Management</li>
+                <li>User Statistics Dashboard</li>
+                <li>Event Evaluation Tools</li>
+                <li>Certificate Generation</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Check if bootstrap is needed
+        async function checkBootstrapStatus() {
+            try {
+                const response = await fetch('/api/bootstrap/status');
+                const data = await response.json();
+
+                if (data.success) {
+                    if (!data.data.needsBootstrap) {
+                        showMessage('Admin users already exist. Bootstrap is not available.', 'error');
+                        document.getElementById('bootstrapForm').style.display = 'none';
+                    } else {
+                        showMessage(`No admin users found. You can create the first administrator.`, 'info');
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to check bootstrap status:', error);
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('bootstrapForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const name = document.getElementById('adminName').value;
+            const email = document.getElementById('adminEmail').value;
+
+            // Validate email domain (development allows "admin" emails)
+            if (!email.endsWith('@laverdad.edu.ph') && !email.includes('admin')) {
+                showMessage('Email must end with @laverdad.edu.ph or contain "admin" for development testing.', 'error');
+                return;
+            }
+
+            // Disable form during submission
+            const submitBtn = document.getElementById('bootstrapBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating Administrator...';
+
+            try {
+                const response = await fetch('/api/bootstrap/admin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, email })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(`Success! Administrator account created for ${email}. You can now use Google SSO to login.`, 'success');
+
+                    // Hide form after success
+                    setTimeout(() => {
+                        document.getElementById('bootstrapForm').style.display = 'none';
+                    }, 2000);
+                } else {
+                    showMessage(data.message, 'error');
+                }
+            } catch (error) {
+                console.error('Bootstrap failed:', error);
+                showMessage('Failed to create administrator account. Please try again.', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Administrator Account';
+            }
+        });
+
+        // Show message
+        function showMessage(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = `alert alert-${type}`;
+            statusDiv.innerHTML = `<strong>${type === 'error' ? 'Error' : type === 'success' ? 'Success' : 'Info'}:</strong> ${message}`;
+            statusDiv.style.display = 'block';
+
+            // Auto-hide after 5 seconds for success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // Validate email domain as user types
+        document.getElementById('adminEmail').addEventListener('input', (e) => {
+            const email = e.target.value;
+            const submitBtn = document.getElementById('bootstrapBtn');
+
+            if (email.endsWith('@laverdad.edu.ph') || email.includes('admin')) {
+                submitBtn.disabled = false;
+                e.target.style.borderColor = '#28a745';
+            } else if (email.includes('@')) {
+                submitBtn.disabled = true;
+                e.target.style.borderColor = '#dc3545';
+            } else {
+                submitBtn.disabled = false;
+                e.target.style.borderColor = '#eee';
+            }
+        });
+
+        // Initialize
+        window.addEventListener('load', checkBootstrapStatus);
+    </script>
+</body>
+</html>

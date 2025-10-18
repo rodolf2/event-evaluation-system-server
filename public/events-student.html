@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Event Registration - La Verdad Christian College</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .auth-section {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .google-login-btn {
+            background-color: #4285f4;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px 0;
+        }
+
+        .google-login-btn:hover {
+            background-color: #3367d6;
+        }
+
+        .student-info {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .student-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #28a745;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .student-details h3 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .student-details p {
+            color: #7f8c8d;
+        }
+
+        .navigation {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            padding: 10px 20px;
+            border: 2px solid #28a745;
+            background: transparent;
+            color: #28a745;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .nav-btn:hover,
+        .nav-btn.active {
+            background: #28a745;
+            color: white;
+        }
+
+        .events-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .event-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .event-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .event-image {
+            height: 150px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 48px;
+        }
+
+        .event-content {
+            padding: 20px;
+        }
+
+        .event-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .event-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .event-date {
+            color: #28a745;
+            font-weight: 500;
+        }
+
+        .event-location {
+            color: #7f8c8d;
+        }
+
+        .event-description {
+            color: #555;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .event-category {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+
+        .category-academic {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .category-club {
+            background-color: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .category-sports {
+            background-color: #e8f5e8;
+            color: #388e3c;
+        }
+
+        .category-cultural {
+            background-color: #fff3e0;
+            color: #f57c00;
+        }
+
+        .event-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn-register {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: transform 0.2s;
+        }
+
+        .btn-registered {
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: not-allowed;
+            font-weight: 500;
+        }
+
+        .btn-view {
+            background: transparent;
+            color: #28a745;
+            border: 2px solid #28a745;
+            padding: 8px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-view:hover {
+            background: #28a745;
+            color: white;
+        }
+
+        .my-events-section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .events-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .event-item {
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .event-item-info h4 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .event-item-info p {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        .event-item-status {
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-registered {
+            background-color: #cce7ff;
+            color: #004085;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .stats-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .stats-items {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            text-align: center;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .events-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-buttons {
+                justify-content: center;
+            }
+
+            .event-meta {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎓 Student Event Portal</h1>
+        <p>La Verdad Christian College - Register for Events & Activities</p>
+    </div>
+
+    <div class="container">
+        <!-- Authentication Section -->
+        <div id="authSection" class="auth-section">
+            <h2>🔐 Student Access Required</h2>
+            <p>Please log in with your Google account to access events and register.</p>
+
+            <a href="/api/auth/google" class="google-login-btn">
+                🔑 Sign in with Google
+            </a>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                <p style="color: #666; font-size: 14px; margin-bottom: 10px;">🔧 Development Mode:</p>
+                <input type="email" id="devEmail" placeholder="student@test.com" style="width: 100%; max-width: 300px; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <button onclick="devLogin()" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">🚀 Development Login</button>
+                <p style="color: #888; font-size: 12px; margin-top: 5px;">Use this for testing without Google OAuth</p>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboard" class="hidden">
+            <!-- Student Info -->
+            <div id="studentInfo" class="student-info hidden">
+                <div class="student-avatar" id="studentAvatar">S</div>
+                <div class="student-details">
+                    <h3 id="studentName">Student Name</h3>
+                    <p id="studentEmail">student@laverdad.edu.ph</p>
+                    <p id="studentRole">Student</p>
+                </div>
+                <button onclick="logout()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; margin-left: auto;">Logout</button>
+            </div>
+
+            <!-- Navigation -->
+            <div class="navigation">
+                <div class="nav-buttons">
+                    <button class="nav-btn active" onclick="showSection('available')">📅 Available Events</button>
+                    <button class="nav-btn" onclick="showSection('myevents')">🎯 My Events</button>
+                    <button class="nav-btn" onclick="showSection('stats')">📊 My Stats</button>
+                </div>
+            </div>
+
+            <!-- Available Events Section -->
+            <div id="availableSection">
+                <h2 style="color: #2c3e50; margin-bottom: 20px;">📅 Available Events</h2>
+                <div id="eventsContainer" class="events-grid">
+                    <div class="loading">Loading available events...</div>
+                </div>
+            </div>
+
+            <!-- My Events Section -->
+            <div id="myeventsSection" class="hidden">
+                <div class="my-events-section">
+                    <h3>🎯 My Registered Events</h3>
+                    <div id="myEventsList" class="events-list">
+                        <div class="loading">Loading your events...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Section -->
+            <div id="statsSection" class="hidden">
+                <div class="stats-summary">
+                    <h3>📊 My Event Statistics</h3>
+                    <div class="stats-items">
+                        <div class="stat-item">
+                            <div class="stat-number" id="totalRegistrations">0</div>
+                            <div class="stat-label">Events Registered</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="upcomingEvents">0</div>
+                            <div class="stat-label">Upcoming Events</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="completedEvents">0</div>
+                            <div class="stat-label">Completed Events</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="certificatesEarned">0</div>
+                            <div class="stat-label">Certificates</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Details Modal -->
+    <div id="eventModal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto;">
+            <h3 id="modalTitle">Event Details</h3>
+            <div id="eventDetails">
+                <p>Loading event details...</p>
+            </div>
+            <div style="margin-top: 20px; text-align: center;">
+                <button id="registerBtn" class="btn-register" onclick="registerForEvent()">Register for Event</button>
+                <button class="btn-view" onclick="closeEventModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentEventId = null;
+
+        // Check authentication status
+        async function checkAuth() {
+            try {
+                const token = localStorage.getItem('authToken');
+
+                if (!token) {
+                    document.getElementById('authSection').classList.remove('hidden');
+                    document.getElementById('dashboard').classList.add('hidden');
+                    document.getElementById('studentInfo').classList.add('hidden');
+                    return;
+                }
+
+                const response = await fetch('/api/auth/check', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success && data.data.authenticated) {
+                    currentUser = data.data.user;
+                    document.getElementById('authSection').classList.add('hidden');
+                    document.getElementById('dashboard').classList.remove('hidden');
+                    document.getElementById('studentInfo').classList.remove('hidden');
+
+                    // Update student info
+                    updateStudentInfo();
+
+                    // Load dashboard data
+                    loadDashboard();
+                } else {
+                    document.getElementById('authSection').classList.remove('hidden');
+                    document.getElementById('dashboard').classList.add('hidden');
+                    document.getElementById('studentInfo').classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                document.getElementById('authSection').classList.remove('hidden');
+                document.getElementById('dashboard').classList.add('hidden');
+                document.getElementById('studentInfo').classList.add('hidden');
+            }
+        }
+
+        // Update student information display
+        function updateStudentInfo() {
+            document.getElementById('studentName').textContent = currentUser.name;
+            document.getElementById('studentEmail').textContent = currentUser.email;
+
+            // Set avatar initial
+            const initial = currentUser.name.charAt(0).toUpperCase();
+            document.getElementById('studentAvatar').textContent = initial;
+
+            // Set role badge
+            let roleText = 'Student';
+            if (currentUser.email.includes('admin')) {
+                roleText = 'Administrator';
+            } else if (currentUser.email.endsWith('@laverdad.edu.ph')) {
+                roleText = 'Faculty/Staff';
+            }
+            document.getElementById('studentRole').textContent = roleText;
+        }
+
+        // Development login function
+        async function devLogin() {
+            const email = document.getElementById('devEmail').value;
+
+            if (!email) {
+                alert('Please enter an email address');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/dev-login/${encodeURIComponent(email)}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    // Store token in localStorage
+                    localStorage.setItem('authToken', data.data.token);
+
+                    // Hide auth section and show dashboard
+                    document.getElementById('authSection').classList.add('hidden');
+                    document.getElementById('dashboard').classList.remove('hidden');
+                    document.getElementById('studentInfo').classList.remove('hidden');
+
+                    // Update student info
+                    currentUser = data.data.user;
+                    updateStudentInfo();
+
+                    // Load dashboard data
+                    loadDashboard();
+
+                    alert(`Development login successful! Logged in as: ${data.data.user.email}`);
+                } else {
+                    alert('Development login failed: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Development login error:', error);
+                alert('Development login failed. Make sure user exists.');
+            }
+        }
+
+        // Load dashboard data
+        async function loadDashboard() {
+            await Promise.all([
+                loadAvailableEvents(),
+                loadMyEvents(),
+                loadMyStats()
+            ]);
+            showSection('available');
+        }
+
+        // Load available events
+        async function loadAvailableEvents() {
+            try {
+                const token = getToken();
+                const response = await fetch('/api/events?status=published&status=ongoing', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    renderAvailableEvents(data.data.events);
+                }
+            } catch (error) {
+                console.error('Failed to load available events:', error);
+                document.getElementById('eventsContainer').innerHTML = '<div class="error">Failed to load events</div>';
+            }
+        }
+
+        // Render available events
+        function renderAvailableEvents(events) {
+            const container = document.getElementById('eventsContainer');
+
+            if (events.length === 0) {
+                container.innerHTML = '<div class="loading">No events available at the moment</div>';
+                return;
+            }
+
+            let html = '';
+            events.forEach(event => {
+                const startDate = new Date(event.startDate).toLocaleDateString();
+                const endDate = new Date(event.endDate).toLocaleDateString();
+                const isRegistered = event.registeredParticipants.some(p => p.user._id === currentUser.id);
+
+                html += `
+                    <div class="event-card">
+                        <div class="event-image">📅</div>
+                        <div class="event-content">
+                            <h3 class="event-title">${event.title}</h3>
+                            <div class="event-meta">
+                                <span class="event-date">${startDate} - ${endDate}</span>
+                                <span class="event-location">${event.location}</span>
+                            </div>
+                            <p class="event-description">${event.shortDescription || event.description.substring(0, 100) + '...'}</p>
+                            <span class="event-category category-${event.category}">${event.category}</span>
+                            <div class="event-actions">
+                                <button class="btn-view" onclick="viewEvent('${event._id}')">View Details</button>
+                                <button class="btn-register ${isRegistered ? 'btn-registered' : ''}" onclick="registerForEventFromCard('${event._id}', ${isRegistered})">
+                                    ${isRegistered ? 'Registered' : 'Register'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // View event details
+        async function viewEvent(eventId) {
+            try {
+                const token = getToken();
+                const response = await fetch(`/api/events/${eventId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const event = data.data.event;
+                    const isRegistered = event.registeredParticipants.some(p => p.user._id === currentUser.id);
+
+                    const detailsHtml = `
+                        <h4>${event.title}</h4>
+                        <p><strong>📅 Date:</strong> ${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate).toLocaleDateString()}</p>
+                        <p><strong>📍 Location:</strong> ${event.location}</p>
+                        <p><strong>👥 Organizer:</strong> ${event.organizerName}</p>
+                        <p><strong>🏷️ Category:</strong> ${event.category}</p>
+                        <p><strong>📝 Description:</strong></p>
+                        <p>${event.description}</p>
+                        ${event.requirements ? `<p><strong>📋 Requirements:</strong> ${event.requirements}</p>` : ''}
+                        <p><strong>📊 Capacity:</strong> ${event.registeredParticipants.length}/${event.maxParticipants || 'Unlimited'}</p>
+                        <p><strong>🔗 Status:</strong> ${event.status}</p>
+                    `;
+
+                    document.getElementById('eventDetails').innerHTML = detailsHtml;
+
+                    // Update register button
+                    const registerBtn = document.getElementById('registerBtn');
+                    if (isRegistered) {
+                        registerBtn.textContent = 'Already Registered';
+                        registerBtn.disabled = true;
+                        registerBtn.style.background = '#6c757d';
+                        registerBtn.style.cursor = 'not-allowed';
+                    } else {
+                        registerBtn.textContent = 'Register for Event';
+                        registerBtn.disabled = false;
+                        registerBtn.style.background = '';
+                        registerBtn.style.cursor = 'pointer';
+                        registerBtn.onclick = () => registerForEvent();
+                    }
+
+                    currentEventId = eventId;
+                    document.getElementById('eventModal').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Failed to load event details:', error);
+            }
+        }
+
+        // Register for event from card
+        async function registerForEventFromCard(eventId, isRegistered) {
+            if (isRegistered) {
+                alert('You are already registered for this event');
+                return;
+            }
+
+            try {
+                const token = getToken();
+                const response = await fetch(`/api/events/${eventId}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('Successfully registered for event!');
+                    loadAvailableEvents(); // Refresh the events list
+                } else {
+                    alert('Registration failed: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert('Failed to register for event');
+            }
+        }
+
+        // Register for event from modal
+        async function registerForEvent() {
+            if (!currentEventId) return;
+
+            try {
+                const token = getToken();
+                const response = await fetch(`/api/events/${currentEventId}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('Successfully registered for event!');
+                    closeEventModal();
+                    loadAvailableEvents(); // Refresh the events list
+                    loadMyEvents(); // Refresh my events
+                } else {
+                    alert('Registration failed: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert('Failed to register for event');
+            }
+        }
+
+        // Load my events
+        async function loadMyEvents() {
+            try {
+                const token = getToken();
+                const response = await fetch('/api/events/my', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    renderMyEvents(data.data.events);
+                }
+            } catch (error) {
+                console.error('Failed to load my events:', error);
+                document.getElementById('myEventsList').innerHTML = '<div class="error">Failed to load your events</div>';
+            }
+        }
+
+        // Render my events
+        function renderMyEvents(events) {
+            const container = document.getElementById('myEventsList');
+
+            if (events.length === 0) {
+                container.innerHTML = '<div class="loading">You are not registered for any events yet</div>';
+                return;
+            }
+
+            let html = '';
+            events.forEach(event => {
+                const eventDate = new Date(event.startDate).toLocaleDateString();
+                const isUpcoming = event.startDate > new Date();
+
+                html += `
+                    <div class="event-item">
+                        <div class="event-item-info">
+                            <h4>${event.title}</h4>
+                            <p>📅 ${eventDate} | 📍 ${event.location}</p>
+                            <p>👥 ${event.organizerName}</p>
+                        </div>
+                        <div>
+                            <span class="event-item-status status-${isUpcoming ? 'registered' : 'completed'}">
+                                ${isUpcoming ? 'Registered' : 'Completed'}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Load my stats
+        async function loadMyStats() {
+            try {
+                const token = getToken();
+                const response = await fetch('/api/events/my', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const events = data.data.events;
+                    const totalRegistrations = events.length;
+                    const upcomingEvents = events.filter(e => e.startDate > new Date()).length;
+                    const completedEvents = events.filter(e => e.startDate <= new Date()).length;
+
+                    document.getElementById('totalRegistrations').textContent = totalRegistrations;
+                    document.getElementById('upcomingEvents').textContent = upcomingEvents;
+                    document.getElementById('completedEvents').textContent = completedEvents;
+                    document.getElementById('certificatesEarned').textContent = completedEvents; // Assume certificates for completed events
+                }
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Show section
+        function showSection(section) {
+            document.getElementById('availableSection').classList.add('hidden');
+            document.getElementById('myeventsSection').classList.add('hidden');
+            document.getElementById('statsSection').classList.add('hidden');
+
+            // Update nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+
+            if (section === 'available') {
+                document.getElementById('availableSection').classList.remove('hidden');
+                document.querySelector('[onclick="showSection(\'available\')"]').classList.add('active');
+            } else if (section === 'myevents') {
+                document.getElementById('myeventsSection').classList.remove('hidden');
+                document.querySelector('[onclick="showSection(\'myevents\')"]').classList.add('active');
+            } else if (section === 'stats') {
+                document.getElementById('statsSection').classList.remove('hidden');
+                document.querySelector('[onclick="showSection(\'stats\')"]').classList.add('active');
+            }
+        }
+
+        // Close event modal
+        function closeEventModal() {
+            document.getElementById('eventModal').classList.add('hidden');
+            currentEventId = null;
+        }
+
+        // Get token from localStorage
+        function getToken() {
+            return localStorage.getItem('authToken');
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('authToken');
+            currentUser = null;
+            document.getElementById('authSection').classList.remove('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('studentInfo').classList.add('hidden');
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            console.log('🚀 Student event portal loaded');
+            checkAuth();
+        });
+    </script>
+</body>
+</html>

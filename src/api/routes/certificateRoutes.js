@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const certificateController = require('../controllers/certificateController');
+const { requireRole } = require('../../middlewares/auth');
+
+// All certificate routes require admin or student access
+router.use(requireRole(['psas', 'club-officer', 'participant']));
 
 // Generate a single certificate
 router.post('/generate', certificateController.generateCertificate);
