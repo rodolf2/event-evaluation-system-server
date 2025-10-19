@@ -38,6 +38,20 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  profilePicture: {
+    type: String,
+    default: null
+  },
+  role: {
+    type: String,
+    enum: ['participant', 'psas', 'club-officer', 'school-admin', 'mis'],
+    default: 'participant',
+    required: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
 });
 
 // Update the updatedAt field before saving

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -9,6 +10,14 @@ const path = require("path");
 const connectDB = require("./utils/db");
 const User = require("./models/User");
 require("./config/passport");
+=======
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const passport = require('passport');
+const connectDB = require('./utils/db');
+>>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
 
 const app = express();
 
@@ -22,6 +31,10 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(passport.initialize());
+
+// Configure Passport
+require('./config/passport');
 
 // Session configuration
 app.use(
@@ -62,6 +75,7 @@ app.get("/", (req, res) => {
   res.send("Event Evaluation System API is running...");
 });
 
+<<<<<<< HEAD
 // Development testing route (bypass Google OAuth for testing) - ONLY in development
 if (process.env.NODE_ENV === "development") {
 app.get("/dev-login/:email", async (req, res) => {
@@ -192,6 +206,24 @@ app.get("/health", (req, res) => {
     environment: process.env.NODE_ENV || "development",
   });
 });
+=======
+// API Routes
+const analysisRoutes = require('./api/routes/analysisRoutes');
+const eventRoutes = require('./api/routes/eventRoutes');
+const certificateRoutes = require('./api/routes/certificateRoutes');
+const authRoutes = require('./api/routes/authRoutes');
+const protectedRoutes = require('./api/routes/protectedRoutes');
+const userRoutes = require('./api/routes/userRoutes');
+const reminderRoutes = require('./api/routes/reminderRoutes');
+
+app.use('/api/analysis', analysisRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/certificates', certificateRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/protected', protectedRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/reminders', reminderRoutes);
+>>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
 
 const PORT = process.env.PORT || 5000;
 

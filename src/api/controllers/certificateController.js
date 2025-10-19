@@ -1,7 +1,12 @@
-const certificateService = require('../../services/certificate/certificateService');
-const Certificate = require('../../models/Certificate');
-const fs = require('fs');
-const path = require('path');
+const certificateService = require("../../services/certificate/certificateService");
+const Certificate = require("../../models/Certificate");
+const fs = require("fs");
+const path = require("path");
+
+/**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
+ */
 
 class CertificateController {
   /**
@@ -10,42 +15,45 @@ class CertificateController {
    */
   async generateCertificate(req, res) {
     try {
-      // Validate that req.body exists
       if (!req.body) {
         return res.status(400).json({
           success: false,
-          message: 'Request body is required',
+          message: "Request body is required",
         });
       }
 
-      const { userId, eventId, certificateType, customMessage, sendEmail } = req.body;
+      const { userId, eventId, certificateType, customMessage, sendEmail } =
+        req.body;
 
       if (!userId || !eventId) {
         return res.status(400).json({
           success: false,
-          message: 'User ID and Event ID are required',
+          message: "User ID and Event ID are required",
         });
       }
 
       const options = {
-        certificateType: certificateType || 'participation',
+        certificateType: certificateType || "participation",
         customMessage,
-        sendEmail: sendEmail !== false, // Default to true
+        sendEmail: sendEmail !== false,
       };
 
-      const result = await certificateService.generateCertificate(userId, eventId, options);
+      const result = await certificateService.generateCertificate(
+        userId,
+        eventId,
+        options
+      );
 
       res.status(201).json({
         success: true,
-        message: 'Certificate generated successfully',
+        message: "Certificate generated successfully",
         data: result,
       });
-
     } catch (error) {
-      console.error('Error generating certificate:', error);
+      console.error("Error generating certificate:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to generate certificate',
+        message: "Failed to generate certificate",
         error: error.message,
       });
     }
@@ -57,45 +65,53 @@ class CertificateController {
    */
   async generateBulkCertificates(req, res) {
     try {
-      // Validate that req.body exists
       if (!req.body) {
         return res.status(400).json({
           success: false,
-          message: 'Request body is required',
+          message: "Request body is required",
         });
       }
 
-      const { eventId, participantIds, certificateType, customMessage, sendEmail } = req.body;
+      const {
+        eventId,
+        participantIds,
+        certificateType,
+        customMessage,
+        sendEmail,
+      } = req.body;
 
       if (!eventId || !participantIds || !Array.isArray(participantIds)) {
         return res.status(400).json({
           success: false,
-          message: 'Event ID and participant IDs array are required',
+          message: "Event ID and participant IDs array are required",
         });
       }
 
       const options = {
-        certificateType: certificateType || 'participation',
+        certificateType: certificateType || "participation",
         customMessage,
         sendEmail: sendEmail !== false,
       };
 
-      const results = await certificateService.generateBulkCertificates(eventId, participantIds, options);
+      const results = await certificateService.generateBulkCertificates(
+        eventId,
+        participantIds,
+        options
+      );
 
-      const successCount = results.filter(r => r.success).length;
-      const failureCount = results.filter(r => !r.success).length;
+      const successCount = results.filter((r) => r.success).length;
+      const failureCount = results.filter((r) => !r.success).length;
 
       res.status(200).json({
         success: true,
         message: `Processed ${results.length} certificates. ${successCount} successful, ${failureCount} failed`,
         data: results,
       });
-
     } catch (error) {
-      console.error('Error generating bulk certificates:', error);
+      console.error("Error generating bulk certificates:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to generate bulk certificates',
+        message: "Failed to generate bulk certificates",
         error: error.message,
       });
     }
@@ -109,26 +125,27 @@ class CertificateController {
     try {
       const { certificateId } = req.params;
 
-      const certificate = await certificateService.getCertificate(certificateId);
+      const certificate = await certificateService.getCertificate(
+        certificateId
+      );
 
       res.status(200).json({
         success: true,
         data: certificate,
       });
-
     } catch (error) {
-      console.error('Error fetching certificate:', error);
+      console.error("Error fetching certificate:", error);
 
-      if (error.message === 'Certificate not found') {
+      if (error.message === "Certificate not found") {
         return res.status(404).json({
           success: false,
-          message: 'Certificate not found',
+          message: "Certificate not found",
         });
       }
 
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch certificate',
+        message: "Failed to fetch certificate",
         error: error.message,
       });
     }
@@ -147,34 +164,39 @@ class CertificateController {
       if (!certificate) {
         return res.status(404).json({
           success: false,
-          message: 'Certificate not found',
+          message: "Certificate not found",
         });
       }
 
-      if (!fs.existsSync(certificate.filePath)) {
+      const validatedPath = certificateService.validateCertificatePath(
+        path.join(__dirname, "../../uploads/certificates"),
+        certificate.filePath
+      );
+
+      if (!fs.existsSync(validatedPath)) {
         return res.status(404).json({
           success: false,
-          message: 'Certificate file not found',
+          message: "Certificate file not found",
         });
       }
 
-      // Set appropriate headers for PDF download
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${certificate.certificateId}.pdf"`);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${certificate.certificateId}.pdf"`
+      );
 
-      // Stream the file
-      const fileStream = fs.createReadStream(certificate.filePath);
+      const fileStream = fs.createReadStream(validatedPath);
       fileStream.pipe(res);
-
     } catch (error) {
-      console.error('Error downloading certificate:', error);
+      console.error("Error downloading certificate:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to download certificate',
+        message: "Failed to download certificate",
         error: error.message,
       });
     }
-  }
+  } // ✅ fixed missing closing brace
 
   /**
    * Get certificates for a user
@@ -185,11 +207,28 @@ class CertificateController {
       const { userId } = req.params;
       const { page = 1, limit = 10 } = req.query;
 
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+
+      if (
+        isNaN(pageNum) ||
+        pageNum < 1 ||
+        isNaN(limitNum) ||
+        limitNum < 1 ||
+        limitNum > 100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid pagination parameters. Page must be >= 1, limit must be 1-100",
+        });
+      }
+
       const certificates = await Certificate.find({ userId })
-        .populate('eventId', 'name date')
+        .populate("eventId", "name date")
         .sort({ issuedDate: -1 })
-        .limit(limit * 1)
-        .skip((page - 1) * limit);
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum); // ✅ fixed pagination variables
 
       const total = await Certificate.countDocuments({ userId });
 
@@ -197,19 +236,18 @@ class CertificateController {
         success: true,
         data: certificates,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / limit),
+          currentPage: pageNum,
+          totalPages: Math.ceil(total / limitNum),
           totalCertificates: total,
-          hasNextPage: page < Math.ceil(total / limit),
-          hasPrevPage: page > 1,
+          hasNextPage: pageNum < Math.ceil(total / limitNum),
+          hasPrevPage: pageNum > 1,
         },
       });
-
     } catch (error) {
-      console.error('Error fetching user certificates:', error);
+      console.error("Error fetching user certificates:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch user certificates',
+        message: "Failed to fetch user certificates",
         error: error.message,
       });
     }
@@ -224,11 +262,28 @@ class CertificateController {
       const { eventId } = req.params;
       const { page = 1, limit = 10 } = req.query;
 
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+
+      if (
+        isNaN(pageNum) ||
+        pageNum < 1 ||
+        isNaN(limitNum) ||
+        limitNum < 1 ||
+        limitNum > 100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid pagination parameters. Page must be >= 1, limit must be 1-100",
+        });
+      }
+
       const certificates = await Certificate.find({ eventId })
-        .populate('userId', 'name email')
+        .populate("userId", "name email")
         .sort({ issuedDate: -1 })
-        .limit(limit * 1)
-        .skip((page - 1) * limit);
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum); // ✅ fixed pagination variables
 
       const total = await Certificate.countDocuments({ eventId });
 
@@ -236,19 +291,18 @@ class CertificateController {
         success: true,
         data: certificates,
         pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / limit),
+          currentPage: pageNum,
+          totalPages: Math.ceil(total / limitNum),
           totalCertificates: total,
-          hasNextPage: page < Math.ceil(total / limit),
-          hasPrevPage: page > 1,
+          hasNextPage: pageNum < Math.ceil(total / limitNum),
+          hasPrevPage: pageNum > 1,
         },
       });
-
     } catch (error) {
-      console.error('Error fetching event certificates:', error);
+      console.error("Error fetching event certificates:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch event certificates',
+        message: "Failed to fetch event certificates",
         error: error.message,
       });
     }
@@ -263,20 +317,25 @@ class CertificateController {
       const { certificateId } = req.params;
 
       const certificate = await Certificate.findOne({ certificateId })
-        .populate('userId', 'name email')
-        .populate('eventId', 'name date');
+        .populate("userId", "name email")
+        .populate("eventId", "name date");
 
       if (!certificate) {
         return res.status(404).json({
           success: false,
-          message: 'Certificate not found',
+          message: "Certificate not found",
         });
       }
 
-      if (!fs.existsSync(certificate.filePath)) {
+      const validatedPath = certificateService.validateCertificatePath(
+        path.join(__dirname, "../../uploads/certificates"),
+        certificate.filePath
+      );
+
+      if (!fs.existsSync(validatedPath)) {
         return res.status(404).json({
           success: false,
-          message: 'Certificate file not found',
+          message: "Certificate file not found",
         });
       }
 
@@ -288,18 +347,20 @@ class CertificateController {
         customMessage: certificate.customMessage,
       };
 
-      await certificateService.sendCertificateByEmail(certificateData, certificate.filePath);
+      await certificateService.sendCertificateByEmail(
+        certificateData,
+        validatedPath
+      );
 
       res.status(200).json({
         success: true,
-        message: 'Certificate email sent successfully',
+        message: "Certificate email sent successfully",
       });
-
     } catch (error) {
-      console.error('Error resending certificate:', error);
+      console.error("Error resending certificate:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to resend certificate',
+        message: "Failed to resend certificate",
         error: error.message,
       });
     }
@@ -318,28 +379,34 @@ class CertificateController {
       if (!certificate) {
         return res.status(404).json({
           success: false,
-          message: 'Certificate not found',
+          message: "Certificate not found",
         });
       }
 
-      // Delete the PDF file
-      if (fs.existsSync(certificate.filePath)) {
-        fs.unlinkSync(certificate.filePath);
+      try {
+        const validatedPath = certificateService.validateCertificatePath(
+          path.join(__dirname, "../../uploads/certificates"),
+          certificate.filePath
+        );
+
+        if (fs.existsSync(validatedPath)) {
+          fs.unlinkSync(validatedPath);
+        }
+      } catch (fileError) {
+        console.error("Error handling certificate file:", fileError);
       }
 
-      // Delete the database record
       await Certificate.findOneAndDelete({ certificateId });
 
       res.status(200).json({
         success: true,
-        message: 'Certificate deleted successfully',
+        message: "Certificate deleted successfully",
       });
-
     } catch (error) {
-      console.error('Error deleting certificate:', error);
+      console.error("Error deleting certificate:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to delete certificate',
+        message: "Failed to delete certificate",
         error: error.message,
       });
     }
@@ -356,15 +423,7 @@ class CertificateController {
           $group: {
             _id: null,
             totalCertificates: { $sum: 1 },
-            certificatesByType: {
-              $push: '$certificateType',
-            },
-            certificatesByMonth: {
-              $push: {
-                month: { $month: '$issuedDate' },
-                year: { $year: '$issuedDate' },
-              },
-            },
+            certificatesByType: { $push: "$certificateType" },
           },
         },
         {
@@ -372,17 +431,15 @@ class CertificateController {
             totalCertificates: 1,
             certificatesByType: {
               $map: {
-                input: {
-                  $setUnion: ['$certificatesByType'],
-                },
-                as: 'type',
+                input: { $setUnion: ["$certificatesByType"] },
+                as: "type",
                 in: {
-                  type: '$$type',
+                  type: "$$type",
                   count: {
                     $size: {
                       $filter: {
-                        input: '$certificatesByType',
-                        cond: { $eq: ['$$this', '$$type'] },
+                        input: "$certificatesByType",
+                        cond: { $eq: ["$$this", "$$type"] },
                       },
                     },
                   },
@@ -394,15 +451,8 @@ class CertificateController {
       ]);
 
       const emailStats = await Certificate.aggregate([
-        {
-          $match: { isEmailSent: true },
-        },
-        {
-          $group: {
-            _id: null,
-            totalEmailsSent: { $sum: 1 },
-          },
-        },
+        { $match: { isEmailSent: true } },
+        { $group: { _id: null, totalEmailsSent: { $sum: 1 } } },
       ]);
 
       res.status(200).json({
@@ -413,12 +463,11 @@ class CertificateController {
           totalEmailsSent: emailStats[0]?.totalEmailsSent || 0,
         },
       });
-
     } catch (error) {
-      console.error('Error fetching certificate stats:', error);
+      console.error("Error fetching certificate stats:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch certificate statistics',
+        message: "Failed to fetch certificate statistics",
         error: error.message,
       });
     }
