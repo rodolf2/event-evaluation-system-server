@@ -15,6 +15,20 @@ const UserSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
   },
+  profilePicture: {
+    type: String,
+    default: null
+  },
+  role: {
+    type: String,
+    enum: ['participant', 'psas', 'club-officer', 'school-admin', 'mis'],
+    default: 'participant',
+    required: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
 });
 
 module.exports = mongoose.model('User', UserSchema);

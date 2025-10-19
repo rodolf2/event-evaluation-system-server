@@ -5,6 +5,24 @@ const nodemailer = require("nodemailer");
 const Certificate = require("../../models/Certificate");
 
 class CertificateService {
+  static validateCertificatePath(basePath, filePath) {
+    if (!filePath) throw new Error("Invalid certificate path");
+
+    // Normalize the paths
+    const normalizedBase = path.resolve(basePath);
+    const normalizedPath = path.resolve(
+      normalizedBase,
+      path.normalize(filePath)
+    );
+
+    // Ensure the path is within the certificates directory
+    if (!normalizedPath.startsWith(normalizedBase)) {
+      throw new Error("Invalid certificate path detected");
+    }
+
+    return normalizedPath;
+  }
+
   constructor() {
     // Create uploads directory if it doesn't exist
     this.certificatesDir = path.join(__dirname, "../../uploads/certificates");
@@ -22,29 +40,30 @@ class CertificateService {
     });
   }
 
-  /**
-   * Generate a unique certificate ID
-   */
   generateCertificateId() {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
     return `CERT-${timestamp}-${random}`;
   }
 
-  /**
-   * Create certificate PDF
-   */
   async generateCertificatePDF(certificateData) {
     const { user, event, certificateType, customMessage, certificateId } =
       certificateData;
 
     return new Promise((resolve, reject) => {
       try {
+        // Sanitize filename
         const fileName = `${certificateId}_${user.name.replace(
-          /\s+/g,
+          /[^a-zA-Z0-9]/g,
           "_"
-        )}.pdf`;
-        const filePath = path.join(this.certificatesDir, fileName);
+        )}.pdf`; // ✅ added variable
+        const safeFileName = fileName;
+
+        // Resolve and validate path
+        const filePath = path.resolve(this.certificatesDir, safeFileName);
+        if (!filePath.startsWith(path.resolve(this.certificatesDir))) {
+          throw new Error("Invalid certificate path detected");
+        }
 
         const doc = new PDFDocument({
           size: "A4",
@@ -55,10 +74,7 @@ class CertificateService {
         const stream = fs.createWriteStream(filePath);
         doc.pipe(stream);
 
-        // Certificate background and styling
         this.drawCertificateBackground(doc);
-
-        // Certificate content
         this.drawCertificateContent(doc, {
           userName: user.name,
           eventName: event.name,
@@ -74,7 +90,7 @@ class CertificateService {
         stream.on("finish", () => {
           resolve({
             filePath,
-            fileName,
+            fileName, // ✅ fixed undefined variable
           });
         });
 
@@ -87,19 +103,14 @@ class CertificateService {
     });
   }
 
-  /**
-   * Draw certificate background and border (replicates provided design)
-   */
   drawCertificateBackground(doc) {
     const width = doc.page.width;
     const height = doc.page.height;
 
-    // White base
     doc.save();
     doc.rect(0, 0, width, height).fill("#FFFFFF");
     doc.restore();
 
-    // Top deep-blue wave
     doc.save();
     doc
       .moveTo(0, 0)
@@ -110,7 +121,6 @@ class CertificateService {
     doc.fillColor("#0f3b66").fill();
     doc.restore();
 
-    // Top gold accent curve under blue
     doc.save();
     doc
       .moveTo(0, 40)
@@ -121,7 +131,6 @@ class CertificateService {
     doc.fillColor("#e9c779").fill();
     doc.restore();
 
-    // Bottom deep-blue wave
     doc.save();
     doc
       .moveTo(0, height)
@@ -139,7 +148,6 @@ class CertificateService {
     doc.fillColor("#0f3b66").fill();
     doc.restore();
 
-    // Bottom gold accent over blue
     doc.save();
     doc
       .moveTo(0, height - 40)
@@ -157,7 +165,6 @@ class CertificateService {
     doc.fillColor("#ecd6a3").fill();
     doc.restore();
 
-    // Thin inner gold border inset
     doc.save();
     doc.lineWidth(3);
     doc.strokeColor("#d7b65b");
@@ -165,36 +172,21 @@ class CertificateService {
     doc.rect(inset, inset, width - inset * 2, height - inset * 2).stroke();
     doc.restore();
 
-    // Draw gold ribbon seal (top-left)
-    // place at about x=70,y=80 to match design proportion on A4 landscape
     this.drawGoldSeal(doc, 70, 80);
   }
 
-  /**
-   * Draw gold ribbon seal (circle + ribbon) closely matching the uploaded image
-   */
   drawGoldSeal(doc, x, y) {
-    // Colors
     const shadow = "#c17b06";
     const outer = "#f0b83a";
     const inner = "#f8d67a";
     const centerHighlight = "#fff6d9";
 
     doc.save();
-
-    // little drop shadow behind badge
     doc.circle(x + 3, y + 3, 36).fill(shadow);
-
-    // outer ring
     doc.circle(x, y, 36).fill(outer);
-
-    // inner ring (slightly offset highlight)
     doc.circle(x - 4, y - 4, 26).fill(inner);
-
-    // small center dot
     doc.circle(x - 4, y - 4, 8).fill(outer);
 
-    // ribbon tails (two small downward ribbons)
     doc
       .moveTo(x - 18, y + 34)
       .lineTo(x - 6, y + 70)
@@ -209,20 +201,15 @@ class CertificateService {
       .closePath();
     doc.fillColor("#d6a638").fill();
 
-    // star-like lines (subtle)
     doc.translate(x - 4, y - 4);
     doc.strokeColor(outer).lineWidth(1.2);
     for (let i = 0; i < 8; i++) {
       doc.rotate((Math.PI * 2) / 8);
       doc.moveTo(14, 0).lineTo(20, 0).stroke();
     }
-    // restore translation and state
     doc.restore();
   }
 
-  /**
-   * Draw certificate content (title, name with underline, centered paragraph, signatories)
-   */
   drawCertificateContent(doc, data) {
     const {
       userName,
@@ -240,12 +227,8 @@ class CertificateService {
 
     doc.save();
 
-    // Title lines
     doc.font("Helvetica-Bold").fontSize(36).fillColor("#0f3b66");
-    // Big word CERTIFICATE centered (top area)
     doc.text("CERTIFICATE", 0, 120, { align: "center", width: pageWidth });
-
-    // OF PARTICIPATION in blue uppercase under CERTIFICATE
     doc.font("Helvetica").fontSize(18).fillColor("#0f3b66");
     doc.text("OF PARTICIPATION", 0, 160, {
       align: "center",
@@ -253,25 +236,19 @@ class CertificateService {
       characterSpacing: 1.2,
     });
 
-    // Subtitle small
     doc.font("Helvetica").fontSize(15).fillColor("#374151");
     doc.text("This certificate is proudly presented to", 0, 220, {
       align: "center",
       width: pageWidth,
     });
 
-    // Participant name (large, gold, bold) - centered
     const nameText = (userName || "Participant Name").toUpperCase();
     doc.font("Helvetica-Bold").fontSize(34).fillColor("#c89d28");
-
-    // we place name starting at y=195 to match design spacing
     const nameY = 270;
     doc.text(nameText, 0, nameY, { align: "center", width: pageWidth });
 
-    // Draw black underline centered directly under the name
     const nameWidth = doc.widthOfString(nameText);
     const underlineX = centerX - nameWidth / 2;
-    // place a little gap under the text
     const underlineY = nameY + doc.currentLineHeight() + 6;
     doc.save();
     doc
@@ -282,32 +259,26 @@ class CertificateService {
       .stroke();
     doc.restore();
 
-    // Dynamic description paragraph under the underline
     const paraY = underlineY + 18;
-
-    // Generate dynamic description based on event details
     let dynamicDescription;
     if (customMessage) {
       dynamicDescription = customMessage;
     } else {
-      // Create meaningful description from event data
-      const eventDateStr = new Date(eventDate).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
+      const eventDateStr = new Date(eventDate).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
       });
 
       dynamicDescription = `For outstanding participation and valuable contribution to ${eventName} held on ${eventDateStr} at La Verdad Christian College - Apalit, Pampanga. This certificate recognizes dedication, enthusiasm, and commitment demonstrated throughout the event.`;
 
-      // Add specific details based on certificate type
-      if (certificateType === 'achievement') {
+      if (certificateType === "achievement") {
         dynamicDescription = `For exceptional achievement and distinguished performance in ${eventName} held on ${eventDateStr} at La Verdad Christian College - Apalit, Pampanga. This certificate honors the remarkable accomplishments and dedication shown during the event.`;
-      } else if (certificateType === 'completion') {
+      } else if (certificateType === "completion") {
         dynamicDescription = `For successfully completing ${eventName} held on ${eventDateStr} at La Verdad Christian College - Apalit, Pampanga. This certificate acknowledges the successful fulfillment of all requirements and active engagement throughout the program.`;
       }
     }
 
-    // Give paragraph a comfortable column width (leave margins)
     const paraWidth = pageWidth - 200;
     doc.font("Helvetica").fontSize(15).fillColor("#4b5563");
     doc.text(dynamicDescription, (pageWidth - paraWidth) / 2, paraY, {
@@ -316,25 +287,19 @@ class CertificateService {
       lineGap: 4,
     });
 
-    // Signature area (no horizontal line above signatures)
     this.drawSignatureArea(doc);
-
     doc.restore();
   }
 
-  /**
-   * Draw signature area - names and titles centered under name columns, NO lines
-   */
   drawSignatureArea(doc) {
     const width = doc.page.width;
     const height = doc.page.height;
-    const signatureY = height - 150; // slightly higher so there's space for issued date above
+    const signatureY = height - 150;
 
     const colWidth = 220;
-    const leftX = width / 2 - colWidth - 20; // left column x
-    const rightX = width / 2 + 20; // right column x
+    const leftX = width / 2 - colWidth - 20;
+    const rightX = width / 2 + 20;
 
-    // Left signatory name (bold), no horizontal line
     doc.font("Helvetica-Bold").fontSize(15).fillColor("#0f3b66");
     doc.text("Dr. Sharene T. Labung", leftX, signatureY, {
       width: colWidth,
@@ -346,7 +311,6 @@ class CertificateService {
       align: "center",
     });
 
-    // Right signatory name (bold), no horizontal line
     doc.font("Helvetica-Bold").fontSize(15).fillColor("#0f3b66");
     doc.text("Luckie Kristine Villanueva", rightX, signatureY, {
       width: colWidth,
@@ -357,88 +321,8 @@ class CertificateService {
       width: colWidth,
       align: "center",
     });
-
   }
 
-  /**
-   * Draw decorative corner elements (kept in case used elsewhere)
-   */
-  drawDecorativeCorner(doc, x, y, isLeft) {
-    const curveSize = 60;
-    const goldColor = "#f59e0b";
-
-    doc.save();
-
-    if (isLeft) {
-      // Top-left corner curves
-      doc
-        .strokeColor(goldColor)
-        .lineWidth(6)
-        .moveTo(x + curveSize, y)
-        .lineTo(x + curveSize - 20, y)
-        .quadraticCurveTo(x + curveSize - 30, y, x + curveSize - 30, y + 10)
-        .quadraticCurveTo(
-          x + curveSize - 30,
-          y + 20,
-          x + curveSize - 20,
-          y + 20
-        )
-        .lineTo(x + curveSize, y + 20)
-        .stroke();
-
-      doc
-        .strokeColor(goldColor)
-        .lineWidth(6)
-        .moveTo(x, y + curveSize)
-        .lineTo(x, y + curveSize - 20)
-        .quadraticCurveTo(x, y + curveSize - 30, x + 10, y + curveSize - 30)
-        .quadraticCurveTo(
-          x + 20,
-          y + curveSize - 30,
-          x + 20,
-          y + curveSize - 20
-        )
-        .lineTo(x + 20, y + curveSize)
-        .stroke();
-    } else {
-      // Top-right corner curves (mirrored)
-      doc
-        .strokeColor(goldColor)
-        .lineWidth(6)
-        .moveTo(x - curveSize, y)
-        .lineTo(x - curveSize + 20, y)
-        .quadraticCurveTo(x - curveSize + 30, y, x - curveSize + 30, y + 10)
-        .quadraticCurveTo(
-          x - curveSize + 30,
-          y + 20,
-          x - curveSize + 20,
-          y + 20
-        )
-        .lineTo(x - curveSize, y + 20)
-        .stroke();
-
-      doc
-        .strokeColor(goldColor)
-        .lineWidth(6)
-        .moveTo(x, y + curveSize)
-        .lineTo(x, y + curveSize - 20)
-        .quadraticCurveTo(x, y + curveSize - 30, x - 10, y + curveSize - 30)
-        .quadraticCurveTo(
-          x - 20,
-          y + curveSize - 30,
-          x - 20,
-          y + curveSize - 20
-        )
-        .lineTo(x - 20, y + curveSize)
-        .stroke();
-    }
-
-    doc.restore();
-  }
-
-  /**
-   * Send certificate via email
-   */
   async sendCertificateByEmail(certificateData, pdfPath) {
     try {
       const { user, event, certificateId } = certificateData;
@@ -458,7 +342,6 @@ class CertificateService {
 
       const result = await this.transporter.sendMail(mailOptions);
 
-      // Update certificate record to mark email as sent
       await Certificate.findOneAndUpdate(
         { certificateId },
         {
@@ -474,9 +357,6 @@ class CertificateService {
     }
   }
 
-  /**
-   * Generate email template
-   */
   generateEmailTemplate(certificateData) {
     const { user, event, certificateType } = certificateData;
 
@@ -501,9 +381,6 @@ class CertificateService {
     `;
   }
 
-  /**
-   * Generate certificate for user and event
-   */
   async generateCertificate(userId, eventId, options = {}) {
     try {
       const User = require("../../models/User");
@@ -528,10 +405,8 @@ class CertificateService {
         customMessage: options.customMessage,
       };
 
-      // Generate PDF
       const pdfResult = await this.generateCertificatePDF(certificateData);
 
-      // Save certificate record to database
       const certificate = new Certificate({
         userId,
         eventId,
@@ -547,7 +422,6 @@ class CertificateService {
 
       await certificate.save();
 
-      // Send email if requested
       if (options.sendEmail !== false) {
         try {
           await this.sendCertificateByEmail(
@@ -556,7 +430,6 @@ class CertificateService {
           );
         } catch (emailError) {
           console.error("Failed to send certificate email:", emailError);
-          // Don't throw error here, certificate is already generated
         }
       }
 
@@ -572,9 +445,6 @@ class CertificateService {
     }
   }
 
-  /**
-   * Get certificate by ID
-   */
   async getCertificate(certificateId) {
     try {
       const certificate = await Certificate.findOne({ certificateId })
@@ -591,9 +461,6 @@ class CertificateService {
     }
   }
 
-  /**
-   * Generate certificates for multiple participants in an event
-   */
   async generateBulkCertificates(eventId, participantIds, options = {}) {
     try {
       const results = [];

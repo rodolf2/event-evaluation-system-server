@@ -44,4 +44,32 @@ router.get('/:id/feedback', async (req, res) => {
   }
 });
 
+// @route   GET /api/events/:id/analytics
+// @desc    Get analytics for a specific event
+// @access  Public
+router.get('/:id/analytics', async (req, res) => {
+  try {
+    // NOTE: This is a mock implementation.
+    // In a real app, you would calculate this data based on the event ID.
+    const analyticsData = {
+      totalAttendees: 506,
+      totalResponses: 200,
+      responseRate: 40,
+      responseBreakdown: {
+        positive: { count: 100, percentage: 50 },
+        neutral: { count: 70, percentage: 35 },
+        negative: { count: 30, percentage: 15 },
+      },
+      responseOverview: {
+        labels: ["8/14", "8/15", "8/16", "8/17", "8/18", "8/19"],
+        data: [10, 50, 100, 10, 15, 15],
+        dateRange: "August 14, 2025 - August 19, 2025",
+      },
+    };
+    res.json(analyticsData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
