@@ -23,7 +23,7 @@ const requireAuth = async (req, res, next) => {
 
     // Check if user exists and is active
     const User = require("../models/User");
-    const user = await User.findById(decoded.userId);
+    const user = await User.findById(decoded.id);
 
     if (!user || !user.isActive) {
       return res.status(401).json({
@@ -32,7 +32,7 @@ const requireAuth = async (req, res, next) => {
       });
     }
 
-    req.user = { id: decoded.userId };
+    req.user = user;
     next();
   } catch (error) {
     res.status(401).json({
@@ -58,7 +58,7 @@ const requireSuperAdmin = async (req, res, next) => {
 
     // Check if user exists and is super admin
     const User = require("../models/User");
-    const user = await User.findById(decoded.userId);
+    const user = await User.findById(decoded.id);
 
     if (!user) {
       return res.status(401).json({
@@ -104,7 +104,7 @@ const requireOwnerOrAdmin = (resourceUserIdField = "userId") => {
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const User = require("../models/User");
-      const user = await User.findById(decoded.userId);
+      const user = await User.findById(decoded.id);
 
       if (!user) {
         return res.status(401).json({
@@ -156,7 +156,7 @@ const requireRole = (allowedRoles) => {
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const User = require("../models/User");
-      const user = await User.findById(decoded.userId);
+      const user = await User.findById(decoded.id);
 
       if (!user) {
         return res.status(401).json({

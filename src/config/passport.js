@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const User = require("../models/User");
@@ -7,12 +8,18 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/User');
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const User = require('../models/User');
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+<<<<<<< HEAD
 <<<<<<< HEAD
       callbackURL: "/api/auth/google/callback",
     },
@@ -77,6 +84,8 @@ passport.use(
       } catch (error) {
         done(error, null);
 =======
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
       callbackURL: '/api/auth/google/callback',
       proxy: true
     },
@@ -121,26 +130,37 @@ passport.use(
         return done(null, user);
       } catch (error) {
         return done(error, null);
+<<<<<<< HEAD
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
       }
     }
   )
 );
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 // Serialize user for session
 =======
 // Serialize user into the session
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+// Serialize user into the session
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 // Deserialize user from session
 =======
 // Deserialize user from the session
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+// Deserialize user from the session
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 passport.deserializeUser(async (id, done) => {
   try {
     const user = await User.findById(id);
@@ -151,7 +171,11 @@ passport.deserializeUser(async (id, done) => {
 });
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 module.exports = passport;
 =======
 module.exports = passport;
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+module.exports = passport;
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842

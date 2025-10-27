@@ -4,6 +4,7 @@ const reminderSchema = new mongoose.Schema({
   title: {
     type: String,
 <<<<<<< HEAD
+<<<<<<< HEAD
     required: true
   },
   description: {
@@ -19,6 +20,8 @@ const reminderSchema = new mongoose.Schema({
     ref: 'User',
     required: true
 =======
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
     required: [true, 'Reminder title is required'],
     trim: true,
     maxlength: [100, 'Title cannot exceed 100 characters']
@@ -52,18 +55,28 @@ const reminderSchema = new mongoose.Schema({
   },
   emailSentAt: {
     type: Date
+<<<<<<< HEAD
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
   }
 }, {
   timestamps: true
 });
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 module.exports = mongoose.model('Reminder', reminderSchema);
 =======
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 // Index for efficient queries
 reminderSchema.index({ userId: 1, date: 1 });
 reminderSchema.index({ userId: 1, completed: 1 });
 
+<<<<<<< HEAD
 module.exports = mongoose.model('Reminder', reminderSchema);
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+module.exports = mongoose.model('Reminder', reminderSchema);
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Event = require('../../models/Event');
 const Feedback = require('../../models/Feedback');
+const analysisService = require('../../services/analysis/analysisService');
 
 // @route   GET /api/events
 // @desc    Get all events
@@ -72,4 +73,81 @@ router.get('/:id/analytics', async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
+=======
+// @route   GET /api/events/:id/report
+// @desc    Get report data for a specific event
+// @access  Public
+router.get('/:id/report', async (req, res) => {
+  try {
+    const eventId = req.params.id;
+
+    // Get event details
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Get feedback count and basic stats
+    const feedbackCount = await Feedback.countDocuments({ eventId });
+    const feedbacks = await Feedback.find({ eventId });
+    const ratings = feedbacks.map(fb => fb.rating).filter(r => r != null && r > 0);
+    const averageRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+
+    // Generate qualitative and quantitative reports
+    const qualitativeReport = await analysisService.generateQualitativeReport(eventId);
+    const quantitativeReport = await analysisService.generateQuantitativeReport(eventId);
+
+    const reportData = {
+      id: event._id,
+      title: `${event.name} Evaluation Report`,
+      eventName: event.name,
+      eventDate: event.date,
+      thumbnail: '/Reports.png', // Using the Reports.png image from public folder
+      feedbackCount,
+      averageRating,
+      qualitativeReport,
+      quantitativeReport,
+      generatedAt: new Date()
+    };
+
+    res.json(reportData);
+  } catch (error) {
+    console.error('Error generating report:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// @route   GET /api/events/reports
+// @desc    Get all available reports for events that have feedback
+// @access  Public
+router.get('/reports/all', async (req, res) => {
+  try {
+    // Find events that have feedback
+    const eventsWithFeedback = await Feedback.distinct('eventId');
+
+    // Get event details for these events
+    const events = await Event.find({ _id: { $in: eventsWithFeedback } }).sort({ date: -1 });
+
+    const reports = await Promise.all(events.map(async (event) => {
+      const feedbackCount = await Feedback.countDocuments({ eventId: event._id });
+
+      return {
+        id: event._id,
+        title: `${event.name} Evaluation Report`,
+        thumbnail: '/Reports.png',
+        eventName: event.name,
+        eventDate: event.date,
+        feedbackCount
+      };
+    }));
+
+    res.json(reports);
+  } catch (error) {
+    console.error('Error fetching reports:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 module.exports = router;

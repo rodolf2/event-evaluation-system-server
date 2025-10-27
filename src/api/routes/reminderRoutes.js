@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 const express = require("express");
 const router = express.Router();
 const {
@@ -22,6 +23,8 @@ router.delete("/:id", deleteReminder);
 
 module.exports = router;
 =======
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../../middleware/authMiddleware');
@@ -116,4 +119,7 @@ router.delete('/:id', protect, async (req, res) => {
 });
 
 module.exports = router;
+<<<<<<< HEAD
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842

@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -10,6 +13,7 @@ const path = require("path");
 const connectDB = require("./utils/db");
 const User = require("./models/User");
 require("./config/passport");
+<<<<<<< HEAD
 =======
 require('dotenv').config();
 const express = require('express');
@@ -18,13 +22,15 @@ const bodyParser = require('body-parser');
 const passport = require('passport');
 const connectDB = require('./utils/db');
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 
 const app = express();
 
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
   })
 );
@@ -75,6 +81,7 @@ app.get("/", (req, res) => {
   res.send("Event Evaluation System API is running...");
 });
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 // Development testing route (bypass Google OAuth for testing) - ONLY in development
 if (process.env.NODE_ENV === "development") {
@@ -207,10 +214,13 @@ app.get("/health", (req, res) => {
   });
 });
 =======
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 // API Routes
 const analysisRoutes = require('./api/routes/analysisRoutes');
 const eventRoutes = require('./api/routes/eventRoutes');
 const certificateRoutes = require('./api/routes/certificateRoutes');
+const formsRoutes = require('./api/routes/formsRoutes');
 const authRoutes = require('./api/routes/authRoutes');
 const protectedRoutes = require('./api/routes/protectedRoutes');
 const userRoutes = require('./api/routes/userRoutes');
@@ -219,11 +229,15 @@ const reminderRoutes = require('./api/routes/reminderRoutes');
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/certificates', certificateRoutes);
+app.use('/api/forms', formsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/protected', protectedRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reminders', reminderRoutes);
+<<<<<<< HEAD
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 
 const PORT = process.env.PORT || 5000;
 

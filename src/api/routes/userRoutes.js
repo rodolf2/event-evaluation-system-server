@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 <<<<<<< HEAD
+<<<<<<< HEAD
 const {
   createUser,
   getAllUsers,
@@ -36,6 +37,8 @@ router.delete('/:id', deleteUser);
 // PUT /api/users/bulk - Bulk update users
 router.put('/bulk', bulkUpdateUsers);
 =======
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 const User = require('../../models/User');
 const { protect, authorize } = require('../../middleware/authMiddleware');
 
@@ -132,6 +135,9 @@ router.put('/:id', protect, authorize('school-admin', 'mis'), async (req, res) =
     });
   }
 });
+<<<<<<< HEAD
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 
 module.exports = router;

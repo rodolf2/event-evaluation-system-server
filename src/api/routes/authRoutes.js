@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 <<<<<<< HEAD
+<<<<<<< HEAD
 const passport = require('../../config/passport');
 const {
   googleAuthCallback,
@@ -40,6 +41,8 @@ router.post('/logout', logout);
 // Alternative logout route for GET requests
 router.get('/logout', logout);
 =======
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const User = require('../../models/User');
@@ -118,6 +121,9 @@ router.get('/profile', async (req, res) => {
     });
   }
 });
+<<<<<<< HEAD
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
+=======
+>>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 
 module.exports = router;
