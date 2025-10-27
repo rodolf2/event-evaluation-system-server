@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Form Viewer</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background-color: #f8fafc;
+        color: #1a202c;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .form-header {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .form-title {
+        font-size: 28px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 10px;
+      }
+
+      .form-description {
+        color: #718096;
+        font-size: 16px;
+      }
+
+      .form-content {
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .question {
+        margin-bottom: 30px;
+      }
+
+      .question-title {
+        font-size: 18px;
+        font-weight: 500;
+        margin-bottom: 10px;
+        color: #2d3748;
+      }
+
+      .required {
+        color: #e53e3e;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-control {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 16px;
+        transition: border-color 0.2s;
+      }
+
+      .form-control:focus {
+        outline: none;
+        border-color: #3182ce;
+        box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+      }
+
+      .radio-group,
+      .checkbox-group {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .radio-item,
+      .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .radio-item input,
+      .checkbox-item input {
+        width: 18px;
+        height: 18px;
+      }
+
+      .scale-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+      }
+
+      .scale-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 5px;
+        font-size: 14px;
+        color: #718096;
+      }
+
+      .submitter-info {
+        background: #f7fafc;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 30px 0;
+      }
+
+      .submitter-info h3 {
+        margin-bottom: 15px;
+        color: #2d3748;
+      }
+
+      .submit-btn {
+        background: #3182ce;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 6px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .submit-btn:hover {
+        background: #2c5aa0;
+      }
+
+      .submit-btn:disabled {
+        background: #a0aec0;
+        cursor: not-allowed;
+      }
+
+      .error {
+        background: #fed7d7;
+        color: #c53030;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 20px 0;
+      }
+
+      .success {
+        background: #c6f6d5;
+        color: #2f855a;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 20px 0;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+      }
+
+      .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3182ce;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 600px) {
+        .container {
+          padding: 10px;
+        }
+
+        .form-header,
+        .form-content {
+          padding: 20px;
+        }
+
+        .scale-container {
+          flex-direction: column;
+          align-items: stretch;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading form...</p>
+      </div>
+
+      <div id="error" class="error" style="display: none">
+        <h3>Error</h3>
+        <p id="errorMessage"></p>
+      </div>
+
+      <div id="success" class="success" style="display: none">
+        <h3>Success!</h3>
+        <p>
+          Your response has been submitted successfully. Thank you for your
+          feedback!
+        </p>
+      </div>
+
+      <div id="formContainer" style="display: none">
+        <div class="form-header">
+          <h1 class="form-title" id="formTitle">Form Title</h1>
+          <p class="form-description" id="formDescription">Form Description</p>
+        </div>
+
+        <div class="form-content">
+          <form id="evaluationForm">
+            <div id="questionsContainer"></div>
+
+            <div class="submitter-info">
+              <h3>Your Information (Optional)</h3>
+              <div class="form-group">
+                <label for="submitterName">Name:</label>
+                <input
+                  type="text"
+                  id="submitterName"
+                  class="form-control"
+                  placeholder="Your name (optional)"
+                />
+              </div>
+              <div class="form-group">
+                <label for="submitterEmail">Email:</label>
+                <input
+                  type="email"
+                  id="submitterEmail"
+                  class="form-control"
+                  placeholder="Your email (optional)"
+                />
+              </div>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">
+              Submit Response
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let formData = null;
+      let formId = null;
+
+      // Get form ID from URL
+      function getFormIdFromUrl() {
+        const path = window.location.pathname;
+        const match = path.match(/\/forms\/([^\/]+)\/view/);
+        return match ? match[1] : null;
+      }
+
+      // Load form data
+      async function loadForm() {
+        formId = getFormIdFromUrl();
+
+        if (!formId) {
+          showError("Invalid form URL");
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/forms/${formId}/view/api`);
+          const data = await response.json();
+
+          if (data.success) {
+            formData = data.data.form;
+            renderForm();
+          } else {
+            showError(data.message || "Failed to load form");
+          }
+        } catch (error) {
+          console.error("Error loading form:", error);
+          showError("Failed to load form. Please try again.");
+        }
+      }
+
+      // Render form
+      function renderForm() {
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("formContainer").style.display = "block";
+
+        document.getElementById("formTitle").textContent = formData.title;
+        document.getElementById("formDescription").textContent =
+          formData.description || "";
+
+        const questionsContainer =
+          document.getElementById("questionsContainer");
+        questionsContainer.innerHTML = "";
+
+        formData.questions.forEach((question, index) => {
+          const questionElement = createQuestionElement(question, index);
+          questionsContainer.appendChild(questionElement);
+        });
+      }
+
+      // Create question element
+      function createQuestionElement(question, index) {
+        const questionDiv = document.createElement("div");
+        questionDiv.className = "question";
+
+        const title = document.createElement("h3");
+        title.className = "question-title";
+        title.textContent = question.title;
+        if (question.required) {
+          title.innerHTML += ' <span class="required">*</span>';
+        }
+        questionDiv.appendChild(title);
+
+        const inputElement = createInputElement(question, index);
+        questionDiv.appendChild(inputElement);
+
+        return questionDiv;
+      }
+
+      // Create input element based on question type
+      function createInputElement(question, index) {
+        const questionId = `q${index}`;
+
+        switch (question.type) {
+          case "short_answer":
+            return createTextInput(questionId, question.required, "text");
+
+          case "paragraph":
+            return createTextArea(questionId, question.required);
+
+          case "multiple_choice":
+            return createRadioGroup(
+              questionId,
+              question.options,
+              question.required
+            );
+
+          case "scale":
+            return createScaleInput(
+              questionId,
+              question.low,
+              question.high,
+              question.lowLabel,
+              question.highLabel,
+              question.required
+            );
+
+          case "date":
+            return createTextInput(questionId, question.required, "date");
+
+          case "time":
+            return createTextInput(questionId, question.required, "time");
+
+          default:
+            return createTextInput(questionId, question.required, "text");
+        }
+      }
+
+      // Create text input
+      function createTextInput(id, required, type = "text") {
+        const input = document.createElement("input");
+        input.type = type;
+        input.id = id;
+        input.name = id;
+        input.className = "form-control";
+        input.required = required;
+        return input;
+      }
+
+      // Create textarea
+      function createTextArea(id, required) {
+        const textarea = document.createElement("textarea");
+        textarea.id = id;
+        textarea.name = id;
+        textarea.className = "form-control";
+        textarea.rows = 4;
+        textarea.required = required;
+        return textarea;
+      }
+
+      // Create radio group
+      function createRadioGroup(id, options, required) {
+        const container = document.createElement("div");
+        container.className = "radio-group";
+
+        options.forEach((option, index) => {
+          const radioItem = document.createElement("div");
+          radioItem.className = "radio-item";
+
+          const radio = document.createElement("input");
+          radio.type = "radio";
+          radio.id = `${id}_${index}`;
+          radio.name = id;
+          radio.value = option;
+          radio.required = required;
+
+          const label = document.createElement("label");
+          label.htmlFor = `${id}_${index}`;
+          label.textContent = option;
+
+          radioItem.appendChild(radio);
+          radioItem.appendChild(label);
+          container.appendChild(radioItem);
+        });
+
+        return container;
+      }
+
+      // Create scale input
+      function createScaleInput(id, low, high, lowLabel, highLabel, required) {
+        const container = document.createElement("div");
+        container.className = "scale-container";
+
+        const input = document.createElement("input");
+        input.type = "range";
+        input.id = id;
+        input.name = id;
+        input.min = low;
+        input.max = high;
+        input.value = Math.floor((low + high) / 2);
+        input.required = required;
+
+        const valueDisplay = document.createElement("span");
+        valueDisplay.textContent = input.value;
+
+        input.addEventListener("input", () => {
+          valueDisplay.textContent = input.value;
+        });
+
+        const labelsDiv = document.createElement("div");
+        labelsDiv.className = "scale-labels";
+        labelsDiv.innerHTML = `<span>${lowLabel || low}</span><span>${
+          highLabel || high
+        }</span>`;
+
+        container.appendChild(input);
+        container.appendChild(valueDisplay);
+        container.appendChild(labelsDiv);
+
+        return container;
+      }
+
+      // Show error
+      function showError(message) {
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("error").style.display = "block";
+        document.getElementById("errorMessage").textContent = message;
+      }
+
+      // Show success
+      function showSuccess() {
+        document.getElementById("formContainer").style.display = "none";
+        document.getElementById("success").style.display = "block";
+      }
+
+      // Handle form submission
+      document
+        .getElementById("evaluationForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const submitBtn = document.getElementById("submitBtn");
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Submitting...";
+
+          try {
+            const formDataObj = new FormData(e.target);
+            const responses = [];
+
+            formData.questions.forEach((question, index) => {
+              const questionId = `q${index}`;
+              const answer = formDataObj.get(questionId);
+
+              if (answer) {
+                responses.push({
+                  questionId: questionId,
+                  questionTitle: question.title,
+                  answer: answer,
+                });
+              }
+            });
+
+            const submissionData = {
+              responses: responses,
+              respondentName: document.getElementById("submitterName").value,
+              respondentEmail: document.getElementById("submitterEmail").value,
+            };
+
+            const response = await fetch(`/api/forms/${formId}/submit`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(submissionData),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+              showSuccess();
+            } else {
+              throw new Error(result.message || "Failed to submit response");
+            }
+          } catch (error) {
+            console.error("Error submitting form:", error);
+            showError("Failed to submit response. Please try again.");
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Submit Response";
+          }
+        });
+
+      // Load form when page loads
+      loadForm();
+    </script>
+  </body>
+</html>

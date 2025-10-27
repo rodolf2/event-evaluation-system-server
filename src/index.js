@@ -15,7 +15,7 @@ const app = express();
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
   })
 );
@@ -70,6 +70,7 @@ app.get("/", (req, res) => {
 const analysisRoutes = require('./api/routes/analysisRoutes');
 const eventRoutes = require('./api/routes/eventRoutes');
 const certificateRoutes = require('./api/routes/certificateRoutes');
+const formsRoutes = require('./api/routes/formsRoutes');
 const authRoutes = require('./api/routes/authRoutes');
 const protectedRoutes = require('./api/routes/protectedRoutes');
 const userRoutes = require('./api/routes/userRoutes');
@@ -78,6 +79,7 @@ const reminderRoutes = require('./api/routes/reminderRoutes');
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/certificates', certificateRoutes);
+app.use('/api/forms', formsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/protected', protectedRoutes);
 app.use('/api/users', userRoutes);
