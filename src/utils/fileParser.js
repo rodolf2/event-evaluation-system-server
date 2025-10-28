@@ -126,7 +126,7 @@ class FileParser {
 
   // Parse questions from text (comprehensive implementation)
   parseQuestionsFromText(text) {
-    console.log('Input text to parse:', text.substring(0, 200) + '...');
+    console.log('Input text to parse:', text.substring(0, 500) + '...');
     const lines = text.split('\n').filter(line => line.trim());
     const questions = [];
     const seenQuestions = new Set(); // Track unique questions
@@ -158,11 +158,19 @@ class FileParser {
     let questionBuffer = []; // Buffer for multi-line questions
 
     for (let i = 0; i < lines.length; i++) {
+      if (!questionText.trim()) {
+          console.log('Skipping empty question text.');
+          continue;
+      }
       const line = lines[i].trim();
+      console.log(`Processing line ${i + 1}: "${line}"`);
       const nextLines = lines.slice(i + 1, Math.min(i + 8, lines.length)); // Look ahead
 
       // Skip very short lines or pure numbers/symbols
-      if (line.length < 2 || /^[^\w\s]+$/.test(line)) continue;
+      if (line.length < 2 || /^[^\w\s]+$/.test(line)) {
+        console.log('Skipping short or symbolic line.');
+        continue;
+      }
 
       let matchedPattern = null;
       let questionText = '';
@@ -192,17 +200,24 @@ class FileParser {
 
       // Process matched question
       if (matchedPattern && questionText) {
+        if (!questionText.trim()) {
+            console.log('Skipping empty question text.');
+            continue;
+        }
+        console.log(`Matched pattern '${matchedPattern}' with question text: "${questionText}"`);
         // Save previous question if exists
         if (currentQuestion) {
           this.finalizeQuestion(currentQuestion, choices);
           if (!seenQuestions.has(currentQuestion.title.toLowerCase())) {
             questions.push(currentQuestion);
             seenQuestions.add(currentQuestion.title.toLowerCase());
+            console.log(`Added question: "${currentQuestion.title}"`);
           }
         }
 
         // Skip if we've seen this question before
         if (seenQuestions.has(questionText.toLowerCase())) {
+          console.log('Skipping duplicate question.');
           currentQuestion = null;
           collectingChoices = false;
           choices = [];
@@ -215,6 +230,7 @@ class FileParser {
           type: this.determineQuestionType(questionText, nextLines),
           required: this.determineRequired(questionText),
         };
+        console.log(`Created new question with type '${currentQuestion.type}'.`);
 
         collectingChoices = this.needsChoices(currentQuestion.type);
         choices = [];
@@ -229,6 +245,7 @@ class FileParser {
           const choiceText = choiceMatch[1] ? choiceMatch[1].trim() : '';
           if (choiceText && !choices.includes(choiceText)) {
             choices.push(choiceText);
+            console.log(`Added choice: "${choiceText}"`);
           }
           continue;
         }
@@ -241,11 +258,13 @@ class FileParser {
         if (inlineChoices.length >= 2 && inlineChoices.length <= 6) {
           choices = [...new Set([...choices, ...inlineChoices])]; // Remove duplicates
           collectingChoices = false;
+          console.log(`Added inline choices: ${choices.join(', ')}`);
           continue;
         }
 
         // Stop collecting if we hit another question pattern or long text
         if (Object.values(patterns).some(pattern => pattern.test(line)) || line.length > 100) {
+          console.log('Stopping choice collection.');
           collectingChoices = false;
         }
       }
@@ -256,6 +275,7 @@ class FileParser {
         if (line.length > 10 && !line.match(patterns.choice)) {
           currentQuestion.title += ' ' + line;
           questionBuffer = [];
+          console.log(`Appended multi-line text to current question.`);
         }
       }
     }
@@ -265,11 +285,13 @@ class FileParser {
       this.finalizeQuestion(currentQuestion, choices);
       if (!seenQuestions.has(currentQuestion.title.toLowerCase())) {
         questions.push(currentQuestion);
+        console.log(`Added final question: "${currentQuestion.title}"`);
       }
     }
 
     // Enhanced fallback for documents with no clear questions
     if (questions.length === 0) {
+      console.log('No questions found, attempting fallback.');
       // Try to extract from paragraph text - look for question-like sentences
       const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
 
@@ -284,6 +306,7 @@ class FileParser {
             required: false,
             options: [],
           });
+          console.log(`Added fallback question: "${trimmed}"`);
           break; // Just take the first good one
         }
       }
@@ -291,6 +314,7 @@ class FileParser {
 
     // Absolute fallback
     if (questions.length === 0) {
+      console.log('No questions found, creating generic feedback question.');
       questions.push({
         title: 'Please provide your feedback',
         type: 'paragraph',

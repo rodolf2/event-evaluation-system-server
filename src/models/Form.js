@@ -133,6 +133,32 @@ const formSchema = new mongoose.Schema(
         },
       },
     ],
+    attendeeList: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          default: null, // Can be null if user is not registered
+        },
+        name: {
+          type: String,
+          trim: true,
+        },
+        email: {
+          type: String,
+          trim: true,
+          lowercase: true,
+        },
+        hasResponded: {
+          type: Boolean,
+          default: false,
+        },
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     uploadedLinks: [
       {
         title: String,
