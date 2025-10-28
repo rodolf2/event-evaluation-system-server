@@ -1,4 +1,5 @@
 const Form = require("../../models/Form");
+const User = require("../../models/User"); // Import User model
 const formsService = require("../../services/forms/formsService");
 const multer = require("multer");
 const path = require("path");
@@ -38,7 +39,27 @@ const upload = multer({
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Invalid file type"), false);
+      cb(new Error("Invalid file type. Allowed types: PDF, DOC, DOCX, CSV, XLS, XLSX, TXT"), false);
+    }
+  },
+});
+
+const attendeeUpload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit for attendee lists
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "text/csv",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only CSV and Excel files are allowed for attendee lists."), false);
     }
   },
 });
@@ -186,14 +207,14 @@ const uploadForm = [
         }
       }
 
-          res.status(500).json({
-            success: false,
-            message: "Failed to create form from upload",
-            error: error.message,
-          });
-        }
-      },
-      ];
+      res.status(500).json({
+        success: false,
+        message: "Failed to create form from upload",
+        error: error.message,
+      });
+    }
+  },
+];
       
       // POST /api/forms/extract-by-file - Extract questions from an uploaded file without creating a form
       const extractFormByFile = [
@@ -565,16 +586,146 @@ const getFormResponses = async (req, res) => {
   }
 };
 
+// POST /api/forms/:id/attendees - Upload attendee list for a form
+const uploadAttendeeList = [
+  attendeeUpload.single("attendeeFile"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "No attendee file uploaded",
+        });
+      }
+
+      const form = await Form.findOne({
+        _id: id,
+        createdBy: req.user._id,
+      });
+
+      if (!form) {
+        return res.status(404).json({
+          success: false,
+          message: "Form not found",
+        });
+      }
+
+      // Parse CSV/Excel file to extract attendee data
+      const parsedAttendees = await formsService.parseAttendeeFile(req.file.path);
+
+      const processedAttendees = await Promise.all(
+        parsedAttendees.map(async (attendee) => {
+          let user = await User.findOne({ email: attendee.email });
+
+          if (!user) {
+            // Create new user if not found
+            user = new User({
+              name: attendee.name || attendee.email.split('@')[0], // Fallback name
+              email: attendee.email,
+              role: 'participant', // Default role for imported attendees
+            });
+            await user.save();
+          }
+
+          return {
+            userId: user._id,
+            name: attendee.name,
+            email: attendee.email,
+            hasResponded: false,
+            uploadedAt: new Date(),
+          };
+        })
+      );
+
+      // Update form with processed attendee list
+      form.attendeeList = processedAttendees;
+
+      await form.save();
+
+      // Clean up uploaded file
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.error("Error cleaning up attendee file:", cleanupError);
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Attendee list uploaded successfully",
+        data: {
+          attendeeCount: form.attendeeList.length,
+          attendees: form.attendeeList,
+        },
+      });
+    } catch (error) {
+      console.error("Error uploading attendee list:", error);
+
+      // Clean up uploaded file if error occurs
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (cleanupError) {
+          console.error("Error cleaning up file:", cleanupError);
+        }
+      }
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to upload attendee list",
+        error: error.message,
+      });
+    }
+  },
+];
+
+// GET /api/forms/:id/attendees - Get attendee list for a form
+const getAttendeeList = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const form = await Form.findOne({
+      _id: id,
+      createdBy: req.user._id,
+    });
+
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: "Form not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        attendeeCount: form.attendeeList.length,
+        attendees: form.attendeeList,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching attendee list:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch attendee list",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getAllForms,
   getFormById,
   createBlankForm,
   uploadForm,
-  extractFormByFile, // Add this line
+  extractFormByFile,
   extractFormByUrl,
   uploadFormByUrl,
   publishForm,
   deleteForm,
   submitFormResponse,
   getFormResponses,
+  uploadAttendeeList,
+  getAttendeeList,
 };

@@ -62,6 +62,7 @@ app.use(passport.session());
 
 // Static file serving for certificate downloads and admin interface
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use("/uploads/csv", express.static(path.join(__dirname, "../uploads/csv")));
 app.use(express.static(path.join(__dirname, "public")));
 
 // Connect to Database
@@ -225,6 +226,7 @@ const authRoutes = require('./api/routes/authRoutes');
 const protectedRoutes = require('./api/routes/protectedRoutes');
 const userRoutes = require('./api/routes/userRoutes');
 const reminderRoutes = require('./api/routes/reminderRoutes');
+const uploadRoutes = require('./api/routes/uploadRoutes');
 
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/events', eventRoutes);
@@ -235,9 +237,13 @@ app.use('/api/protected', protectedRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reminders', reminderRoutes);
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
 =======
 >>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
+=======
+app.use('/api/upload', uploadRoutes);
+>>>>>>> 5a2d4c9568aaff9d3cfea88728918090fb3f831c
 
 const PORT = process.env.PORT || 5000;
 
