@@ -238,12 +238,16 @@ app.use('/api/users', userRoutes);
 app.use('/api/reminders', reminderRoutes);
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
 =======
 >>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 =======
 app.use('/api/upload', uploadRoutes);
 >>>>>>> 5a2d4c9568aaff9d3cfea88728918090fb3f831c
+=======
+app.use('/api/upload', uploadRoutes);
+>>>>>>> 65ec4552338f4a9dd332764ff89eaa63c30110ec
 
 const PORT = process.env.PORT || 5000;
 

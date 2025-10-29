@@ -46,7 +46,10 @@ const generateQualitativeReport = async (eventId) => {
     // Call Python script for text analysis
     const pythonResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(process.cwd(), 'text_analysis.py');
-      const pyshell = new PythonShell(scriptPath);
+      const pythonPath = process.platform === 'win32'
+        ? path.resolve(process.cwd(), 'venv', 'Scripts', 'python.exe')
+        : path.resolve(process.cwd(), 'venv', 'bin', 'python');
+      const pyshell = new PythonShell(scriptPath, { pythonPath });
 
       // Send data to Python script
       pyshell.send(JSON.stringify({
@@ -123,7 +126,10 @@ const generateQuantitativeReport = async (eventId) => {
     // Use Python for statistical analysis
     const quantitativeResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(process.cwd(), 'text_analysis.py');
-      const pyshell = new PythonShell(scriptPath);
+      const pythonPath = process.platform === 'win32'
+        ? path.resolve(process.cwd(), 'venv', 'Scripts', 'python.exe')
+        : path.resolve(process.cwd(), 'venv', 'bin', 'python');
+      const pyshell = new PythonShell(scriptPath, { pythonPath });
 
       pyshell.send(JSON.stringify({
         action: 'analyze_quantitative',

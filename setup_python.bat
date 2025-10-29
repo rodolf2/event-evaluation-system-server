@@ -24,7 +24,7 @@ call venv\Scripts\activate.bat
 
 REM Upgrade pip
 echo Upgrading pip...
-pip install --upgrade pip
+pip install --upgrade pip setuptools wheel
 
 REM Install required packages
 echo Installing Python dependencies...
