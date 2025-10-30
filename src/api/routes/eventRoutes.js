@@ -122,11 +122,16 @@ router.get('/:id/report', requireRole(['psas', 'school-admin', 'mis']), async (r
 // @access  Protected (psas, school-admin, mis)
 router.get('/reports/all', requireRole(['psas', 'school-admin', 'mis']), async (req, res) => {
   try {
+    console.log('Fetching all reports...');
+    console.log('User role:', req.user ? req.user.role : 'No user');
+
     // Find events that have feedback
     const eventsWithFeedback = await Feedback.distinct('eventId');
+    console.log('Events with feedback:', eventsWithFeedback.length);
 
     // Get event details for these events
     const events = await Event.find({ _id: { $in: eventsWithFeedback } }).sort({ date: -1 });
+    console.log('Found events:', events.length);
 
     const reports = await Promise.all(events.map(async (event) => {
       const feedbackCount = await Feedback.countDocuments({ eventId: event._id });
@@ -141,6 +146,7 @@ router.get('/reports/all', requireRole(['psas', 'school-admin', 'mis']), async (
       };
     }));
 
+    console.log('Generated reports:', reports.length);
     res.json(reports);
   } catch (error) {
     console.error('Error fetching reports:', error);

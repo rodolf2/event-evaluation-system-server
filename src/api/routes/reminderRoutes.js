@@ -1,38 +1,11 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-const express = require("express");
-const router = express.Router();
-const {
-  getReminders,
-  createReminder,
-  deleteReminder,
-} = require("../controllers/reminderController");
-const { requireAuth } = require("../../middlewares/auth");
-
-// All reminder routes require a logged in user
-router.use(requireAuth);
-
-// GET /api/reminders - Get all reminders for the logged-in user
-router.get("/", getReminders);
-
-// POST /api/reminders - Create new reminder
-router.post("/", createReminder);
-
-// DELETE /api/reminders/:id - Delete a reminder
-router.delete("/:id", deleteReminder);
-
-module.exports = router;
-=======
-=======
->>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../../middleware/authMiddleware');
+const { requireRole } = require('../../middlewares/auth');
 const reminderService = require('../../services/reminder/reminderService');
 const Reminder = require('../../models/Reminder');
 
 // GET /api/reminders - Get all reminders for the authenticated user
-router.get('/', protect, async (req, res) => {
+router.get('/', requireRole(['psas', 'club-officer', 'school-admin', 'mis']), async (req, res) => {
   try {
     const reminders = await Reminder.find({ userId: req.user._id })
       .sort({ date: 1, createdAt: -1 });
@@ -49,7 +22,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // POST /api/reminders - Create a new reminder
-router.post('/', protect, async (req, res) => {
+router.post('/', requireRole(['psas', 'club-officer']), async (req, res) => {
   try {
     const { title, date, description, priority } = req.body;
 
@@ -86,7 +59,7 @@ router.post('/', protect, async (req, res) => {
 });
 
 // DELETE /api/reminders/:id - Delete a reminder
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', requireRole(['psas', 'club-officer']), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -119,7 +92,3 @@ router.delete('/:id', protect, async (req, res) => {
 });
 
 module.exports = router;
-<<<<<<< HEAD
->>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
-=======
->>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842

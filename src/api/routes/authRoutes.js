@@ -1,48 +1,5 @@
 const express = require('express');
 const router = express.Router();
-<<<<<<< HEAD
-<<<<<<< HEAD
-const passport = require('../../config/passport');
-const {
-  googleAuthCallback,
-  googleAuthFailure,
-  logout,
-  getProfile,
-  updateProfile,
-  checkAuth,
-  verifyAdmin
-} = require('../controllers/authController');
-const { requireAuth } = require('../../middlewares/auth');
-
-// Google OAuth routes
-router.get('/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
-
-router.get('/google/callback',
-  passport.authenticate('google', { failureRedirect: '/api/auth/google/failure' }),
-  googleAuthCallback
-);
-
-router.get('/google/failure', googleAuthFailure);
-
-// Protected routes (require authentication)
-router.get('/profile', requireAuth, getProfile);
-
-router.put('/profile', requireAuth, updateProfile);
-
-router.get('/check', requireAuth, checkAuth);
-
-router.get('/verify-admin', requireAuth, verifyAdmin);
-
-// Logout route
-router.post('/logout', logout);
-
-// Alternative logout route for GET requests
-router.get('/logout', logout);
-=======
-=======
->>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const User = require('../../models/User');
@@ -56,8 +13,8 @@ router.get(
   (req, res) => {
     // Generate JWT token with role information and profile picture
     const token = jwt.sign(
-      { 
-        id: req.user._id, 
+      {
+        id: req.user._id,
         email: req.user.email,
         role: req.user.role,
         isActive: req.user.isActive,
@@ -85,20 +42,20 @@ router.get('/profile', async (req, res) => {
     }
 
     const token = authHeader.split(' ')[1];
-    
+
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Find user
     const user = await User.findById(decoded.id);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found',
       });
     }
-    
+
     // Return user data with role information and profile picture
     res.json({
       success: true,
@@ -121,9 +78,5 @@ router.get('/profile', async (req, res) => {
     });
   }
 });
-<<<<<<< HEAD
->>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
-=======
->>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 
 module.exports = router;
