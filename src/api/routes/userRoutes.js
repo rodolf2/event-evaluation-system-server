@@ -1,52 +1,16 @@
 const express = require('express');
 const router = express.Router();
-<<<<<<< HEAD
-<<<<<<< HEAD
-const {
-  createUser,
-  getAllUsers,
-  getUserById,
-  updateUser,
-  deleteUser,
-  getUserStats,
-  bulkUpdateUsers
-} = require('../controllers/userController');
+const User = require('../../models/User');
 const { requireRole } = require('../../middlewares/auth');
 
-// All user management routes require admin access
-router.use(requireRole(['mis', 'psas']));
+// All user management routes require mis role only
+router.use(requireRole(['mis']));
 
-// POST /api/users - Create new user (admin only)
-router.post('/', createUser);
-
-// GET /api/users - Get all users with pagination and filters
-router.get('/', getAllUsers);
-
-// GET /api/users/stats/overview - Get user statistics for admin dashboard
-router.get('/stats/overview', getUserStats);
-
-// GET /api/users/:id - Get user by ID
-router.get('/:id', getUserById);
-
-// PUT /api/users/:id - Update user
-router.put('/:id', updateUser);
-
-// DELETE /api/users/:id - Delete/deactivate user
-router.delete('/:id', deleteUser);
-
-// PUT /api/users/bulk - Bulk update users
-router.put('/bulk', bulkUpdateUsers);
-=======
-=======
->>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
-const User = require('../../models/User');
-const { protect, authorize } = require('../../middleware/authMiddleware');
-
-// Get all users - restricted to admin and mis roles
-router.get('/', protect, authorize('school-admin', 'mis'), async (req, res) => {
+// Get all users - restricted to mis role
+router.get('/', async (req, res) => {
   try {
     const users = await User.find().select('-__v');
-    
+
     res.json({
       success: true,
       data: {
@@ -62,11 +26,11 @@ router.get('/', protect, authorize('school-admin', 'mis'), async (req, res) => {
   }
 });
 
-// Create new user - restricted to admin and mis roles
-router.post('/', protect, authorize('school-admin', 'mis'), async (req, res) => {
+// Create new user - restricted to mis role
+router.post('/', async (req, res) => {
   try {
     const { name, email, role } = req.body;
-    
+
     // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -75,7 +39,16 @@ router.post('/', protect, authorize('school-admin', 'mis'), async (req, res) => 
         message: 'User with this email already exists'
       });
     }
-    
+
+    // Validate role against allowed values
+    const allowedRoles = ['participant', 'psas', 'club-officer', 'school-admin', 'mis'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified'
+      });
+    }
+
     // Create user
     const user = await User.create({
       name,
@@ -83,7 +56,7 @@ router.post('/', protect, authorize('school-admin', 'mis'), async (req, res) => 
       role,
       isActive: true
     });
-    
+
     res.status(201).json({
       success: true,
       data: {
@@ -99,11 +72,11 @@ router.post('/', protect, authorize('school-admin', 'mis'), async (req, res) => 
   }
 });
 
-// Update user - restricted to admin and mis roles
-router.put('/:id', protect, authorize('school-admin', 'mis'), async (req, res) => {
+// Update user - restricted to mis role
+router.put('/:id', async (req, res) => {
   try {
     const { name, email, role, isActive } = req.body;
-    
+
     // Find user
     let user = await User.findById(req.params.id);
     if (!user) {
@@ -112,15 +85,26 @@ router.put('/:id', protect, authorize('school-admin', 'mis'), async (req, res) =
         message: 'User not found'
       });
     }
-    
+
+    // Validate role if being updated
+    if (role) {
+      const allowedRoles = ['participant', 'psas', 'club-officer', 'school-admin', 'mis'];
+      if (!allowedRoles.includes(role)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid role specified'
+        });
+      }
+    }
+
     // Update user
     user.name = name || user.name;
     user.email = email || user.email;
     user.role = role || user.role;
     user.isActive = isActive !== undefined ? isActive : user.isActive;
-    
+
     await user.save();
-    
+
     res.json({
       success: true,
       data: {
@@ -135,9 +119,5 @@ router.put('/:id', protect, authorize('school-admin', 'mis'), async (req, res) =
     });
   }
 });
-<<<<<<< HEAD
->>>>>>> 28c2a0829cabd02254f53bf8130711435d5404e4
-=======
->>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 
 module.exports = router;

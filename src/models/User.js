@@ -20,8 +20,9 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['psas', 'club-officer', 'participant', 'school-admin', 'mis'],
+    enum: ['participant', 'psas', 'club-officer', 'school-admin', 'mis'],
     default: 'participant',
+    required: true
   },
   isActive: {
     type: Boolean,
@@ -41,16 +42,6 @@ const UserSchema = new mongoose.Schema({
   profilePicture: {
     type: String,
     default: null
-  },
-  role: {
-    type: String,
-    enum: ['participant', 'psas', 'club-officer', 'school-admin', 'mis'],
-    default: 'participant',
-    required: true
-  },
-  isActive: {
-    type: Boolean,
-    default: true
   }
 });
 

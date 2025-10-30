@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { requireRole } = require('../../middlewares/auth');
 const Event = require('../../models/Event');
 const Feedback = require('../../models/Feedback');
 const analysisService = require('../../services/analysis/analysisService');
@@ -33,8 +34,8 @@ router.get('/:id', async (req, res) => {
 
 // @route   GET /api/events/:id/feedback
 // @desc    Get all feedback for a specific event
-// @access  Public
-router.get('/:id/feedback', async (req, res) => {
+// @access  Protected (psas, school-admin, mis)
+router.get('/:id/feedback', requireRole(['psas', 'school-admin', 'mis']), async (req, res) => {
   try {
     const feedbacks = await Feedback.find({ eventId: req.params.id })
       .populate('userId', 'name email')
@@ -47,8 +48,8 @@ router.get('/:id/feedback', async (req, res) => {
 
 // @route   GET /api/events/:id/analytics
 // @desc    Get analytics for a specific event
-// @access  Public
-router.get('/:id/analytics', async (req, res) => {
+// @access  Protected (psas, school-admin, mis)
+router.get('/:id/analytics', requireRole(['psas', 'school-admin', 'mis']), async (req, res) => {
   try {
     // NOTE: This is a mock implementation.
     // In a real app, you would calculate this data based on the event ID.
@@ -73,12 +74,10 @@ router.get('/:id/analytics', async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
-=======
 // @route   GET /api/events/:id/report
 // @desc    Get report data for a specific event
-// @access  Public
-router.get('/:id/report', async (req, res) => {
+// @access  Protected (psas, school-admin, mis)
+router.get('/:id/report', requireRole(['psas', 'school-admin', 'mis']), async (req, res) => {
   try {
     const eventId = req.params.id;
 
@@ -120,8 +119,8 @@ router.get('/:id/report', async (req, res) => {
 
 // @route   GET /api/events/reports
 // @desc    Get all available reports for events that have feedback
-// @access  Public
-router.get('/reports/all', async (req, res) => {
+// @access  Protected (psas, school-admin, mis)
+router.get('/reports/all', requireRole(['psas', 'school-admin', 'mis']), async (req, res) => {
   try {
     // Find events that have feedback
     const eventsWithFeedback = await Feedback.distinct('eventId');
@@ -149,5 +148,4 @@ router.get('/reports/all', async (req, res) => {
   }
 });
 
->>>>>>> 303a0d8ce9b6f1af57b834bf2917b83323f8f842
 module.exports = router;
