@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { protect } = require('../../middleware/authMiddleware');
+const { requireAuth } = require('../../middlewares/auth');
 
 const router = express.Router();
 
@@ -41,7 +41,7 @@ const upload = multer({
 });
 
 // Upload CSV file
-router.post('/csv', protect, upload.single('file'), (req, res) => {
+router.post('/csv', requireAuth, upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({

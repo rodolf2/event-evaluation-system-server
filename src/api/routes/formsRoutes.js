@@ -36,4 +36,7 @@ router.post('/:id/submit', requireRole(['participant']), formsController.submitF
 // GET /api/forms/:id/responses - Get responses for a form (psas, school-admin, mis can view)
 router.get('/:id/responses', requireRole(['psas', 'school-admin', 'mis']), formsController.getFormResponses);
 
+// GET /api/forms/my-evaluations - Get forms that the current user is assigned to (participants, club-officers)
+router.get('/my-evaluations', requireRole(['participant', 'club-officer']), formsController.getMyEvaluations);
+
 module.exports = router;

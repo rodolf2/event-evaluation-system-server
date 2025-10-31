@@ -151,6 +151,54 @@ const createBlankForm = async (req, res) => {
 
     console.log("Form created successfully:", savedForm._id);
 
+    // Process uploaded CSV files to extract attendee data
+    if (uploadedLinks && uploadedLinks.length > 0) {
+      try {
+        for (const link of uploadedLinks) {
+          if (link.url && link.url.includes('.csv')) {
+            console.log("Processing CSV file for attendees:", link.url);
+
+            // Extract file path from URL
+            const filePath = link.url.replace('http://localhost:5000', '');
+            const fullPath = require('path').join(__dirname, '../..', filePath);
+
+            const parsedAttendees = await formsService.parseAttendeeFile(fullPath);
+            console.log(`Parsed ${parsedAttendees.length} attendees from CSV`);
+
+            if (parsedAttendees.length > 0) {
+              // Convert parsed attendees to attendeeList format with normalized emails
+              const attendeeList = parsedAttendees.map(attendee => ({
+                userId: null, // Will be populated when users respond
+                name: attendee.name || '',
+                email: attendee.email ? attendee.email.toLowerCase().trim() : '',
+                hasResponded: false,
+                uploadedAt: new Date(),
+              }));
+
+              // Validate attendee data
+              const validAttendees = attendeeList.filter(attendee =>
+                attendee.name.trim() !== '' && attendee.email.includes('@')
+              );
+
+              if (validAttendees.length > 0) {
+                // Update form with attendee list
+                savedForm.attendeeList = validAttendees;
+                await savedForm.save();
+                console.log(`Updated form with ${validAttendees.length} valid attendees`);
+                break; // Only process the first CSV file
+              } else {
+                console.warn("No valid attendees found in CSV after filtering");
+              }
+            }
+          }
+        }
+      } catch (csvError) {
+        console.error("Error processing CSV file:", csvError);
+        // Log the error but don't fail the form creation
+        console.log("CSV processing failed, continuing with form creation without attendees");
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: "Form created successfully",
@@ -617,13 +665,16 @@ const uploadAttendeeList = [
 
       const processedAttendees = await Promise.all(
         parsedAttendees.map(async (attendee) => {
-          let user = await User.findOne({ email: attendee.email });
+          // Normalize email for consistency
+          const normalizedEmail = attendee.email ? attendee.email.toLowerCase().trim() : '';
+
+          let user = await User.findOne({ email: normalizedEmail });
 
           if (!user) {
             // Create new user if not found
             user = new User({
-              name: attendee.name || attendee.email.split('@')[0], // Fallback name
-              email: attendee.email,
+              name: attendee.name ? attendee.name.trim() : (attendee.email ? attendee.email.split('@')[0].trim() : 'Unknown'), // Fallback name
+              email: normalizedEmail,
               role: 'participant', // Default role for imported attendees
             });
             await user.save();
@@ -631,8 +682,8 @@ const uploadAttendeeList = [
 
           return {
             userId: user._id,
-            name: attendee.name,
-            email: attendee.email,
+            name: attendee.name ? attendee.name.trim() : user.name,
+            email: normalizedEmail,
             hasResponded: false,
             uploadedAt: new Date(),
           };
@@ -714,6 +765,98 @@ const getAttendeeList = async (req, res) => {
   }
 };
 
+// GET /api/forms/my-evaluations - Get forms that the current user is assigned to
+const getMyEvaluations = async (req, res) => {
+  try {
+    const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : '';
+    const userName = req.user.name ? req.user.name.trim() : '';
+
+    console.log('getMyEvaluations - User info:', { email: userEmail, name: userName });
+
+    // Find forms where the user is in the attendeeList using more robust matching
+    const forms = await Form.find({
+      status: 'published'
+    })
+    .populate('createdBy', 'name email')
+    .select('title description shareableLink eventStartDate eventEndDate attendeeList createdAt')
+    .sort({ createdAt: -1 });
+
+    console.log(`Found ${forms.length} published forms total`);
+
+    // Filter forms where the user is in the attendeeList and hasn't responded
+    const availableForms = [];
+
+    for (const form of forms) {
+      if (!form.attendeeList || form.attendeeList.length === 0) {
+        continue;
+      }
+
+      // Check if user is in attendee list
+      const attendee = form.attendeeList.find(attendee => {
+        const attendeeEmail = attendee.email ? attendee.email.toLowerCase().trim() : '';
+        const attendeeName = attendee.name ? attendee.name.trim() : '';
+
+        // Match by email first (primary identifier)
+        if (userEmail && attendeeEmail === userEmail) {
+          return true;
+        }
+
+        // Fallback to name matching if email is not available
+        if (!userEmail && attendeeName && userName && attendeeName === userName) {
+          return true;
+        }
+
+        return false;
+      });
+
+      if (attendee && !attendee.hasResponded) {
+        // Check event date restrictions if set
+        if (form.eventStartDate || form.eventEndDate) {
+          const now = new Date();
+          const startDate = form.eventStartDate ? new Date(form.eventStartDate) : null;
+          const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
+
+          if (startDate && now < startDate) {
+            console.log(`Form "${form.title}" not available yet - starts ${startDate}`);
+            continue;
+          }
+
+          if (endDate && now > endDate) {
+            console.log(`Form "${form.title}" is no longer available - ended ${endDate}`);
+            continue;
+          }
+        }
+
+        availableForms.push(form);
+        console.log(`Added available form: "${form.title}" for user ${userEmail || userName}`);
+      }
+    }
+
+    console.log(`Final available forms: ${availableForms.length}`);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        forms: availableForms,
+        count: availableForms.length,
+        debug: {
+          totalPublishedForms: forms.length,
+          availableFormsCount: availableForms.length,
+          userEmail: userEmail,
+          userName: userName
+        }
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching my evaluations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch your evaluations',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getAllForms,
   getFormById,
@@ -726,6 +869,7 @@ module.exports = {
   deleteForm,
   submitFormResponse,
   getFormResponses,
+  getMyEvaluations,
   uploadAttendeeList,
   getAttendeeList,
 };

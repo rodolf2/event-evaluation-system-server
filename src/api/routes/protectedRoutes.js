@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { protect, authorize } = require('../../middleware/authMiddleware');
+const { requireAuth, requireRole } = require('../../middlewares/auth');
 
 // Route accessible to all authenticated users
-router.get('/user', protect, (req, res) => {
+router.get('/user', requireAuth, (req, res) => {
   res.json({
     success: true,
     data: {
@@ -19,7 +19,7 @@ router.get('/user', protect, (req, res) => {
 });
 
 // Route accessible only to school-admin and mis roles
-router.get('/admin', protect, authorize('school-admin', 'mis'), (req, res) => {
+router.get('/admin', requireAuth, requireRole(['school-admin', 'mis']), (req, res) => {
   res.json({
     success: true,
     data: {
@@ -35,7 +35,7 @@ router.get('/admin', protect, authorize('school-admin', 'mis'), (req, res) => {
 });
 
 // Route accessible only to mis role
-router.get('/mis', protect, authorize('mis'), (req, res) => {
+router.get('/mis', requireAuth, requireRole(['mis']), (req, res) => {
   res.json({
     success: true,
     data: {

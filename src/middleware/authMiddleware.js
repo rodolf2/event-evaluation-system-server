@@ -23,13 +23,13 @@ exports.protect = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'User no longer exists',
+        message: 'User not found',
       });
     }
 
     // Check if user is active
     if (!user.isActive) {
-      return res.status(403).json({
+      return res.status(401).json({
         success: false,
         message: 'User account is inactive',
       });
@@ -41,7 +41,7 @@ exports.protect = async (req, res, next) => {
   } catch (err) {
     return res.status(401).json({
       success: false,
-      message: 'Not authorized to access this route',
+      message: 'Invalid token',
     });
   }
 };
