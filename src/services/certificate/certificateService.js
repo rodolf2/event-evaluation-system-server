@@ -47,13 +47,15 @@ class CertificateService {
   }
 
   async generateCertificatePDF(certificateData) {
-    const { user, event, certificateType, customMessage, certificateId } =
+    const { user, event, certificateType, customMessage, certificateId, studentName } =
       certificateData;
 
     return new Promise((resolve, reject) => {
       try {
+        // Use student name from CSV data if provided, otherwise use user name
+        const displayName = studentName || user.name || "Participant";
         // Sanitize filename
-        const fileName = `${certificateId}_${user.name.replace(
+        const fileName = `${certificateId}_${displayName.replace(
           /[^a-zA-Z0-9]/g,
           "_"
         )}.pdf`; // ✅ added variable
@@ -76,7 +78,7 @@ class CertificateService {
 
         this.drawCertificateBackground(doc);
         this.drawCertificateContent(doc, {
-          userName: user.name,
+          userName: studentName || user.name || "Participant",
           eventName: event.name,
           eventDate: event.date,
           certificateType,
@@ -403,6 +405,7 @@ class CertificateService {
         certificateId,
         certificateType: options.certificateType || "participation",
         customMessage: options.customMessage,
+        studentName: options.studentName,
       };
 
       const pdfResult = await this.generateCertificatePDF(certificateData);

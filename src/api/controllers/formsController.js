@@ -89,16 +89,39 @@ const getAllForms = async (req, res) => {
 const getFormById = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user._id;
+    const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : '';
 
-    const form = await Form.findOne({
+    let form;
+
+    // First, try to find form created by the current user (creator access)
+    form = await Form.findOne({
       _id: id,
-      createdBy: req.user._id,
+      createdBy: userId,
     }).populate("createdBy", "name email");
+
+    // If not found and user is a participant, check if they're assigned to the form
+    if (!form && req.user.role === 'participant') {
+      form = await Form.findOne({
+        _id: id,
+        status: 'published',
+        'attendeeList.email': userEmail
+      }).populate("createdBy", "name email");
+    }
+
+    // If still not found, check if user has any role and is assigned to the form
+    if (!form) {
+      form = await Form.findOne({
+        _id: id,
+        status: 'published',
+        'attendeeList.email': userEmail
+      }).populate("createdBy", "name email");
+    }
 
     if (!form) {
       return res.status(404).json({
         success: false,
-        message: "Form not found",
+        message: "Form not found or you don't have permission to view it",
       });
     }
 
@@ -119,13 +142,9 @@ const getFormById = async (req, res) => {
 // POST /api/forms/blank - Create a new blank form
 const createBlankForm = async (req, res) => {
   try {
-    console.log("Creating blank form - Request body:", req.body);
-    console.log("User from auth:", req.user);
-
     const { title, description, questions, uploadedFiles, uploadedLinks, eventStartDate, eventEndDate } = req.body;
 
     if (!req.user || !req.user._id) {
-      console.log("User not authenticated");
       return res.status(401).json({
         success: false,
         message: "User not authenticated",
@@ -144,26 +163,19 @@ const createBlankForm = async (req, res) => {
       eventEndDate: eventEndDate ? new Date(eventEndDate) : null,
     };
 
-    console.log("Form data to save:", formData);
-
     const form = new Form(formData);
     const savedForm = await form.save();
 
-    console.log("Form created successfully:", savedForm._id);
-
     // Process uploaded CSV files to extract attendee data
-    if (uploadedLinks && uploadedLinks.length > 0) {
+    if (Array.isArray(uploadedLinks) && uploadedLinks.length > 0) {
       try {
         for (const link of uploadedLinks) {
           if (link.url && link.url.includes('.csv')) {
-            console.log("Processing CSV file for attendees:", link.url);
-
             // Extract file path from URL
-            const filePath = link.url.replace('http://localhost:5000', '');
-            const fullPath = require('path').join(__dirname, '../..', filePath);
+            const fileName = link.url.split('/').pop();
+            const fullPath = path.join(__dirname, '../../../uploads/csv', fileName);
 
             const parsedAttendees = await formsService.parseAttendeeFile(fullPath);
-            console.log(`Parsed ${parsedAttendees.length} attendees from CSV`);
 
             if (parsedAttendees.length > 0) {
               // Convert parsed attendees to attendeeList format with normalized emails
@@ -184,7 +196,6 @@ const createBlankForm = async (req, res) => {
                 // Update form with attendee list
                 savedForm.attendeeList = validAttendees;
                 await savedForm.save();
-                console.log(`Updated form with ${validAttendees.length} valid attendees`);
                 break; // Only process the first CSV file
               } else {
                 console.warn("No valid attendees found in CSV after filtering");
@@ -195,7 +206,6 @@ const createBlankForm = async (req, res) => {
       } catch (csvError) {
         console.error("Error processing CSV file:", csvError);
         // Log the error but don't fail the form creation
-        console.log("CSV processing failed, continuing with form creation without attendees");
       }
     }
 
@@ -424,11 +434,7 @@ const uploadFormByUrl = async (req, res) => {
 const publishForm = async (req, res) => {
   try {
     const { id } = req.params;
-    const { questions } = req.body;
-
-    console.log("Publishing form - ID:", id);
-    console.log("Questions to publish:", questions);
-    console.log("User from auth:", req.user);
+    const { title, description, questions, eventStartDate, eventEndDate, uploadedFiles, uploadedLinks } = req.body;
 
     const form = await Form.findOne({
       _id: id,
@@ -436,20 +442,16 @@ const publishForm = async (req, res) => {
     });
 
     if (!form) {
-      console.log("Form not found for ID:", id);
       return res.status(404).json({
         success: false,
         message: "Form not found",
       });
     }
 
-    console.log("Found form:", form._id);
-
     // Validate event dates if provided
-    if (form.eventStartDate && form.eventEndDate) {
-      const now = new Date();
-      const startDate = new Date(form.eventStartDate);
-      const endDate = new Date(form.eventEndDate);
+    if (eventStartDate && eventEndDate) {
+      const startDate = new Date(eventStartDate);
+      const endDate = new Date(eventEndDate);
 
       if (startDate >= endDate) {
         return res.status(400).json({
@@ -457,18 +459,32 @@ const publishForm = async (req, res) => {
           message: "Event start date must be before end date",
         });
       }
-
-      // Optional: Check if publishing within the event period
-      // if (now < startDate || now > endDate) {
-      //   return res.status(400).json({
-      //     success: false,
-      //     message: "Cannot publish form outside of event dates",
-      //   });
-      // }
+      form.eventStartDate = eventStartDate;
+      form.eventEndDate = eventEndDate;
     }
 
-    // Update form with final questions and publish
-    form.questions = questions;
+    // Update form with final details and publish
+    if (title) {
+      form.title = title;
+    }
+    if (description) {
+      form.description = description;
+    }
+    if (questions) {
+      form.questions = questions;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "No questions provided in request",
+      });
+    }
+    if (uploadedFiles) {
+      form.uploadedFiles = uploadedFiles;
+    }
+    if (uploadedLinks) {
+      form.uploadedLinks = uploadedLinks;
+    }
+    
     form.status = "published";
     form.publishedAt = new Date();
 
@@ -478,7 +494,6 @@ const publishForm = async (req, res) => {
     form.shareableLink = shareableLink;
 
     const savedForm = await form.save();
-    console.log("Form published successfully:", savedForm._id);
 
     res.status(200).json({
       success: true,
@@ -489,8 +504,8 @@ const publishForm = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error publishing form:", error);
-    console.error("Error stack:", error.stack);
+    console.error("📝 Error publishing form:", error);
+    console.error("📝 Error stack:", error.stack);
     res.status(500).json({
       success: false,
       message: "Failed to publish form",
@@ -587,6 +602,45 @@ const submitFormResponse = async (req, res) => {
     form.responses.push(responseData);
     form.responseCount = (form.responseCount || 0) + 1;
 
+    // Check if this respondent is in the attendee list and update their status
+    if (respondentEmail) {
+      const normalizedEmail = respondentEmail.toLowerCase().trim();
+      const attendee = form.attendeeList.find(attendee =>
+        attendee.email && attendee.email.toLowerCase().trim() === normalizedEmail
+      );
+
+      if (attendee) {
+        attendee.hasResponded = true;
+
+        // Generate certificate if the attendee hasn't received one yet
+        if (!attendee.certificateGenerated) {
+          try {
+            const certificateService = require("../../services/certificate/certificateService");
+
+            // Use the student's name from attendee list for the certificate
+            const certificateResult = await certificateService.generateCertificate(
+              attendee.userId || form.createdBy, // Use attendee's userId if available, otherwise form creator
+              form._id, // Use the form as the "event"
+              {
+                certificateType: "completion",
+                customMessage: `For successfully completing the evaluation form: ${form.title}`,
+                sendEmail: true,
+                studentName: attendee.name // Use the name from attendee list
+              }
+            );
+
+            if (certificateResult.success) {
+              attendee.certificateGenerated = true;
+              attendee.certificateId = certificateResult.certificateId;
+            }
+          } catch (certError) {
+            console.error(`Error generating certificate for ${attendee.name}:`, certError);
+            // Don't fail the response submission if certificate generation fails
+          }
+        }
+      }
+    }
+
     await form.save();
 
     res.status(201).json({
@@ -607,16 +661,39 @@ const submitFormResponse = async (req, res) => {
 const getFormResponses = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user._id;
+    const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : '';
 
-    const form = await Form.findOne({
+    let form;
+
+    // First, try to find form created by the current user (creator access)
+    form = await Form.findOne({
       _id: id,
-      createdBy: req.user._id,
+      createdBy: userId,
     });
+
+    // If not found and user is a participant, check if they're assigned to the form
+    if (!form && req.user.role === 'participant') {
+      form = await Form.findOne({
+        _id: id,
+        status: 'published',
+        'attendeeList.email': userEmail
+      });
+    }
+
+    // If still not found, check if user has any role and is assigned to the form
+    if (!form) {
+      form = await Form.findOne({
+        _id: id,
+        status: 'published',
+        'attendeeList.email': userEmail
+      });
+    }
 
     if (!form) {
       return res.status(404).json({
         success: false,
-        message: "Form not found",
+        message: "Form not found or you don't have permission to view its responses",
       });
     }
 
@@ -769,82 +846,43 @@ const getAttendeeList = async (req, res) => {
 const getMyEvaluations = async (req, res) => {
   try {
     const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : '';
-    const userName = req.user.name ? req.user.name.trim() : '';
 
-    console.log('getMyEvaluations - User info:', { email: userEmail, name: userName });
+    if (!userEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'User email not found',
+      });
+    }
 
-    // Find forms where the user is in the attendeeList using more robust matching
     const forms = await Form.find({
-      status: 'published'
+      status: 'published',
+      'attendeeList.email': userEmail
     })
     .populate('createdBy', 'name email')
     .select('title description shareableLink eventStartDate eventEndDate attendeeList createdAt')
     .sort({ createdAt: -1 });
 
-    console.log(`Found ${forms.length} published forms total`);
+    const now = new Date();
+    const availableForms = forms.filter(form => {
+      const startDate = form.eventStartDate ? new Date(form.eventStartDate) : null;
+      const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
 
-    // Filter forms where the user is in the attendeeList and hasn't responded
-    const availableForms = [];
-
-    for (const form of forms) {
-      if (!form.attendeeList || form.attendeeList.length === 0) {
-        continue;
-      }
-
-      // Check if user is in attendee list
-      const attendee = form.attendeeList.find(attendee => {
-        const attendeeEmail = attendee.email ? attendee.email.toLowerCase().trim() : '';
-        const attendeeName = attendee.name ? attendee.name.trim() : '';
-
-        // Match by email first (primary identifier)
-        if (userEmail && attendeeEmail === userEmail) {
-          return true;
-        }
-
-        // Fallback to name matching if email is not available
-        if (!userEmail && attendeeName && userName && attendeeName === userName) {
-          return true;
-        }
-
+      if (startDate && now < startDate) {
         return false;
-      });
-
-      if (attendee && !attendee.hasResponded) {
-        // Check event date restrictions if set
-        if (form.eventStartDate || form.eventEndDate) {
-          const now = new Date();
-          const startDate = form.eventStartDate ? new Date(form.eventStartDate) : null;
-          const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
-
-          if (startDate && now < startDate) {
-            console.log(`Form "${form.title}" not available yet - starts ${startDate}`);
-            continue;
-          }
-
-          if (endDate && now > endDate) {
-            console.log(`Form "${form.title}" is no longer available - ended ${endDate}`);
-            continue;
-          }
-        }
-
-        availableForms.push(form);
-        console.log(`Added available form: "${form.title}" for user ${userEmail || userName}`);
       }
-    }
 
-    console.log(`Final available forms: ${availableForms.length}`);
+      if (endDate && now > endDate) {
+        return false;
+      }
+
+      return true;
+    });
 
     res.status(200).json({
       success: true,
       data: {
         forms: availableForms,
         count: availableForms.length,
-        debug: {
-          totalPublishedForms: forms.length,
-          availableFormsCount: availableForms.length,
-          userEmail: userEmail,
-          userName: userName
-        }
       },
     });
   } catch (error) {

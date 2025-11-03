@@ -93,10 +93,7 @@ const formSchema = new mongoose.Schema(
     },
     googleFormId: {
       type: String,
-      unique: true,
-      sparse: true,
       index: true,
-      default: null,
     },
     questions: [questionSchema],
     status: {
@@ -156,6 +153,14 @@ const formSchema = new mongoose.Schema(
         uploadedAt: {
           type: Date,
           default: Date.now,
+        },
+        certificateGenerated: {
+          type: Boolean,
+          default: false,
+        },
+        certificateId: {
+          type: String,
+          default: null,
         },
       },
     ],

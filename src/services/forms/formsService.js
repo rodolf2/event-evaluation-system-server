@@ -19,9 +19,7 @@ class FormsService {
       try {
         extractedData = await fileParser.extractQuestionsFromFile(filePath);
         questions = extractedData.questions || [];
-        console.log(`Extracted ${questions.length} questions from file`);
       } catch (parseError) {
-        console.log("File parsing failed:", parseError.message);
         // If parsing completely fails, we'll use fallback questions below
       }
 
@@ -29,7 +27,6 @@ class FormsService {
       if (!questions || questions.length === 0) {
         const fileExt = fileName.split('.').pop()?.toLowerCase();
         questions = this.generateFallbackQuestions(fileName, fileExt);
-        console.log(`Using ${questions.length} fallback questions for ${fileExt} file`);
       }
 
       const finalData = {
@@ -196,9 +193,7 @@ class FormsService {
             maxRedirects: 5, // follow up to 5 redirects
           });
           finalUrl = response.request.res.responseUrl;
-          console.log(`Redirected to full URL: ${finalUrl}`);
         } catch (error) {
-          console.error("Error following shortened URL:", error);
           throw new Error("Could not resolve shortened Google Forms URL");
         }
       }
@@ -232,8 +227,6 @@ class FormsService {
       let extractedQuestions = [];
 
       try {
-        console.log("Attempting to extract questions from Google Form...");
-
         // For this implementation, we'll use a pragmatic approach:
         // 1. Try the official Google Forms API if credentials are available (not implemented yet)
         // 2. Fall back to HTML scraping with improved logic
@@ -283,14 +276,11 @@ class FormsService {
         }
 
         // Try to extract questions using the original manual parsing approach
-        console.log("Attempting to extract questions from Google Form HTML using manual parsing...");
 
         try {
           // Strategy 1: Look for FB_PUBLIC_LOAD_DATA scripts (most common)
           const scriptRegex = /<script[^>]*>[\s\S]*?FB_PUBLIC_LOAD_DATA_[\s\S]*?<\/script>/gi;
           const scriptMatches = html.match(scriptRegex);
-
-          console.log(`Found ${scriptMatches ? scriptMatches.length : 0} FB_PUBLIC_LOAD_DATA scripts`);
 
           if (scriptMatches) {
             for (const scriptTag of scriptMatches) {
@@ -303,7 +293,6 @@ class FormsService {
                 }
 
                 if (dataMatch && dataMatch[1]) {
-                  console.log("Found JSON data in script, attempting to parse...");
                   const parsedData = JSON.parse(dataMatch[1]);
 
                   if (Array.isArray(parsedData) && parsedData.length > 1) {
@@ -311,7 +300,6 @@ class FormsService {
                     const questionsData = parsedData[1];
 
                     if (Array.isArray(questionsData)) {
-                      console.log(`Processing ${questionsData.length} potential questions and sections`);
 
                       extractedQuestions = [];
                       let currentSection = null;
@@ -320,8 +308,6 @@ class FormsService {
                       for (let i = 0; i < questionsData.length; i++) {
                         const q = questionsData[i];
                         try {
-                          console.log(`Processing item ${i}:`, JSON.stringify(q).substring(0, 200));
-
                           // Handle different Google Forms question structures
                           if (Array.isArray(q) && q.length >= 2) {
                             let questionFound = false;
@@ -340,7 +326,6 @@ class FormsService {
                                 // This is a section
                                 currentSection = title.trim();
                                 sectionCounter++;
-                                console.log(`Found section: "${currentSection}"`);
                                 continue; // Skip adding as question
                               }
                             }
@@ -374,11 +359,8 @@ class FormsService {
 
                                 const shouldSkip = skipPatterns.some(pattern => pattern.test(lowerTitle));
                                 if (shouldSkip) {
-                                  console.log(`Skipping common field: "${title}"`);
                                   continue;
                                 }
-
-                                console.log(`Found question: "${title}" (type: ${questionType}, required: ${isRequired})`);
 
                                 // Extract options for multiple choice questions
                                 let options = [];
@@ -433,7 +415,6 @@ class FormsService {
                             // Strategy 2: Alternative structure [null, "question text", null, type, options]
                             if (!questionFound && q[1] && typeof q[1] === 'string' && q[1].trim()) {
                               const title = q[1].trim();
-                              console.log(`Found alternative question: "${title}"`);
 
                               const questionTypeMap = {
                                 0: "short_answer",
@@ -480,7 +461,6 @@ class FormsService {
                                 !trimmed.includes('http') &&
                                 !trimmed.match(/^event.*address/i) &&
                                 !trimmed.match(/^contact.*us/i)) {
-                              console.log(`Found string question: "${trimmed}"`);
                               extractedQuestions.push({
                                 title: trimmed,
                                 type: "short_answer",
@@ -496,26 +476,12 @@ class FormsService {
                           }
 
                         } catch (questionError) {
-                          console.log(`Error processing item ${i}:`, questionError.message);
                           continue;
                         }
                       }
 
                       // Filter out any remaining nulls and duplicates
                       extractedQuestions = extractedQuestions.filter(q => q !== null);
-
-                      // Group questions by sections
-                      const questionsBySection = {};
-                      extractedQuestions.forEach(q => {
-                        const sectionName = q.section || 'Default Section';
-                        if (!questionsBySection[sectionName]) {
-                          questionsBySection[sectionName] = [];
-                        }
-                        questionsBySection[sectionName].push(q);
-                      });
-
-                      console.log(`Successfully extracted ${extractedQuestions.length} questions across ${Object.keys(questionsBySection).length} sections`);
-                      console.log('Sections found:', Object.keys(questionsBySection));
 
                       if (extractedQuestions.length > 0) {
                         break; // Found questions, stop processing
@@ -524,18 +490,15 @@ class FormsService {
                   }
                 }
               } catch (parseError) {
-                console.log("Error parsing script:", parseError.message);
                 continue;
               }
             }
           }
 
         } catch (parsingError) {
-          console.log("Manual parsing extraction failed:", parsingError.message);
           extractedQuestions = [];
 
           // Fallback to enhanced web scraping if script parsing fails
-          console.log("Falling back to enhanced web scraping...");
           try {
             const $ = cheerio.load(html);
 
@@ -910,7 +873,6 @@ class FormsService {
 
                 const shouldSkip = skipPatterns.some(pattern => pattern.test(lowerTitle));
                 if (shouldSkip) {
-                  console.log(`Skipping common field: "${questionText}"`);
                   return;
                 }
 
@@ -957,17 +919,10 @@ class FormsService {
 
             extractedQuestions = uniqueQuestions;
 
-            if (extractedQuestions.length > 0) {
-              console.log(`Enhanced web scraping found ${extractedQuestions.length} questions`);
-            }
-
           } catch (scrapingError) {
-            console.log("Enhanced web scraping failed:", scrapingError.message);
             extractedQuestions = [];
           }
         }
-
-        console.log(`Final extraction result: ${extractedQuestions.length} questions extracted from Google Form`);
 
       } catch (error) {
         console.log("Could not extract form details from Google Forms:", error.message);
@@ -1006,8 +961,6 @@ class FormsService {
           fs.createReadStream(filePath)
             .pipe(csv())
             .on('data', (data) => {
-              console.log('CSV Row Data Keys:', Object.keys(data)); // Debugging line
-              console.log('Full Name Key Check:', data['full_name']); // Debugging line
               // Look for name and email columns (case insensitive)
               const nameKeys = Object.keys(data).filter(key =>
                 key.toLowerCase().includes('name') ||
@@ -1015,7 +968,6 @@ class FormsService {
                 key.toLowerCase().includes('full_name') ||
                 key.toLowerCase().includes('student name')
               );
-              console.log('Detected Name Keys:', nameKeys); // Debugging line
 
               const emailKeys = Object.keys(data).filter(key =>
                 key.toLowerCase().includes('email') ||
@@ -1025,8 +977,6 @@ class FormsService {
 
               const name = nameKeys.length > 0 ? data[nameKeys[0]]?.trim() : '';
               const email = emailKeys.length > 0 ? data[emailKeys[0]]?.trim() : '';
-
-              console.log(`Extracted Name: "${name}", Extracted Email: "${email}"`); // Debugging line
 
               if (name && email) {
                 results.push({ name, email: email.toLowerCase() });

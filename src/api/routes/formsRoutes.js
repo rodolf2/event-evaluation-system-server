@@ -6,8 +6,11 @@ const formsController = require('../controllers/formsController');
 // GET /api/forms - Get all forms (psas, club-officer, school-admin, mis can access)
 router.get('/', requireRole(['psas', 'club-officer', 'school-admin', 'mis']), formsController.getAllForms);
 
-// GET /api/forms/:id - Get a specific form by ID (psas, club-officer, school-admin, mis can access)
-router.get('/:id', requireRole(['psas', 'club-officer', 'school-admin', 'mis']), formsController.getFormById);
+// GET /api/forms/my-evaluations - Get forms that the current user is assigned to (participants, club-officers)
+router.get('/my-evaluations', requireRole(['participant', 'club-officer']), formsController.getMyEvaluations);
+
+// GET /api/forms/:id - Get a specific form by ID (psas, club-officer, school-admin, mis, and participants assigned to form)
+router.get('/:id', requireRole(['psas', 'club-officer', 'school-admin', 'mis', 'participant']), formsController.getFormById);
 
 // POST /api/forms/blank - Create a new blank form (psas, club-officer can create)
 router.post('/blank', requireRole(['psas', 'club-officer']), formsController.createBlankForm);
@@ -33,10 +36,7 @@ router.delete('/:id', requireRole(['psas']), formsController.deleteForm);
 // POST /api/forms/:id/submit - Submit responses to a form (only participants can submit)
 router.post('/:id/submit', requireRole(['participant']), formsController.submitFormResponse);
 
-// GET /api/forms/:id/responses - Get responses for a form (psas, school-admin, mis can view)
+// GET /api/forms/:id/responses - Get responses for a form (psas, school-admin, mis can view; creator can view their own)
 router.get('/:id/responses', requireRole(['psas', 'school-admin', 'mis']), formsController.getFormResponses);
-
-// GET /api/forms/my-evaluations - Get forms that the current user is assigned to (participants, club-officers)
-router.get('/my-evaluations', requireRole(['participant', 'club-officer']), formsController.getMyEvaluations);
 
 module.exports = router;

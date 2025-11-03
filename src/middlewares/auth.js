@@ -165,6 +165,7 @@ const requireRole = (allowedRoles) => {
         });
       }
 
+      console.log('User role:', user.role, 'Allowed roles:', allowedRoles);
       if (!allowedRoles.includes(user.role)) {
         return res.status(403).json({
           success: false,

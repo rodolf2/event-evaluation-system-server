@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const csv = require('csv-parser');
 const { requireAuth } = require('../../middlewares/auth');
 
 const router = express.Router();
@@ -41,34 +42,67 @@ const upload = multer({
 });
 
 // Upload CSV file
-router.post('/csv', requireAuth, upload.single('file'), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
+router.post('/csv', requireAuth, (req, res) => {
+  upload.single('file')(req, res, function (err) {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(500).json({
         success: false,
-        message: 'No file uploaded'
+        message: 'Failed to upload file due to multer error',
+        error: err.message
       });
     }
+    console.log('Inside /csv route handler');
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No file uploaded'
+        });
+      }
 
-    // Return the file URL
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/csv/${req.file.filename}`;
+      // Parse the CSV file to extract student data
+      const filePath = req.file.path;
+      const students = [];
+      
+      fs.createReadStream(filePath)
+        .pipe(csv())
+        .on('data', (data) => {
+          students.push(data);
+        })
+        .on('end', () => {
+          console.log(`Parsed ${students.length} students from CSV`);
+          
+          // Return the file URL along with student data
+          const fileUrl = `${req.protocol}://${req.get('host')}/uploads/csv/${req.file.filename}`;
 
-    res.json({
-      success: true,
-      message: 'File uploaded successfully',
-      url: fileUrl,
-      filename: req.file.originalname,
-      size: req.file.size
-    });
+          res.json({
+            success: true,
+            message: 'File uploaded and parsed successfully',
+            url: fileUrl,
+            filename: req.file.originalname,
+            size: req.file.size,
+            students: students
+          });
+        })
+        .on('error', (error) => {
+          console.error('CSV parsing error:', error);
+          res.status(500).json({
+            success: false,
+            message: 'Failed to parse CSV file',
+            error: error.message
+          });
+        });
 
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to upload file',
-      error: error.message
-    });
-  }
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload file',
+        error: error.message
+      });
+    }
+  });
 });
 
 module.exports = router;

@@ -22,7 +22,7 @@ class CertificateController {
         });
       }
 
-      const { userId, eventId, certificateType, customMessage, sendEmail } =
+      const { userId, eventId, certificateType, customMessage, sendEmail, studentName } =
         req.body;
 
       if (!userId || !eventId) {
@@ -36,6 +36,7 @@ class CertificateController {
         certificateType: certificateType || "participation",
         customMessage,
         sendEmail: sendEmail !== false,
+        studentName,
       };
 
       const result = await certificateService.generateCertificate(
