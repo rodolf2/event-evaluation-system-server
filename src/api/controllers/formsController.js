@@ -142,7 +142,7 @@ const getFormById = async (req, res) => {
 // POST /api/forms/blank - Create a new blank form
 const createBlankForm = async (req, res) => {
   try {
-    const { title, description, questions, uploadedFiles, uploadedLinks, eventStartDate, eventEndDate } = req.body;
+    const { title, description, questions, uploadedFiles, uploadedLinks, eventStartDate, eventEndDate, selectedStudents } = req.body;
 
     if (!req.user || !req.user._id) {
       return res.status(401).json({
@@ -166,46 +166,88 @@ const createBlankForm = async (req, res) => {
     const form = new Form(formData);
     const savedForm = await form.save();
 
-    // Process uploaded CSV files to extract attendee data
-    if (Array.isArray(uploadedLinks) && uploadedLinks.length > 0) {
+    // Process selected students if provided, otherwise fall back to CSV processing
+    if (selectedStudents && Array.isArray(selectedStudents) && selectedStudents.length > 0) {
       try {
-        for (const link of uploadedLinks) {
-          if (link.url && link.url.includes('.csv')) {
-            // Extract file path from URL
-            const fileName = link.url.split('/').pop();
-            const fullPath = path.join(__dirname, '../../../uploads/csv', fileName);
+        // Convert selected students to attendeeList format
+        const attendeeList = await Promise.all(
+          selectedStudents.map(async (student) => {
+            // Normalize email for consistency
+            const normalizedEmail = student.email ? student.email.toLowerCase().trim() : '';
 
-            const parsedAttendees = await formsService.parseAttendeeFile(fullPath);
+            let user = await User.findOne({ email: normalizedEmail });
 
-            if (parsedAttendees.length > 0) {
-              // Convert parsed attendees to attendeeList format with normalized emails
-              const attendeeList = parsedAttendees.map(attendee => ({
-                userId: null, // Will be populated when users respond
-                name: attendee.name || '',
-                email: attendee.email ? attendee.email.toLowerCase().trim() : '',
-                hasResponded: false,
-                uploadedAt: new Date(),
-              }));
+            if (!user) {
+              // Create new user if not found
+              user = new User({
+                name: student.name ? student.name.trim() : (normalizedEmail ? normalizedEmail.split('@')[0].trim() : 'Unknown'),
+                email: normalizedEmail,
+                role: 'participant', // Default role for imported attendees
+              });
+              await user.save();
+            }
 
-              // Validate attendee data
-              const validAttendees = attendeeList.filter(attendee =>
-                attendee.name.trim() !== '' && attendee.email.includes('@')
-              );
+            return {
+              userId: user._id,
+              name: student.name ? student.name.trim() : user.name,
+              email: normalizedEmail,
+              hasResponded: false,
+              uploadedAt: new Date(),
+            };
+          })
+        );
 
-              if (validAttendees.length > 0) {
-                // Update form with attendee list
-                savedForm.attendeeList = validAttendees;
-                await savedForm.save();
-                break; // Only process the first CSV file
-              } else {
-                console.warn("No valid attendees found in CSV after filtering");
+        // Update form with attendee list
+        savedForm.attendeeList = attendeeList;
+        await savedForm.save();
+
+        console.log(`Added ${attendeeList.length} selected students to form attendee list`);
+      } catch (selectedStudentsError) {
+        console.error("Error processing selected students:", selectedStudentsError);
+        // Log the error but don't fail the form creation
+      }
+    } else {
+      // Fallback: Process uploaded CSV files to extract attendee data (legacy behavior)
+      if (Array.isArray(uploadedLinks) && uploadedLinks.length > 0) {
+        try {
+          for (const link of uploadedLinks) {
+            if (link.url && link.url.includes('.csv')) {
+              // Extract file path from URL
+              const fileName = link.url.split('/').pop();
+              const fullPath = path.join(__dirname, '../../../uploads/csv', fileName);
+
+              const parsedAttendees = await formsService.parseAttendeeFile(fullPath);
+
+              if (parsedAttendees.length > 0) {
+                // Convert parsed attendees to attendeeList format with normalized emails
+                const attendeeList = parsedAttendees.map(attendee => ({
+                  userId: null, // Will be populated when users respond
+                  name: attendee.name || '',
+                  email: attendee.email ? attendee.email.toLowerCase().trim() : '',
+                  hasResponded: false,
+                  uploadedAt: new Date(),
+                }));
+
+                // Validate attendee data
+                const validAttendees = attendeeList.filter(attendee =>
+                  attendee.name.trim() !== '' && attendee.email.includes('@')
+                );
+
+                if (validAttendees.length > 0) {
+                  // Update form with attendee list
+                  savedForm.attendeeList = validAttendees;
+                  await savedForm.save();
+                  break; // Only process the first CSV file
+                } else {
+                  console.warn("No valid attendees found in CSV after filtering");
+                }
               }
             }
           }
+        } catch (csvError) {
+          console.error("Error processing CSV file:", csvError);
+          // Log the error but don't fail the form creation
         }
-      } catch (csvError) {
-        console.error("Error processing CSV file:", csvError);
-        // Log the error but don't fail the form creation
       }
     }
 
@@ -616,11 +658,26 @@ const submitFormResponse = async (req, res) => {
         if (!attendee.certificateGenerated) {
           try {
             const certificateService = require("../../services/certificate/certificateService");
+            const Event = require("../../models/Event");
+
+            // Create or find an event for this form
+            let event = await Event.findOne({ name: form.title });
+
+            if (!event) {
+              // Create a temporary event for the form
+              event = new Event({
+                name: form.title,
+                date: form.eventStartDate || form.createdAt,
+                category: 'evaluation',
+                description: form.description || `Evaluation form: ${form.title}`
+              });
+              await event.save();
+            }
 
             // Use the student's name from attendee list for the certificate
             const certificateResult = await certificateService.generateCertificate(
               attendee.userId || form.createdBy, // Use attendee's userId if available, otherwise form creator
-              form._id, // Use the form as the "event"
+              event._id, // Use the event ID
               {
                 certificateType: "completion",
                 customMessage: `For successfully completing the evaluation form: ${form.title}`,
