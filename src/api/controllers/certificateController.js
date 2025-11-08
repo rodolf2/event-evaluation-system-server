@@ -473,6 +473,43 @@ class CertificateController {
       });
     }
   }
+
+  /**
+   * Update certificate
+   * PUT /api/certificates/:certificateId
+   */
+  async updateCertificate(req, res) {
+    try {
+      const { certificateId } = req.params;
+      const { templateId, studentName, customMessage, sendEmail } = req.body;
+
+      const certificate = await Certificate.findOneAndUpdate(
+        { certificateId },
+        { templateId, studentName, customMessage, sendEmail },
+        { new: true }
+      );
+
+      if (!certificate) {
+        return res.status(404).json({
+          success: false,
+          message: 'Certificate not found',
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Certificate updated successfully',
+        data: { certificate },
+      });
+    } catch (error) {
+      console.error('Error updating certificate:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update certificate',
+        error: error.message,
+      });
+    }
+  }
 }
 
 module.exports = new CertificateController();

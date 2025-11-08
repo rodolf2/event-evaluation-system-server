@@ -1145,7 +1145,8 @@ class FormsService {
   // Delete form
   async deleteForm(formId, userId) {
     try {
-      const form = await Form.findOneAndDelete({
+      // First, get the form data to identify files to clean up
+      const form = await Form.findOne({
         _id: formId,
         createdBy: userId,
       });
@@ -1154,6 +1155,48 @@ class FormsService {
         throw new Error("Form not found");
       }
 
+      // Clean up uploaded files from filesystem
+      if (form.uploadedFiles && Array.isArray(form.uploadedFiles)) {
+        for (const file of form.uploadedFiles) {
+          if (file.path && fs.existsSync(file.path)) {
+            try {
+              fs.unlinkSync(file.path);
+              console.log(`🗑️ Deleted file: ${file.path}`);
+            } catch (fileError) {
+              console.warn(`⚠️ Failed to delete file ${file.path}:`, fileError.message);
+            }
+          }
+        }
+      }
+
+      // Clean up CSV files that were uploaded for attendee lists
+      // These are typically stored in the uploads/csv directory with timestamp-based names
+      if (form.uploadedLinks && Array.isArray(form.uploadedLinks)) {
+        for (const link of form.uploadedLinks) {
+          if (link.url && link.url.includes('/uploads/csv/')) {
+            // Extract file path from URL
+            const fileName = link.url.split('/').pop();
+            const fullPath = path.join(__dirname, '../../../uploads/csv', fileName);
+            
+            if (fs.existsSync(fullPath)) {
+              try {
+                fs.unlinkSync(fullPath);
+                console.log(`🗑️ Deleted CSV file: ${fullPath}`);
+              } catch (csvError) {
+                console.warn(`⚠️ Failed to delete CSV file ${fullPath}:`, csvError.message);
+              }
+            }
+          }
+        }
+      }
+
+      // Now delete the form from database
+      await Form.findOneAndDelete({
+        _id: formId,
+        createdBy: userId,
+      });
+
+      console.log(`✅ Form ${formId} and associated files deleted successfully`);
       return form;
     } catch (error) {
       console.error("Error deleting form:", error);

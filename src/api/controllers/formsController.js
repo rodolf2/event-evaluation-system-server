@@ -561,21 +561,12 @@ const deleteForm = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const form = await Form.findOneAndDelete({
-      _id: id,
-      createdBy: req.user._id,
-    });
-
-    if (!form) {
-      return res.status(404).json({
-        success: false,
-        message: "Form not found",
-      });
-    }
+    // Use the formsService to delete form and associated files
+    const form = await formsService.deleteForm(id, req.user._id);
 
     res.status(200).json({
       success: true,
-      message: "Form deleted successfully",
+      message: "Form and associated files deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting form:", error);
@@ -679,10 +670,13 @@ const submitFormResponse = async (req, res) => {
               attendee.userId || form.createdBy, // Use attendee's userId if available, otherwise form creator
               event._id, // Use the event ID
               {
+                formId: form._id, // Link certificate to the form
                 certificateType: "completion",
                 customMessage: `For successfully completing the evaluation form: ${form.title}`,
                 sendEmail: true,
-                studentName: attendee.name // Use the name from attendee list
+                studentName: attendee.name, // Use the name from attendee list
+                respondentEmail: respondentEmail,
+                respondentName: respondentName
               }
             );
 

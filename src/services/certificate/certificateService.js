@@ -410,13 +410,16 @@ class CertificateService {
 
       const pdfResult = await this.generateCertificatePDF(certificateData);
 
-      const certificate = new Certificate({
+const certificate = new Certificate({
         userId,
         eventId,
+        formId: options.formId,
         certificateType: certificateData.certificateType,
         certificateId,
         filePath: pdfResult.filePath,
         customMessage: options.customMessage,
+        respondentEmail: options.respondentEmail,
+        respondentName: options.respondentName,
         metadata: {
           generatedAt: new Date(),
           pdfFileName: pdfResult.fileName,

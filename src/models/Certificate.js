@@ -11,6 +11,10 @@ const CertificateSchema = new mongoose.Schema({
     ref: 'Event',
     required: true,
   },
+  formId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Form',
+  },
   certificateType: {
     type: String,
     enum: ['participation', 'completion', 'achievement'],
@@ -42,6 +46,13 @@ const CertificateSchema = new mongoose.Schema({
   },
   metadata: {
     type: mongoose.Schema.Types.Mixed,
+  },
+  // Track which form submission this certificate was generated for
+  respondentEmail: {
+    type: String,
+  },
+  respondentName: {
+    type: String,
   },
 });
 
