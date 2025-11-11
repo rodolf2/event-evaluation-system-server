@@ -1,5 +1,6 @@
 const Feedback = require('../../models/Feedback');
 const Event = require('../../models/Event');
+const Form = require('../../models/Form');
 const mongoose = require('mongoose');
 const path = require('path');
 const { PythonShell } = require('python-shell');
@@ -193,4 +194,168 @@ module.exports = {
   getAverageRating,
   generateQualitativeReport,
   generateQuantitativeReport,
+  analyzeResponses,
+  generateResponseOverview,
 };
+
+/**
+ * Analyzes form responses for sentiment and breakdown
+ * @param {Array} responses - Array of form responses
+ * @returns {Object} Analysis results with sentiment breakdown
+ */
+function analyzeResponses(responses) {
+  if (!responses || responses.length === 0) {
+    return {
+      sentimentBreakdown: {
+        positive: { count: 0, percentage: 0 },
+        neutral: { count: 0, percentage: 0 },
+        negative: { count: 0, percentage: 0 }
+      }
+    };
+  }
+
+  let positiveCount = 0;
+  let neutralCount = 0;
+  let negativeCount = 0;
+
+  // Simple keyword-based sentiment analysis
+  const positiveKeywords = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'like', 'best', 'awesome', 'perfect', 'satisfied', 'happy', 'pleased'];
+  const negativeKeywords = ['bad', 'terrible', 'awful', 'horrible', 'hate', 'dislike', 'worst', 'disappointed', 'unsatisfied', 'sad', 'angry', 'frustrated', 'poor', 'fail'];
+  
+  responses.forEach(response => {
+    if (response.responses && Array.isArray(response.responses)) {
+      let textContent = '';
+      
+      // Extract text from all responses
+      response.responses.forEach(q => {
+        if (typeof q.answer === 'string') {
+          textContent += ' ' + q.answer.toLowerCase();
+        } else if (Array.isArray(q.answer)) {
+          textContent += ' ' + q.answer.join(' ').toLowerCase();
+        }
+      });
+      
+      if (textContent.trim()) {
+        // Count keyword matches
+        const positiveMatches = positiveKeywords.filter(keyword => textContent.includes(keyword)).length;
+        const negativeMatches = negativeKeywords.filter(keyword => textContent.includes(keyword)).length;
+        
+        // Determine sentiment
+        if (positiveMatches > negativeMatches && positiveMatches > 0) {
+          positiveCount++;
+        } else if (negativeMatches > positiveMatches && negativeMatches > 0) {
+          negativeCount++;
+        } else {
+          neutralCount++;
+        }
+      } else {
+        // If no text content, treat as neutral
+        neutralCount++;
+      }
+    }
+  });
+
+  const total = responses.length;
+  return {
+    sentimentBreakdown: {
+      positive: {
+        count: positiveCount,
+        percentage: total > 0 ? Math.round((positiveCount / total) * 100 * 100) / 100 : 0
+      },
+      neutral: {
+        count: neutralCount,
+        percentage: total > 0 ? Math.round((neutralCount / total) * 100 * 100) / 100 : 0
+      },
+      negative: {
+        count: negativeCount,
+        percentage: total > 0 ? Math.round((negativeCount / total) * 100 * 100) / 100 : 0
+      }
+    }
+  };
+}
+
+/**
+ * Generates time series data for response overview
+ * @param {Array} responses - Array of form responses
+ * @param {Date} startDate - Start date for the time series (optional)
+ * @param {Date} endDate - End date for the time series (optional)
+ * @returns {Object} Time series data for charts
+ */
+function generateResponseOverview(responses, startDate = null, endDate = null) {
+  if (!responses || responses.length === 0) {
+    return {
+      labels: [],
+      data: [],
+      dateRange: "No responses available"
+    };
+  }
+
+  // Default date range: from form creation to now or last response
+  const dates = responses.map(r => new Date(r.submittedAt)).filter(d => !isNaN(d));
+  if (dates.length === 0) {
+    return {
+      labels: [],
+      data: [],
+      dateRange: "No response dates available"
+    };
+  }
+
+  const minDate = startDate || new Date(Math.min(...dates));
+  const maxDate = endDate || new Date(Math.max(...dates));
+
+  // Generate weekly buckets
+  const weekLabels = [];
+  const weekData = [];
+  const current = new Date(minDate);
+  const end = new Date(maxDate);
+
+  // Set to start of week (Monday)
+  const dayOfWeek = current.getDay();
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  current.setDate(current.getDate() - daysToMonday);
+  current.setHours(0, 0, 0, 0);
+
+  while (current <= end) {
+    const weekStart = new Date(current);
+    const weekEnd = new Date(current);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    // Count responses in this week
+    const weekResponses = responses.filter(r => {
+      const responseDate = new Date(r.submittedAt);
+      return responseDate >= weekStart && responseDate <= weekEnd;
+    });
+
+    // Format label
+    const month = weekStart.toLocaleDateString('en-US', { month: 'short' });
+    const day = weekStart.getDate();
+    weekLabels.push(`${month} ${day}`);
+
+    // Count cumulative responses up to this week
+    const cumulativeCount = responses.filter(r => {
+      const responseDate = new Date(r.submittedAt);
+      return responseDate <= weekEnd;
+    }).length;
+
+    weekData.push(cumulativeCount);
+
+    // Move to next week
+    current.setDate(current.getDate() + 7);
+  }
+
+  // Format date range string
+  const formatDate = (date) => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  return {
+    labels: weekLabels,
+    data: weekData,
+    dateRange: `${formatDate(minDate)} - ${formatDate(maxDate)}`
+  };
+}

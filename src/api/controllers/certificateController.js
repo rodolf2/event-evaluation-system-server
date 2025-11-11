@@ -119,6 +119,33 @@ class CertificateController {
   }
 
   /**
+   * Get certificates for a form
+   * GET /api/certificates/form/:formId
+   */
+  async getCertificatesForForm(req, res) {
+    try {
+      const { formId } = req.params;
+
+      const certificates = await Certificate.find({ formId })
+        .populate("userId", "name email")
+        .populate("eventId", "name date")
+        .sort({ createdAt: -1 });
+
+      res.status(200).json({
+        success: true,
+        data: certificates,
+      });
+    } catch (error) {
+      console.error("Error fetching certificates for form:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch certificates for form",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
    * Get certificate by ID
    * GET /api/certificates/:certificateId
    */

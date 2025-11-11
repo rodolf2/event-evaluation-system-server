@@ -112,19 +112,25 @@ const authRoutes = require("./api/routes/authRoutes");
 const userRoutes = require("./api/routes/userRoutes");
 const bootstrapRoutes = require("./api/routes/bootstrapRoutes");
 const reminderRoutes = require("./api/routes/reminderRoutes");
+const notificationRoutes = require("./api/routes/notificationRoutes");
+const activityRoutes = require("./api/routes/activityRoutes");
 const eventRoutes = require('./api/routes/eventRoutes');
 const formsRoutes = require('./api/routes/formsRoutes');
 const uploadRoutes = require('./api/routes/uploadRoutes');
+const analyticsRoutes = require('./api/routes/analyticsRoutes');
 
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/certificates", certificateRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reminders", reminderRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/activities", activityRoutes);
 app.use("/api/bootstrap", bootstrapRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/forms', formsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Test routes for development
 if (process.env.NODE_ENV === "development") {

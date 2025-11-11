@@ -1,0 +1,648 @@
+const Form = require('../../models/Form');
+const AnalysisService = require('../../services/analysis/analysisService');
+const mongoose = require('mongoose');
+
+/**
+ * Get dynamic quantitative data with filtering and date range
+ */
+const getDynamicQuantitativeData = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const {
+      startDate,
+      endDate,
+      ratingFilter,
+      responseLimit
+    } = req.query;
+    
+    const userId = req.user._id;
+
+    // Find the form
+    const form = await Form.findById(reportId).populate('createdBy', 'name email role');
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: 'Form not found'
+      });
+    }
+
+    // Build dynamic filter for responses
+    let responses = form.responses || [];
+    
+    // Date range filter
+    if (startDate || endDate) {
+      responses = responses.filter(response => {
+        const submittedAt = new Date(response.submittedAt);
+        if (startDate && submittedAt < new Date(startDate)) return false;
+        if (endDate && submittedAt > new Date(endDate)) return false;
+        return true;
+      });
+    }
+
+    // Extract scale/rating responses for analysis
+    const scaleResponses = extractScaleResponses(responses);
+    
+    // Apply rating filter if specified
+    let filteredScaleResponses = scaleResponses;
+    if (ratingFilter) {
+      const [min, max] = ratingFilter.split('-').map(Number);
+      if (!isNaN(min) && !isNaN(max)) {
+        filteredScaleResponses = scaleResponses.filter(r =>
+          r.value >= min && r.value <= max
+        );
+      }
+    }
+
+    // Process data for charts
+    const yearData = processYearlyDataFromForm(form, responses);
+    const ratingDistribution = processRatingDistributionFromForm(filteredScaleResponses);
+    const statusBreakdown = processStatusBreakdownFromForm(form);
+    const responseTrends = processResponseTrendsFromForm(responses);
+
+    // Calculate metrics
+    const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
+    const totalResponses = responses.length;
+    const responseRate = totalAttendees > 0 ? (totalResponses / totalAttendees) * 100 : 0;
+    
+    const metrics = {
+      totalResponses,
+      totalAttendees,
+      responseRate: Math.round(responseRate * 100) / 100,
+      averageRating: filteredScaleResponses.length > 0
+        ? filteredScaleResponses.reduce((sum, r) => sum + r.value, 0) / filteredScaleResponses.length
+        : 0,
+      lastUpdated: new Date().toISOString()
+    };
+
+    res.status(200).json({
+      success: true,
+      data: {
+        metrics,
+        charts: {
+          yearData,
+          ratingDistribution,
+          statusBreakdown,
+          responseTrends
+        },
+        rawData: filteredScaleResponses,
+        formInfo: {
+          title: form.title,
+          description: form.description,
+          status: form.status,
+          eventStartDate: form.eventStartDate,
+          eventEndDate: form.eventEndDate,
+          publishedAt: form.publishedAt
+        },
+        filters: {
+          startDate,
+          endDate,
+          ratingFilter,
+          responseLimit
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching dynamic quantitative data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dynamic quantitative data',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get dynamic qualitative data with filtering
+ */
+const getDynamicQualitativeData = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const { 
+      sentiment = 'all',
+      keyword,
+      startDate,
+      endDate,
+      limit = 50
+    } = req.query;
+    
+    const userId = req.user._id;
+
+    // Find the form
+    const form = await Form.findById(reportId).populate('createdBy', 'name email role');
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: 'Form not found'
+      });
+    }
+
+    // Build filter for responses with text answers
+    let responses = form.responses || [];
+    
+    // Date range filter
+    if (startDate || endDate) {
+      responses = responses.filter(response => {
+        const submittedAt = new Date(response.submittedAt);
+        if (startDate && submittedAt < new Date(startDate)) return false;
+        if (endDate && submittedAt > new Date(endDate)) return false;
+        return true;
+      });
+    }
+
+    // Extract text responses
+    const textResponses = extractTextResponses(responses);
+    
+    // Perform sentiment analysis
+    const analysis = AnalysisService.analyzeResponses(textResponses);
+    
+    // Filter by sentiment if specified
+    let filteredTextResponses = textResponses;
+    if (sentiment !== 'all') {
+      const sentimentKeywords = {
+        positive: ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'like', 'best', 'awesome', 'perfect', 'satisfied', 'happy', 'pleased'],
+        negative: ['bad', 'terrible', 'awful', 'horrible', 'hate', 'dislike', 'worst', 'disappointed', 'unsatisfied', 'sad', 'angry', 'frustrated', 'poor', 'fail'],
+        neutral: []
+      };
+      
+      const keywords = sentimentKeywords[sentiment] || [];
+      if (keywords.length > 0) {
+        filteredTextResponses = textResponses.filter(response => {
+          const text = (response.answer || '').toLowerCase();
+          return keywords.some(keyword => text.includes(keyword));
+        });
+      }
+    }
+
+    // Filter by keyword if specified
+    if (keyword) {
+      const keywordLower = keyword.toLowerCase();
+      filteredTextResponses = filteredTextResponses.filter(response => 
+        (response.answer || '').toLowerCase().includes(keywordLower)
+      );
+    }
+
+    // Categorize comments
+    const categorizedComments = {
+      positive: [],
+      neutral: [],
+      negative: []
+    };
+
+    filteredTextResponses.slice(0, parseInt(limit)).forEach(response => {
+      const answer = response.answer || '';
+      const text = answer.toLowerCase();
+      
+      let category = 'neutral';
+      const positiveKeywords = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'like', 'best', 'awesome', 'perfect', 'satisfied', 'happy', 'pleased'];
+      const negativeKeywords = ['bad', 'terrible', 'awful', 'horrible', 'hate', 'dislike', 'worst', 'disappointed', 'unsatisfied', 'sad', 'angry', 'frustrated', 'poor', 'fail'];
+      
+      const positiveMatches = positiveKeywords.filter(keyword => text.includes(keyword)).length;
+      const negativeMatches = negativeKeywords.filter(keyword => text.includes(keyword)).length;
+      
+      if (positiveMatches > negativeMatches && positiveMatches > 0) {
+        category = 'positive';
+      } else if (negativeMatches > positiveMatches && negativeMatches > 0) {
+        category = 'negative';
+      }
+      
+      categorizedComments[category].push({
+        id: response.id,
+        comment: answer,
+        user: response.respondentName || 'Anonymous',
+        email: response.respondentEmail,
+        questionTitle: response.questionTitle,
+        createdAt: response.submittedAt
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sentimentBreakdown: analysis.sentimentBreakdown,
+        categorizedComments,
+        totalComments: filteredTextResponses.length,
+        formInfo: {
+          title: form.title,
+          description: form.description,
+          status: form.status
+        },
+        filters: {
+          sentiment,
+          keyword,
+          startDate,
+          endDate,
+          limit
+        },
+        lastUpdated: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching dynamic qualitative data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dynamic qualitative data',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get dynamic comments data with advanced filtering
+ */
+const getDynamicCommentsData = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const { 
+      type = 'all', // all, positive, neutral, negative
+      searchTerm,
+      dateRange,
+      role,
+      ratingRange,
+      sortBy = 'date',
+      sortOrder = 'desc',
+      page = 1,
+      limit = 20
+    } = req.query;
+
+    // Find the form
+    const form = await Form.findById(reportId).populate('createdBy', 'name email role');
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: 'Form not found'
+      });
+    }
+
+    // Build base filter for responses
+    let responses = form.responses || [];
+    
+    // Apply filters
+    if (searchTerm) {
+      responses = responses.filter(response => 
+        (response.answer || '').toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (dateRange) {
+      const [start, end] = dateRange.split(',');
+      if (start && end) {
+        responses = responses.filter(response => {
+          const submittedAt = new Date(response.submittedAt);
+          return submittedAt >= new Date(start) && submittedAt <= new Date(end);
+        });
+      }
+    }
+
+    // Get total count for pagination
+    const totalCount = responses.length;
+    
+    // Sort responses
+    responses.sort((a, b) => {
+      const aValue = a[sortBy] || a.submittedAt;
+      const bValue = b[sortBy] || b.submittedAt;
+      return sortOrder === 'asc' ? 
+        (new Date(aValue) - new Date(bValue)) : 
+        (new Date(bValue) - new Date(aValue));
+    });
+    
+    // Paginate results
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedResponses = responses.slice(skip, skip + parseInt(limit));
+
+    // Process comments based on type
+    let processedComments = paginatedResponses;
+    if (type !== 'all') {
+      processedComments = paginatedResponses.filter(response => {
+        const text = (response.answer || '').toLowerCase();
+        const positiveKeywords = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'like', 'best', 'awesome', 'perfect', 'satisfied', 'happy', 'pleased'];
+        const negativeKeywords = ['bad', 'terrible', 'awful', 'horrible', 'hate', 'dislike', 'worst', 'disappointed', 'unsatisfied', 'sad', 'angry', 'frustrated', 'poor', 'fail'];
+        
+        const positiveMatches = positiveKeywords.filter(keyword => text.includes(keyword)).length;
+        const negativeMatches = negativeKeywords.filter(keyword => text.includes(keyword)).length;
+        
+        if (type === 'positive') {
+          return positiveMatches > negativeMatches && positiveMatches > 0;
+        } else if (type === 'negative') {
+          return negativeMatches > positiveMatches && negativeMatches > 0;
+        } else {
+          return (positiveMatches === 0 && negativeMatches === 0) || positiveMatches === negativeMatches;
+        }
+      });
+    }
+
+    // Filter by role if specified (using attendee list)
+    if (role && form.attendeeList) {
+      processedComments = processedComments.filter(response => {
+        const attendee = form.attendeeList.find(a => a.email === response.respondentEmail);
+        return attendee && attendee.userId && attendee.userId.role === role;
+      });
+    }
+
+    const comments = processedComments.map(response => ({
+      id: response.id,
+      comment: response.answer,
+      user: response.respondentName || 'Anonymous',
+      email: response.respondentEmail,
+      questionTitle: response.questionTitle,
+      submittedAt: response.submittedAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        comments,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: totalCount,
+          pages: Math.ceil(totalCount / parseInt(limit))
+        },
+        formInfo: {
+          title: form.title,
+          description: form.description,
+          status: form.status
+        },
+        filters: {
+          type,
+          searchTerm,
+          dateRange,
+          role,
+          ratingRange,
+          sortBy,
+          sortOrder
+        },
+        lastUpdated: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching dynamic comments data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dynamic comments data',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get all reports with live data and metrics
+ */
+const getAllReportsWithLiveData = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { 
+      status = 'all',
+      dateRange,
+      search,
+      limit = 50,
+      page = 1
+    } = req.query;
+
+    // Build filter for forms
+    let formFilter = { createdBy: userId };
+    
+    if (status !== 'all') {
+      formFilter.status = status;
+    }
+
+    if (dateRange) {
+      const [start, end] = dateRange.split(',');
+      if (start && end) {
+        formFilter.createdAt = {
+          $gte: new Date(start),
+          $lte: new Date(end)
+        };
+      }
+    }
+
+    if (search) {
+      formFilter.title = { 
+        $regex: search, 
+        $options: 'i' 
+      };
+    }
+
+    // Get forms with pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const forms = await Form.find(formFilter)
+      .populate('createdBy', 'name email role')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get live data for each form
+    const reportsWithLiveData = forms.map(form => {
+      const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
+      const totalResponses = form.responses ? form.responses.length : 0;
+      const responseRate = totalAttendees > 0 ? (totalResponses / totalAttendees) * 100 : 0;
+      
+      // Calculate average rating from scale responses
+      const scaleResponses = extractScaleResponses(form.responses || []);
+      const averageRating = scaleResponses.length > 0 
+        ? scaleResponses.reduce((sum, r) => sum + r.value, 0) / scaleResponses.length 
+        : 0;
+
+      // Get recent responses (last 7 days)
+      const recentResponses = form.responses ? form.responses.filter(response => {
+        const responseDate = new Date(response.submittedAt);
+        return responseDate >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      }).length : 0;
+
+      return {
+        id: form._id,
+        title: form.title,
+        eventDate: form.eventStartDate || form.createdAt,
+        status: form.status,
+        feedbackCount: totalResponses,
+        averageRating: Math.round(averageRating * 100) / 100,
+        recentComments: recentResponses,
+        creator: form.createdBy,
+        thumbnail: `/thumbnails/form-${form._id}.png`, // Generate or use default
+        lastUpdated: new Date().toISOString(),
+        // Add filterable data
+        metadata: {
+          description: form.description,
+          attendeeCount: totalAttendees,
+          responseRate: Math.round(responseRate * 100) / 100,
+          eventStartDate: form.eventStartDate,
+          eventEndDate: form.eventEndDate
+        }
+      };
+    });
+
+    // Get total count for pagination
+    const totalCount = await Form.countDocuments(formFilter);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        reports: reportsWithLiveData,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: totalCount,
+          pages: Math.ceil(totalCount / parseInt(limit))
+        },
+        filters: {
+          status,
+          dateRange,
+          search,
+          limit,
+          page
+        },
+        lastUpdated: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching reports with live data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch reports with live data',
+      error: error.message
+    });
+  }
+};
+
+// Helper functions
+
+/**
+ * Extract scale responses from form responses
+ */
+function extractScaleResponses(responses) {
+  const scaleResponses = [];
+  
+  responses.forEach(response => {
+    if (response.responses) {
+      response.responses.forEach(item => {
+        // Check if this is a scale/rating question
+        if (typeof item.answer === 'number' && item.answer >= 1 && item.answer <= 10) {
+          scaleResponses.push({
+            id: response.id || Math.random().toString(36).substr(2, 9),
+            value: item.answer,
+            questionTitle: item.questionTitle,
+            respondentEmail: response.respondentEmail,
+            respondentName: response.respondentName,
+            submittedAt: response.submittedAt
+          });
+        }
+      });
+    }
+  });
+  
+  return scaleResponses;
+}
+
+/**
+ * Extract text responses from form responses
+ */
+function extractTextResponses(responses) {
+  const textResponses = [];
+  
+  responses.forEach(response => {
+    if (response.responses) {
+      response.responses.forEach(item => {
+        // Check if this is a text response
+        if (typeof item.answer === 'string' && item.answer.trim().length > 0) {
+          textResponses.push({
+            id: response.id || Math.random().toString(36).substr(2, 9),
+            answer: item.answer,
+            questionTitle: item.questionTitle,
+            respondentEmail: response.respondentEmail,
+            respondentName: response.respondentName,
+            submittedAt: response.submittedAt
+          });
+        }
+      });
+    }
+  });
+  
+  return textResponses;
+}
+
+/**
+ * Process yearly data from form
+ */
+function processYearlyDataFromForm(form, responses) {
+  const currentYear = new Date().getFullYear();
+  const lastYear = currentYear - 1;
+  
+  const currentYearData = { name: `${currentYear}`, value: 0 };
+  const lastYearData = { name: `${lastYear}`, value: 0 };
+  
+  responses.forEach(response => {
+    const responseYear = new Date(response.submittedAt).getFullYear();
+    if (responseYear === currentYear) {
+      currentYearData.value++;
+    } else if (responseYear === lastYear) {
+      lastYearData.value++;
+    }
+  });
+  
+  return [lastYearData, currentYearData];
+}
+
+/**
+ * Process rating distribution from form scale responses
+ */
+function processRatingDistributionFromForm(scaleResponses) {
+  const distribution = [
+    { name: 'Very Poor (1-2)', value: 0 },
+    { name: 'Poor (3-4)', value: 0 },
+    { name: 'Fair (5-6)', value: 0 },
+    { name: 'Good (7-8)', value: 0 },
+    { name: 'Excellent (9-10)', value: 0 }
+  ];
+  
+  scaleResponses.forEach(response => {
+    const rating = response.value || 0;
+    if (rating >= 1 && rating <= 2) distribution[0].value++;
+    else if (rating >= 3 && rating <= 4) distribution[1].value++;
+    else if (rating >= 5 && rating <= 6) distribution[2].value++;
+    else if (rating >= 7 && rating <= 8) distribution[3].value++;
+    else if (rating >= 9 && rating <= 10) distribution[4].value++;
+  });
+  
+  return distribution;
+}
+
+/**
+ * Process status breakdown from form
+ */
+function processStatusBreakdownFromForm(form) {
+  const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
+  const respondedAttendees = form.attendeeList ? 
+    form.attendeeList.filter(attendee => attendee.hasResponded).length : 0;
+  const nonRespondedAttendees = totalAttendees - respondedAttendees;
+
+  return [
+    { name: 'Responded', value: respondedAttendees },
+    { name: 'Not Responded', value: nonRespondedAttendees }
+  ];
+}
+
+/**
+ * Process response trends from form
+ */
+function processResponseTrendsFromForm(responses) {
+  const trends = {};
+  
+  responses.forEach(response => {
+    const date = new Date(response.submittedAt).toISOString().split('T')[0];
+    trends[date] = (trends[date] || 0) + 1;
+  });
+  
+  return Object.entries(trends)
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+module.exports = {
+  getDynamicQuantitativeData,
+  getDynamicQualitativeData,
+  getDynamicCommentsData,
+  getAllReportsWithLiveData
+};

@@ -5,7 +5,7 @@ const CertificateController = require('../controllers/certificateController');
 const { requireAuth } = require('../../middlewares/auth');
 
 // GET /api/certificates/form/:formId - Get certificates for a specific form
-router.get('/form/:formId', requireAuth, CertificateController.getCertificate.bind(CertificateController));
+router.get('/form/:formId', requireAuth, CertificateController.getCertificatesForForm.bind(CertificateController));
 
 // GET /api/certificates/my - Get current user's certificates
 router.get('/my', requireAuth, async (req, res) => {

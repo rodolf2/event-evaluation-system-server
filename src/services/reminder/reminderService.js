@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const Reminder = require("../../models/Reminder");
+const notificationService = require("../notificationService");
 
 class ReminderService {
   constructor() {
@@ -34,11 +35,19 @@ class ReminderService {
         </div>
 
         <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-radius: 0 0 10px 10px;">
-          <h2 style="color: #374151; margin-bottom: 20px;">Hello ${user.name},</h2>
+          <h2 style="color: #374151; margin-bottom: 20px;">Hello ${
+            user.name
+          },</h2>
 
-          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${priorityColors[reminder.priority]};">
-            <h3 style="margin: 0 0 10px 0; color: #1f2937;">${reminder.title}</h3>
-            <p style="margin: 0 0 15px 0; color: #6b7280; line-height: 1.5;">${reminder.description || "No description provided."}</p>
+          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${
+            priorityColors[reminder.priority]
+          };">
+            <h3 style="margin: 0 0 10px 0; color: #1f2937;">${
+              reminder.title
+            }</h3>
+            <p style="margin: 0 0 15px 0; color: #6b7280; line-height: 1.5;">${
+              reminder.description || "No description provided."
+            }</p>
 
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
@@ -46,7 +55,9 @@ class ReminderService {
                 <span style="color: #6b7280; margin-left: 8px;">${reminderDate}</span>
               </div>
               <div>
-                <span style="background: ${priorityColors[reminder.priority]}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+                <span style="background: ${
+                  priorityColors[reminder.priority]
+                }; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
                   ${reminder.priority.toUpperCase()} PRIORITY
                 </span>
               </div>
@@ -76,7 +87,10 @@ class ReminderService {
 
   async sendReminderEmail(reminderId) {
     try {
-      const reminder = await Reminder.findById(reminderId).populate("userId", "name email");
+      const reminder = await Reminder.findById(reminderId).populate(
+        "userId",
+        "name email"
+      );
 
       if (!reminder) {
         throw new Error("Reminder not found");
@@ -84,7 +98,9 @@ class ReminderService {
 
       const user = reminder.userId;
       if (!user || !user.email) {
-        console.warn(`Cannot send reminder email: User or email not found for reminder ${reminderId}`);
+        console.warn(
+          `Cannot send reminder email: User or email not found for reminder ${reminderId}`
+        );
         return;
       }
 
@@ -115,6 +131,39 @@ class ReminderService {
     try {
       const reminder = new Reminder(reminderData);
       await reminder.save();
+      console.log("[createReminder] Reminder saved:", reminder._id);
+
+      // Create in-app notification
+      try {
+        const User = require("../../models/User");
+        const user = await User.findById(reminderData.userId);
+        console.log(
+          "[createReminder] User found:",
+          user ? user.name : "NOT FOUND"
+        );
+
+        if (user) {
+          const notif = await notificationService.notifyReminderCreated(
+            reminder,
+            user
+          );
+          console.log(
+            "[createReminder] Notification created successfully:",
+            notif._id
+          );
+        } else {
+          console.warn(
+            "[createReminder] No user found for userId:",
+            reminderData.userId
+          );
+        }
+      } catch (notificationError) {
+        console.error(
+          "[createReminder] Failed to create reminder notification:",
+          notificationError
+        );
+        // Don't fail the entire operation if notification creation fails
+      }
 
       // Send email notification
       try {
@@ -158,6 +207,42 @@ class ReminderService {
     }
   }
 
+  async completeReminder(reminderId, userId) {
+    try {
+      const reminder = await Reminder.findOne({
+        _id: reminderId,
+        userId: userId,
+      }).populate("userId", "name email");
+
+      if (!reminder) {
+        throw new Error("Reminder not found or unauthorized");
+      }
+
+      // Mark reminder as completed
+      reminder.completed = true;
+      await reminder.save();
+
+      // Send completion notification to all roles
+      try {
+        await notificationService.notifyReminderCompleted(
+          reminder,
+          reminder.userId
+        );
+      } catch (notificationError) {
+        console.error(
+          "Failed to send reminder completion notification:",
+          notificationError
+        );
+        // Don't fail the operation if notification fails
+      }
+
+      return reminder;
+    } catch (error) {
+      console.error("Error completing reminder:", error);
+      throw error;
+    }
+  }
+
   // Method to check and send reminders for upcoming events (could be called by a cron job)
   async sendUpcomingReminders() {
     try {
@@ -170,11 +255,20 @@ class ReminderService {
         completed: false,
       }).populate("userId", "name email");
 
-      console.log(`Found ${upcomingReminders.length} upcoming reminders to send`);
+      console.log(
+        `Found ${upcomingReminders.length} upcoming reminders to send`
+      );
 
       for (const reminder of upcomingReminders) {
         try {
+          // Send email notification
           await this.sendReminderEmail(reminder._id);
+
+          // Send in-app notification to all roles
+          await notificationService.notifyReminderDueSoon(
+            reminder,
+            reminder.userId
+          );
         } catch (error) {
           console.error(`Failed to send reminder ${reminder._id}:`, error);
         }

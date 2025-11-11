@@ -76,6 +76,10 @@ const questionSchema = new mongoose.Schema({
     type: String,
     default: "Excellent",
   },
+  sectionId: {
+    type: mongoose.Schema.Types.Mixed, // Can be "main" or section id for association
+    default: "main",
+  },
 });
 
 const formSchema = new mongoose.Schema(
@@ -95,6 +99,25 @@ const formSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    // Optional: structured section metadata for multi-section forms (PSAS builder)
+    sections: [
+      {
+        id: {
+          type: mongoose.Schema.Types.Mixed,
+        },
+        title: {
+          type: String,
+          trim: true,
+        },
+        description: {
+          type: String,
+          trim: true,
+        },
+        sectionNumber: {
+          type: Number,
+        },
+      },
+    ],
     questions: [questionSchema],
     status: {
       type: String,
