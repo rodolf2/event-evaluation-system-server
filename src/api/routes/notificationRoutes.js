@@ -27,9 +27,9 @@ router.put('/:id/read', requireAuth, markAsRead);
 router.put('/read-multiple', requireAuth, markMultipleAsRead);
 
 // All authenticated users can delete their own notifications
-router.delete('/:id', requireAuth, deleteNotification);
+router.delete('/multiple', requireAuth, deleteMultiple);
 
 // All authenticated users can delete their own notifications
-router.delete('/multiple', requireAuth, deleteMultiple);
+router.delete('/:id', requireAuth, deleteNotification);
 
 module.exports = router;

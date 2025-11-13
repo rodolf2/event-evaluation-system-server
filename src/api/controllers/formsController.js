@@ -265,16 +265,39 @@ const createBlankForm = async (req, res) => {
               );
 
               if (parsedAttendees.length > 0) {
-                // Convert parsed attendees to attendeeList format with normalized emails
-                const attendeeList = parsedAttendees.map((attendee) => ({
-                  userId: null, // Will be populated when users respond
-                  name: attendee.name || "",
-                  email: attendee.email
-                    ? attendee.email.toLowerCase().trim()
-                    : "",
-                  hasResponded: false,
-                  uploadedAt: new Date(),
-                }));
+                // Convert parsed attendees to attendeeList format with user creation
+                const attendeeList = await Promise.all(
+                  parsedAttendees.map(async (attendee) => {
+                    // Normalize email for consistency
+                    const normalizedEmail = attendee.email
+                      ? attendee.email.toLowerCase().trim()
+                      : "";
+
+                    let user = await User.findOne({ email: normalizedEmail });
+
+                    if (!user) {
+                      // Create new user if not found
+                      user = new User({
+                        name: attendee.name
+                          ? attendee.name.trim()
+                          : normalizedEmail
+                          ? normalizedEmail.split("@")[0].trim()
+                          : "Unknown",
+                        email: normalizedEmail,
+                        role: "participant", // Default role for imported attendees
+                      });
+                      await user.save();
+                    }
+
+                    return {
+                      userId: user._id,
+                      name: attendee.name ? attendee.name.trim() : user.name,
+                      email: normalizedEmail,
+                      hasResponded: false,
+                      uploadedAt: new Date(),
+                    };
+                  })
+                );
 
                 // Validate attendee data
                 const validAttendees = attendeeList.filter(
@@ -618,6 +641,7 @@ const publishForm = async (req, res) => {
       title,
       description,
       questions,
+      sections,
       eventStartDate,
       eventEndDate,
       uploadedFiles,
@@ -659,13 +683,19 @@ const publishForm = async (req, res) => {
     if (description) {
       form.description = description;
     }
-    if (questions) {
-      form.questions = questions;
-    } else {
+    if (!Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({
         success: false,
         message: "No questions provided in request",
       });
+    }
+
+    // Always update questions
+    form.questions = questions;
+
+    // Persist sections if provided so newly added sections are saved
+    if (Array.isArray(sections)) {
+      form.sections = sections;
     }
     if (uploadedFiles) {
       form.uploadedFiles = uploadedFiles;
@@ -744,7 +774,11 @@ const publishForm = async (req, res) => {
     // Log activity
     try {
       const activityService = require("../../services/activityService");
-      await activityService.logFormPublished(req.user._id, savedForm.title, req);
+      await activityService.logFormPublished(
+        req.user._id,
+        savedForm.title,
+        req
+      );
     } catch (activityError) {
       console.error("Failed to log form publication activity:", activityError);
     }
@@ -754,7 +788,10 @@ const publishForm = async (req, res) => {
       const notificationService = require("../../services/notificationService");
       await notificationService.notifyFormPublished(savedForm, req.user._id);
     } catch (notificationError) {
-      console.error("Failed to create form publication notifications:", notificationError);
+      console.error(
+        "Failed to create form publication notifications:",
+        notificationError
+      );
       // Don't fail the form publication if notifications fail
     }
 
@@ -1156,13 +1193,20 @@ const getMyEvaluations = async (req, res) => {
       });
     }
 
+    // Only include:
+    // - Published evaluation forms
+    // - Where the current user is explicitly in attendeeList
+    // NOTE:
+    // This prevents generic or admin-only forms (e.g. PSAS notification/config forms)
+    // from leaking into the participant-facing evaluations list.
     const forms = await Form.find({
       status: "published",
       "attendeeList.email": userEmail,
+      type: { $in: [null, "evaluation"] },
     })
       .populate("createdBy", "name email")
       .select(
-        "title description shareableLink eventStartDate eventEndDate attendeeList createdAt"
+        "title description shareableLink eventStartDate eventEndDate attendeeList createdAt type"
       )
       .sort({ createdAt: -1 });
 
@@ -1173,6 +1217,7 @@ const getMyEvaluations = async (req, res) => {
         : null;
       const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
 
+      // Only show evaluations that are currently open for responses.
       if (startDate && now < startDate) {
         return false;
       }
@@ -1184,11 +1229,24 @@ const getMyEvaluations = async (req, res) => {
       return true;
     });
 
+    // Normalize response objects so the frontend always has a stable _id field.
+    const normalizedForms = availableForms.map((form) => ({
+      _id: form._id,
+      title: form.title,
+      description: form.description,
+      shareableLink: form.shareableLink,
+      eventStartDate: form.eventStartDate,
+      eventEndDate: form.eventEndDate,
+      attendeeList: form.attendeeList,
+      createdAt: form.createdAt,
+      type: form.type || "evaluation",
+    }));
+
     res.status(200).json({
       success: true,
       data: {
-        forms: availableForms,
-        count: availableForms.length,
+        forms: normalizedForms,
+        count: normalizedForms.length,
       },
     });
   } catch (error) {

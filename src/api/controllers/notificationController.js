@@ -284,10 +284,11 @@ const deleteNotification = async (req, res) => {
     // 1. User created the notification, OR
     // 2. Notification is targeted to user's role, OR
     // 3. User is school-admin or mis (can delete any notification)
-    const canDelete =
-      notification.createdBy.toString() === req.user._id.toString() ||
-      notification.targetRoles.includes(req.user.role) ||
-      ["school-admin", "mis"].includes(req.user.role);
+    const isCreator = notification.createdBy && notification.createdBy.toString() === req.user._id.toString();
+    const isTargetedToRole = notification.targetRoles.includes(req.user.role);
+    const isAdmin = ["school-admin", "mis"].includes(req.user.role);
+
+    const canDelete = isCreator || isTargetedToRole || isAdmin;
 
     if (!canDelete) {
       return res.status(403).json({
@@ -350,20 +351,21 @@ const deleteMultiple = async (req, res) => {
     const nonDeletableIds = [];
 
     for (const notification of notifications) {
-      const canDelete =
-        notification.createdBy.toString() === req.user._id.toString() ||
-        notification.targetRoles.includes(req.user.role) ||
-        ["school-admin", "mis"].includes(req.user.role);
+      const isCreator = notification.createdBy && notification.createdBy.toString() === req.user._id.toString();
+      const isTargetedToRole = notification.targetRoles.includes(req.user.role);
+      const isAdmin = ["school-admin", "mis"].includes(req.user.role);
+
+      const canDelete = isCreator || isTargetedToRole || isAdmin;
 
       console.log(`[deleteMultiple] Notification ${notification._id}:`, {
         canDelete,
-        createdBy: notification.createdBy.toString(),
+        createdBy: notification.createdBy ? notification.createdBy.toString() : null,
         userId: req.user._id.toString(),
-        isCreator: notification.createdBy.toString() === req.user._id.toString(),
+        isCreator,
         targetRoles: notification.targetRoles,
         userRole: req.user.role,
-        isTargetedToRole: notification.targetRoles.includes(req.user.role),
-        isAdmin: ["school-admin", "mis"].includes(req.user.role),
+        isTargetedToRole,
+        isAdmin,
       });
 
       if (canDelete) {

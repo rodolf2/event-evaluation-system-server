@@ -68,13 +68,20 @@ class NotificationService {
     const title = `New Evaluation Form Published: ${form.title}`;
     const message = `A new evaluation form "${form.title}" has been published and is now available for responses.`;
 
-    // Notify participants
-    await this.createRoleBasedNotification(title, message, ["participant"], {
-      type: "success",
-      priority: "high",
-      relatedEntity: { type: "form", id: form._id },
-      createdBy,
-    });
+    // Notify participants who are in the form's attendee list
+    const participantUsers = (form.attendeeList || [])
+      .filter((attendee) => attendee.userId)
+      .map((attendee) => attendee.userId);
+
+    if (participantUsers.length > 0) {
+      await this.createRoleBasedNotification(title, message, [], {
+        type: "success",
+        priority: "high",
+        targetUsers: participantUsers,
+        relatedEntity: { type: "form", id: form._id },
+        createdBy,
+      });
+    }
 
     // Notify PSAS and Club Officers
     await this.createRoleBasedNotification(
