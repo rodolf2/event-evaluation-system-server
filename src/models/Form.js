@@ -80,6 +80,11 @@ const questionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed, // Can be "main" or section id for association
     default: "main",
   },
+  icon: {
+    type: String,
+    enum: ["star", "emoji", "heart", "Default", "Star", "Heart"],
+    default: null,
+  },
 });
 
 const formSchema = new mongoose.Schema(
