@@ -17,6 +17,13 @@ router.get(
   formsController.getMyEvaluations
 );
 
+// GET /api/forms/completion-stats - Get participant evaluation completion stats for badge progression
+router.get(
+  "/completion-stats",
+  requireRole(["participant"]),
+  formsController.getCompletionStats
+);
+
 // GET /api/forms/:id - Get a specific form by ID (psas, club-officer, school-admin, mis, and participants assigned to form)
 router.get(
   "/:id",
@@ -24,7 +31,7 @@ router.get(
   formsController.getFormById
 );
 
- // POST /api/forms/blank - Create a new blank form (psas, club-officer can create)
+// POST /api/forms/blank - Create a new blank form (psas, club-officer can create)
 router.post(
   "/blank",
   requireRole(["psas", "club-officer"]),

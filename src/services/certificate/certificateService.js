@@ -405,7 +405,7 @@ class CertificateService {
         certificateId,
         certificateType: options.certificateType || "participation",
         customMessage: options.customMessage,
-        studentName: options.studentName,
+        studentName: options.respondentName || options.studentName,
       };
 
       const pdfResult = await this.generateCertificatePDF(certificateData);

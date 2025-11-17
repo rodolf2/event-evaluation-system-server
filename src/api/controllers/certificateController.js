@@ -208,10 +208,15 @@ class CertificateController {
         });
       }
 
+      // Check if this is for inline viewing (from certificate viewer)
+      const isInline = req.query.inline === 'true';
+
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${certificate.certificateId}.pdf"`
+        isInline
+          ? `inline; filename="${certificate.certificateId}.pdf"`
+          : `attachment; filename="${certificate.certificateId}.pdf"`
       );
 
       const fileStream = fs.createReadStream(validatedPath);
@@ -225,6 +230,62 @@ class CertificateController {
       });
     }
   } // ✅ fixed missing closing brace
+
+  /**
+   * Get current user's certificates
+   * GET /api/certificates/my
+   */
+  async getMyCertificates(req, res) {
+    try {
+      const userId = req.user._id;
+      const { page = 1, limit = 10 } = req.query;
+
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+
+      if (
+        isNaN(pageNum) ||
+        pageNum < 1 ||
+        isNaN(limitNum) ||
+        limitNum < 1 ||
+        limitNum > 100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid pagination parameters. Page must be >= 1, limit must be 1-100",
+        });
+      }
+
+      const certificates = await Certificate.find({ userId })
+        .populate("eventId", "name date")
+        .populate("formId", "title")
+        .sort({ issuedDate: -1 })
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum);
+
+      const total = await Certificate.countDocuments({ userId });
+
+      res.status(200).json({
+        success: true,
+        data: certificates,
+        pagination: {
+          currentPage: pageNum,
+          totalPages: Math.ceil(total / limitNum),
+          totalCertificates: total,
+          hasNextPage: pageNum < Math.ceil(total / limitNum),
+          hasPrevPage: pageNum > 1,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching my certificates:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch your certificates",
+        error: error.message,
+      });
+    }
+  }
 
   /**
    * Get certificates for a user

@@ -177,6 +177,11 @@ const createBlankForm = async (req, res) => {
       eventEndDate: req.body.eventEndDate
         ? new Date(req.body.eventEndDate)
         : null,
+      // Certificate template linkage
+      linkedCertificateId: req.body.linkedCertificateId || null,
+      linkedCertificateType: req.body.linkedCertificateType || "completion",
+      certificateTemplateName: req.body.certificateTemplateName || null,
+      isCertificateLinked: req.body.isCertificateLinked || false,
     };
 
     const form = new Form(formData);
@@ -219,7 +224,32 @@ const createBlankForm = async (req, res) => {
                 email: normalizedEmail,
                 role: "participant", // Default role for imported attendees
               });
-              await user.save();
+
+              try {
+                await user.save();
+              } catch (saveError) {
+                // Handle duplicate key error for googleId
+                if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
+                  console.log('🔄 Duplicate googleId error - trying with unique ID...');
+
+                  // Generate a unique googleId for manual users
+                  const timestamp = Date.now();
+                  const randomSuffix = Math.random().toString(36).substring(2, 8);
+                  user.googleId = `manual_${timestamp}_${randomSuffix}`;
+
+                  try {
+                    await user.save();
+                    console.log('✅ User saved with generated googleId');
+                  } catch (retryError) {
+                    console.error('❌ Retry also failed:', retryError);
+                    // If retry fails, throw the original error to maintain error context
+                    throw saveError;
+                  }
+                } else {
+                  // If it's not a googleId duplicate error, throw the original error
+                  throw saveError;
+                }
+              }
             }
 
             return {
@@ -286,7 +316,32 @@ const createBlankForm = async (req, res) => {
                         email: normalizedEmail,
                         role: "participant", // Default role for imported attendees
                       });
-                      await user.save();
+
+                      try {
+                        await user.save();
+                      } catch (saveError) {
+                        // Handle duplicate key error for googleId
+                        if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
+                          console.log('🔄 Duplicate googleId error - trying with unique ID...');
+
+                          // Generate a unique googleId for manual users
+                          const timestamp = Date.now();
+                          const randomSuffix = Math.random().toString(36).substring(2, 8);
+                          user.googleId = `manual_${timestamp}_${randomSuffix}`;
+
+                          try {
+                            await user.save();
+                            console.log('✅ User saved with generated googleId');
+                          } catch (retryError) {
+                            console.error('❌ Retry also failed:', retryError);
+                            // If retry fails, throw the original error to maintain error context
+                            throw saveError;
+                          }
+                        } else {
+                          // If it's not a googleId duplicate error, throw the original error
+                          throw saveError;
+                        }
+                      }
                     }
 
                     return {
@@ -732,7 +787,32 @@ const publishForm = async (req, res) => {
                 email: normalizedEmail,
                 role: "participant", // Default role for imported attendees
               });
-              await user.save();
+
+              try {
+                await user.save();
+              } catch (saveError) {
+                // Handle duplicate key error for googleId
+                if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
+                  console.log('🔄 Duplicate googleId error - trying with unique ID...');
+
+                  // Generate a unique googleId for manual users
+                  const timestamp = Date.now();
+                  const randomSuffix = Math.random().toString(36).substring(2, 8);
+                  user.googleId = `manual_${timestamp}_${randomSuffix}`;
+
+                  try {
+                    await user.save();
+                    console.log('✅ User saved with generated googleId');
+                  } catch (retryError) {
+                    console.error('❌ Retry also failed:', retryError);
+                    // If retry fails, throw the original error to maintain error context
+                    throw saveError;
+                  }
+                } else {
+                  // If it's not a googleId duplicate error, throw the original error
+                  throw saveError;
+                }
+              }
             }
 
             return {
@@ -845,47 +925,73 @@ const submitFormResponse = async (req, res) => {
     // Validate that the form exists and is published
     const form = await Form.findById(id);
 
-    if (!form) {
-      return res.status(404).json({
-        success: false,
-        message: "Form not found",
-      });
-    }
+    // if (!form) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Form not found",
+    //   });
+    // }
 
-    if (form.status !== "published") {
-      return res.status(400).json({
-        success: false,
-        message: "Form is not available for responses",
-      });
-    }
+    // if (form.status !== "published") {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Form is not available for responses",
+    //   });
+    // }
 
     // Check if form is within event date range (if dates are set)
-    if (form.eventStartDate || form.eventEndDate) {
-      const now = new Date();
-      const startDate = form.eventStartDate
-        ? new Date(form.eventStartDate)
-        : null;
-      const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
+    // if (form.eventStartDate || form.eventEndDate) {
+    //   const now = new Date();
+    //   const startDate = form.eventStartDate
+    //     ? new Date(form.eventStartDate)
+    //     : null;
+    //   const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
 
-      if (startDate && now < startDate) {
-        return res.status(400).json({
-          success: false,
-          message: `This form will be available starting from ${startDate.toLocaleDateString()}`,
-        });
-      }
+    //   if (startDate && now < startDate) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: `This form will be available starting from ${startDate.toLocaleDateString()}`,
+    //     });
+    //   }
 
-      if (endDate && now > endDate) {
-        return res.status(400).json({
-          success: false,
-          message: `This form is no longer available. It was available until ${endDate.toLocaleDateString()}`,
-        });
-      }
+    //   if (endDate && now > endDate) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: `This form is no longer available. It was available until ${endDate.toLocaleDateString()}`,
+    //     });
+    //   }
+    // }
+
+    // Process responses - handle both old format (array of answers) and new format (structured objects)
+    let processedResponses = responses;
+    
+    if (responses && responses.length > 0 && typeof responses[0] === 'object' && responses[0].questionId) {
+      // New format with structured response objects - already contains section info
+      processedResponses = responses.map(response => ({
+        questionId: response.questionId,
+        questionTitle: response.questionTitle,
+        answer: response.answer,
+        sectionId: response.sectionId || "main"
+      }));
+    } else {
+      // Legacy format - convert array of answers to structured format
+      // This handles backward compatibility
+      const allQuestions = form.questions || [];
+      processedResponses = (responses || []).map((answer, index) => {
+        const question = allQuestions[index];
+        return {
+          questionId: question?._id?.toString() || `question_${index}`,
+          questionTitle: question?.title || `Question ${index + 1}`,
+          answer: answer,
+          sectionId: question?.sectionId || "main"
+        };
+      });
     }
 
     // Create response object
     const responseData = {
       formId: id,
-      responses: responses || [],
+      responses: processedResponses,
       respondentEmail: respondentEmail || null,
       respondentName: respondentName || null,
       submittedAt: new Date(),
@@ -894,6 +1000,9 @@ const submitFormResponse = async (req, res) => {
     // Add response to form
     form.responses.push(responseData);
     form.responseCount = (form.responseCount || 0) + 1;
+
+    // Initialize certificate result variable
+    let certificateResult = null;
 
     // Check if this respondent is in the attendee list and update their status
     if (respondentEmail) {
@@ -904,57 +1013,68 @@ const submitFormResponse = async (req, res) => {
           attendee.email.toLowerCase().trim() === normalizedEmail
       );
 
+      let shouldGenerateCertificate = false;
+      
       if (attendee) {
         attendee.hasResponded = true;
-
         // Generate certificate if the attendee hasn't received one yet
-        if (!attendee.certificateGenerated) {
-          try {
-            const certificateService = require("../../services/certificate/certificateService");
-            const Event = require("../../models/Event");
+        shouldGenerateCertificate = !attendee.certificateGenerated;
+      } else {
+        // Generate certificate for any participant who completes the form (not just attendees)
+        shouldGenerateCertificate = true;
+      }
 
-            // Create or find an event for this form
-            let event = await Event.findOne({ name: form.title });
+      // Generate certificate if needed
+      if (shouldGenerateCertificate) {
+        try {
+          const certificateService = require("../../services/certificate/certificateService");
+          const Event = require("../../models/Event");
 
-            if (!event) {
-              // Create a temporary event for the form
-              event = new Event({
-                name: form.title,
-                date: form.eventStartDate || form.createdAt,
-                category: "evaluation",
-                description:
-                  form.description || `Evaluation form: ${form.title}`,
-              });
-              await event.save();
-            }
+          // Create or find an event for this form
+          let event = await Event.findOne({ name: form.title });
 
-            // Use the student's name from attendee list for the certificate
-            const certificateResult =
-              await certificateService.generateCertificate(
-                attendee.userId || form.createdBy, // Use attendee's userId if available, otherwise form creator
-                event._id, // Use the event ID
-                {
-                  formId: form._id, // Link certificate to the form
-                  certificateType: "completion",
-                  customMessage: `For successfully completing the evaluation form: ${form.title}`,
-                  sendEmail: true,
-                  studentName: attendee.name, // Use the name from attendee list
-                  respondentEmail: respondentEmail,
-                  respondentName: respondentName,
-                }
-              );
-
-            if (certificateResult.success) {
-              attendee.certificateGenerated = true;
-              attendee.certificateId = certificateResult.certificateId;
-            }
-          } catch (certError) {
-            console.error(
-              `Error generating certificate for ${attendee.name}:`,
-              certError
-            );
-            // Don't fail the response submission if certificate generation fails
+          if (!event) {
+            // Create a temporary event for the form
+            event = new Event({
+              name: form.title,
+              date: form.eventStartDate || form.createdAt,
+              category: "evaluation",
+              description:
+                form.description || `Evaluation form: ${form.title}`,
+            });
+            await event.save();
           }
+
+          // Use respondent's name or fallback to attendee name or email username
+          const certificateName = respondentName ||
+                                attendee?.name ||
+                                respondentEmail.split('@')[0];
+
+          certificateResult =
+            await certificateService.generateCertificate(
+              attendee?.userId || form.createdBy, // Use attendee's userId if available, otherwise form creator
+              event._id, // Use the event ID
+              {
+                formId: form._id, // Link certificate to the form
+                certificateType: "completion",
+                customMessage: `For successfully completing the evaluation form: ${form.title}`,
+                sendEmail: true,
+                studentName: certificateName,
+                respondentEmail: respondentEmail,
+                respondentName: respondentName,
+              }
+            );
+
+          if (certificateResult.success && attendee) {
+            attendee.certificateGenerated = true;
+            attendee.certificateId = certificateResult.certificateId;
+          }
+        } catch (certError) {
+          console.error(
+            `Error generating certificate for ${respondentName || respondentEmail}:`,
+            certError
+          );
+          // Don't fail the response submission if certificate generation fails
         }
       }
     }
@@ -972,6 +1092,10 @@ const submitFormResponse = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Response submitted successfully",
+      data: {
+        certificateId: certificateResult?.certificateId,
+        downloadUrl: certificateResult?.downloadUrl,
+      },
     });
   } catch (error) {
     console.error("Error submitting response:", error);
@@ -1089,7 +1213,32 @@ const uploadAttendeeList = [
               email: normalizedEmail,
               role: "participant", // Default role for imported attendees
             });
-            await user.save();
+
+            try {
+              await user.save();
+            } catch (saveError) {
+              // Handle duplicate key error for googleId
+              if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
+                console.log('🔄 Duplicate googleId error - trying with unique ID...');
+
+                // Generate a unique googleId for manual users
+                const timestamp = Date.now();
+                const randomSuffix = Math.random().toString(36).substring(2, 8);
+                user.googleId = `manual_${timestamp}_${randomSuffix}`;
+
+                try {
+                  await user.save();
+                  console.log('✅ User saved with generated googleId');
+                } catch (retryError) {
+                  console.error('❌ Retry also failed:', retryError);
+                  // If retry fails, throw the original error to maintain error context
+                  throw saveError;
+                }
+              } else {
+                // If it's not a googleId duplicate error, throw the original error
+                throw saveError;
+              }
+            }
           }
 
           return {
@@ -1230,17 +1379,23 @@ const getMyEvaluations = async (req, res) => {
     });
 
     // Normalize response objects so the frontend always has a stable _id field.
-    const normalizedForms = availableForms.map((form) => ({
-      _id: form._id,
-      title: form.title,
-      description: form.description,
-      shareableLink: form.shareableLink,
-      eventStartDate: form.eventStartDate,
-      eventEndDate: form.eventEndDate,
-      attendeeList: form.attendeeList,
-      createdAt: form.createdAt,
-      type: form.type || "evaluation",
-    }));
+    const normalizedForms = availableForms.map((form) => {
+      const attendee = form.attendeeList?.find(
+        (a) => a.email && a.email.toLowerCase().trim() === userEmail
+      ) || null;
+      return {
+        _id: form._id,
+        title: form.title,
+        description: form.description,
+        shareableLink: form.shareableLink,
+        eventStartDate: form.eventStartDate,
+        eventEndDate: form.eventEndDate,
+        attendeeList: form.attendeeList,
+        createdAt: form.createdAt,
+        type: form.type || "evaluation",
+        completed: !!attendee?.hasResponded,
+      };
+    });
 
     res.status(200).json({
       success: true,

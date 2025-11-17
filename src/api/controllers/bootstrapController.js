@@ -76,20 +76,54 @@ const bootstrapAdmin = async (req, res) => {
       isActive: true
     });
 
-    const savedAdmin = await newAdmin.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'First admin user created successfully',
-      data: {
-        user: {
-          id: savedAdmin._id,
-          name: savedAdmin.name,
-          email: savedAdmin.email,
-          role: savedAdmin.role
+    try {
+      const savedAdmin = await newAdmin.save();
+      res.status(201).json({
+        success: true,
+        message: 'First admin user created successfully',
+        data: {
+          user: {
+            id: savedAdmin._id,
+            name: savedAdmin.name,
+            email: savedAdmin.email,
+            role: savedAdmin.role
+          }
         }
+      });
+    } catch (saveError) {
+      // Handle duplicate key error for googleId
+      if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
+        console.log('🔄 Duplicate googleId error - trying with unique ID...');
+
+        // Generate a unique googleId for admin users
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        newAdmin.googleId = `admin_${timestamp}_${randomSuffix}`;
+
+        try {
+          const savedAdmin = await newAdmin.save();
+          console.log('✅ Admin user saved with generated googleId');
+          res.status(201).json({
+            success: true,
+            message: 'First admin user created successfully',
+            data: {
+              user: {
+                id: savedAdmin._id,
+                name: savedAdmin.name,
+                email: savedAdmin.email,
+                role: savedAdmin.role
+              }
+            }
+          });
+        } catch (retryError) {
+          console.error('❌ Admin user retry also failed:', retryError);
+          throw saveError;
+        }
+      } else {
+        // If it's not a googleId duplicate error, throw the original error
+        throw saveError;
       }
-    });
+    }
 
   } catch (error) {
     res.status(500).json({

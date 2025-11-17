@@ -15,6 +15,10 @@ const responseSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed, // Can be string, array, etc.
         required: true,
       },
+      sectionId: {
+        type: mongoose.Schema.Types.Mixed, // Can be "main" or section id for association
+        default: "main",
+      },
     },
   ],
   respondentEmail: {
@@ -215,6 +219,24 @@ const formSchema = new mongoose.Schema(
     eventEndDate: {
       type: Date,
       default: null,
+    },
+    // Certificate template linkage
+    linkedCertificateId: {
+      type: String,
+      default: null,
+    },
+    linkedCertificateType: {
+      type: String,
+      enum: ['participation', 'completion', 'achievement'],
+      default: 'completion',
+    },
+    certificateTemplateName: {
+      type: String,
+      default: null,
+    },
+    isCertificateLinked: {
+      type: Boolean,
+      default: false,
     },
   },
   {
