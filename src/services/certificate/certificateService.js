@@ -5,7 +5,7 @@ const nodemailer = require("nodemailer");
 const Certificate = require("../../models/Certificate");
 
 class CertificateService {
-  static validateCertificatePath(basePath, filePath) {
+  validateCertificatePath(basePath, filePath) {
     if (!filePath) throw new Error("Invalid certificate path");
 
     // Normalize the paths
@@ -296,33 +296,77 @@ class CertificateService {
   drawSignatureArea(doc) {
     const width = doc.page.width;
     const height = doc.page.height;
-    const signatureY = height - 150;
+    const signatureY = height - 140;
 
-    const colWidth = 220;
-    const leftX = width / 2 - colWidth - 20;
-    const rightX = width / 2 + 20;
+    const colWidth = 240;
+    const leftX = width / 2 - colWidth - 40;
+    const rightX = width / 2 + 40;
+    const lineWidth = 180;
 
-    doc.font("Helvetica-Bold").fontSize(15).fillColor("#0f3b66");
-    doc.text("Dr. Sharene T. Labung", leftX, signatureY, {
-      width: colWidth,
-      align: "center",
-    });
-    doc.font("Helvetica").fontSize(12).fillColor("#374151");
-    doc.text("Chancellor / Administrator", leftX, signatureY + 18, {
-      width: colWidth,
-      align: "center",
-    });
+    // Draw decorative lines above signatures
+    doc.save();
+    doc.strokeColor("#d4af37").lineWidth(1);
 
-    doc.font("Helvetica-Bold").fontSize(15).fillColor("#0f3b66");
-    doc.text("Luckie Kristine Villanueva", rightX, signatureY, {
+    // Left signature line
+    const leftLineX = leftX + (colWidth - lineWidth) / 2;
+    doc.moveTo(leftLineX, signatureY - 15).lineTo(leftLineX + lineWidth, signatureY - 15).stroke();
+
+    // Right signature line
+    const rightLineX = rightX + (colWidth - lineWidth) / 2;
+    doc.moveTo(rightLineX, signatureY - 15).lineTo(rightLineX + lineWidth, signatureY - 15).stroke();
+    doc.restore();
+
+    // Signature spacing - more elegant layout
+    const signatureSpacing = 28;
+    const titleSpacing = 18;
+
+    // Left signature - Dr. Sharen T. Labung
+    doc.save();
+    doc.font("Helvetica-Bold").fontSize(16).fillColor("#0f3b66");
+    doc.text("Dr. Sharene T. Labung", leftX, signatureY + 5, {
       width: colWidth,
       align: "center",
     });
-    doc.font("Helvetica").fontSize(12).fillColor("#374151");
-    doc.text("PSAS Department Head", rightX, signatureY + 18, {
+    doc.restore();
+
+    doc.save();
+    doc.font("Helvetica").fontSize(11).fillColor("#6b7280");
+    doc.text("Chancellor / Administrator", leftX, signatureY + signatureSpacing, {
       width: colWidth,
       align: "center",
     });
+    doc.restore();
+
+    // Right signature - Luckie Christine Villanueva
+    doc.save();
+    doc.font("Helvetica-Bold").fontSize(16).fillColor("#0f3b66");
+    doc.text("Luckie Christine Villanueva", rightX, signatureY + 5, {
+      width: colWidth,
+      align: "center",
+    });
+    doc.restore();
+
+    doc.save();
+    doc.font("Helvetica").fontSize(11).fillColor("#6b7280");
+    doc.text("PSAS Department Head", rightX, signatureY + signatureSpacing, {
+      width: colWidth,
+      align: "center",
+    });
+    doc.restore();
+
+    // Add small decorative elements at the corners of signature lines
+    doc.save();
+    doc.strokeColor("#d4af37").lineWidth(0.5);
+
+    // Left corner decoration
+    doc.circle(leftLineX, signatureY - 15, 2).stroke();
+    doc.circle(leftLineX + lineWidth, signatureY - 15, 2).stroke();
+
+    // Right corner decoration
+    doc.circle(rightLineX, signatureY - 15, 2).stroke();
+    doc.circle(rightLineX + lineWidth, signatureY - 15, 2).stroke();
+
+    doc.restore();
   }
 
   async sendCertificateByEmail(certificateData, pdfPath) {

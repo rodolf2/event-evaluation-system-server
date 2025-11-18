@@ -238,6 +238,15 @@ class CertificateController {
   async getMyCertificates(req, res) {
     try {
       const userId = req.user._id;
+      console.log('getMyCertificates called for userId:', userId);
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID not found",
+        });
+      }
+
       const { page = 1, limit = 10 } = req.query;
 
       const pageNum = parseInt(page);
@@ -257,14 +266,40 @@ class CertificateController {
         });
       }
 
-      const certificates = await Certificate.find({ userId })
-        .populate("eventId", "name date")
-        .populate("formId", "title")
-        .sort({ issuedDate: -1 })
-        .limit(limitNum)
-        .skip((pageNum - 1) * limitNum);
+      console.log('Fetching certificates for userId:', userId, 'page:', pageNum, 'limit:', limitNum);
+
+      let certificates;
+      try {
+        certificates = await Certificate.find({ userId })
+          .populate({
+            path: "eventId",
+            select: "name date",
+            options: { lean: true }
+          })
+          .populate({
+            path: "formId",
+            select: "title",
+            options: { lean: true }
+          })
+          .sort({ issuedDate: -1 })
+          .limit(limitNum)
+          .skip((pageNum - 1) * limitNum)
+          .lean();
+      } catch (populateError) {
+        console.error('Error in populate queries:', populateError);
+        // Fallback to basic query without populate
+        certificates = await Certificate.find({ userId })
+          .sort({ issuedDate: -1 })
+          .limit(limitNum)
+          .skip((pageNum - 1) * limitNum)
+          .select('certificateId certificateType issuedDate')
+          .lean();
+      }
+
+      console.log('Found certificates:', certificates.length);
 
       const total = await Certificate.countDocuments({ userId });
+      console.log('Total certificates:', total);
 
       res.status(200).json({
         success: true,
@@ -279,6 +314,7 @@ class CertificateController {
       });
     } catch (error) {
       console.error("Error fetching my certificates:", error);
+      console.error("Error stack:", error.stack);
       res.status(500).json({
         success: false,
         message: "Failed to fetch your certificates",

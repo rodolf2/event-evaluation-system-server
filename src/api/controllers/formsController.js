@@ -1050,18 +1050,34 @@ const submitFormResponse = async (req, res) => {
                                 attendee?.name ||
                                 respondentEmail.split('@')[0];
 
+          // Use linked certificate if available
+          let certificateType = "completion";
+          let customMessage = `For successfully completing the evaluation form: ${form.title}`;
+
+          if (form.isCertificateLinked && form.linkedCertificateId) {
+            certificateType = form.linkedCertificateType || "completion";
+            // If there's a linked certificate, customize the message based on the template
+            if (form.certificateTemplateName) {
+              customMessage = `Certificate awarded for completing: ${form.title} - ${form.certificateTemplateName}`;
+            } else if (form.linkedCertificateId) {
+              customMessage = `Certificate awarded for completing: ${form.title} (${form.linkedCertificateId})`;
+            }
+            console.log(`Using linked certificate template: ${form.linkedCertificateId} for form ${form.title}`);
+          }
+
           certificateResult =
             await certificateService.generateCertificate(
               attendee?.userId || form.createdBy, // Use attendee's userId if available, otherwise form creator
               event._id, // Use the event ID
               {
                 formId: form._id, // Link certificate to the form
-                certificateType: "completion",
-                customMessage: `For successfully completing the evaluation form: ${form.title}`,
+                certificateType: certificateType,
+                customMessage: customMessage,
                 sendEmail: true,
                 studentName: certificateName,
                 respondentEmail: respondentEmail,
                 respondentName: respondentName,
+                templateId: form.linkedCertificateId || null,
               }
             );
 

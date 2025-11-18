@@ -8,27 +8,7 @@ const { requireAuth } = require('../../middlewares/auth');
 router.get('/form/:formId', requireAuth, CertificateController.getCertificatesForForm.bind(CertificateController));
 
 // GET /api/certificates/my - Get current user's certificates
-router.get('/my', requireAuth, async (req, res) => {
-  try {
-    const { userId } = req.user;
-    const certificates = await Certificate.find({ userId })
-      .populate('eventId', 'name date')
-      .populate('formId', 'title')
-      .sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      data: certificates,
-    });
-  } catch (error) {
-    console.error('Error fetching user certificates:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch certificates',
-      error: error.message,
-    });
-  }
-});
+router.get('/my', requireAuth, CertificateController.getMyCertificates.bind(CertificateController));
 
 // GET /api/certificates/download/:certificateId - Download certificate PDF
 router.get('/download/:certificateId', requireAuth, CertificateController.downloadCertificate.bind(CertificateController));
