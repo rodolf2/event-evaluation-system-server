@@ -47,4 +47,11 @@ router.get(
   reportController.getAllReportsWithLiveData
 );
 
+// GET /api/analytics/reports - Get all reports with live data
+router.get(
+  "/reports",
+  requireRole(["psas", "club-officer", "school-admin", "mis"]),
+  reportController.getAllReportsWithLiveData
+);
+
 module.exports = router;

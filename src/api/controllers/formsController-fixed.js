@@ -229,26 +229,19 @@ const createBlankForm = async (req, res) => {
                 await user.save();
               } catch (saveError) {
                 // Handle duplicate key error for googleId
-                if (
-                  saveError.code === 11000 &&
-                  saveError.keyPattern?.googleId
-                ) {
-                  console.log(
-                    "🔄 Duplicate googleId error - trying with unique ID..."
-                  );
+                if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
+                  console.log('🔄 Duplicate googleId error - trying with unique ID...');
 
                   // Generate a unique googleId for manual users
                   const timestamp = Date.now();
-                  const randomSuffix = Math.random()
-                    .toString(36)
-                    .substring(2, 8);
+                  const randomSuffix = Math.random().toString(36).substring(2, 8);
                   user.googleId = `manual_${timestamp}_${randomSuffix}`;
 
                   try {
                     await user.save();
-                    console.log("✅ User saved with generated googleId");
+                    console.log('✅ User saved with generated googleId');
                   } catch (retryError) {
-                    console.error("❌ Retry also failed:", retryError);
+                    console.error('❌ Retry also failed:', retryError);
                     // If retry fails, throw the original error to maintain error context
                     throw saveError;
                   }
@@ -328,28 +321,19 @@ const createBlankForm = async (req, res) => {
                         await user.save();
                       } catch (saveError) {
                         // Handle duplicate key error for googleId
-                        if (
-                          saveError.code === 11000 &&
-                          saveError.keyPattern?.googleId
-                        ) {
-                          console.log(
-                            "🔄 Duplicate googleId error - trying with unique ID..."
-                          );
+                        if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
+                          console.log('🔄 Duplicate googleId error - trying with unique ID...');
 
                           // Generate a unique googleId for manual users
                           const timestamp = Date.now();
-                          const randomSuffix = Math.random()
-                            .toString(36)
-                            .substring(2, 8);
+                          const randomSuffix = Math.random().toString(36).substring(2, 8);
                           user.googleId = `manual_${timestamp}_${randomSuffix}`;
 
                           try {
                             await user.save();
-                            console.log(
-                              "✅ User saved with generated googleId"
-                            );
+                            console.log('✅ User saved with generated googleId');
                           } catch (retryError) {
-                            console.error("❌ Retry also failed:", retryError);
+                            console.error('❌ Retry also failed:', retryError);
                             // If retry fails, throw the original error to maintain error context
                             throw saveError;
                           }
@@ -462,11 +446,6 @@ const updateDraftForm = async (req, res) => {
       "uploadedLinks",
       "eventStartDate",
       "eventEndDate",
-      // Certificate template linkage fields
-      "linkedCertificateId",
-      "linkedCertificateType",
-      "certificateTemplateName",
-      "isCertificateLinked",
     ];
 
     updatableFields.forEach((field) => {
@@ -723,19 +702,7 @@ const publishForm = async (req, res) => {
       uploadedFiles,
       uploadedLinks,
       selectedStudents,
-      // Certificate template linkage fields
-      linkedCertificateId,
-      linkedCertificateType,
-      certificateTemplateName,
-      isCertificateLinked,
     } = req.body;
-
-    console.log(`[FORM-PUB] Publishing form ${id} with certificate linking:`, {
-      isCertificateLinked,
-      linkedCertificateId,
-      linkedCertificateType,
-      certificateTemplateName,
-    });
 
     const form = await Form.findOne({
       _id: id,
@@ -792,39 +759,6 @@ const publishForm = async (req, res) => {
       form.uploadedLinks = uploadedLinks;
     }
 
-    // Update certificate template linkage fields
-    if (linkedCertificateId !== undefined) {
-      form.linkedCertificateId = linkedCertificateId;
-      console.log(
-        `[FORM-PUB] ✓ Set linkedCertificateId: ${linkedCertificateId}`
-      );
-    }
-    if (linkedCertificateType !== undefined) {
-      form.linkedCertificateType = linkedCertificateType;
-      console.log(
-        `[FORM-PUB] ✓ Set linkedCertificateType: ${linkedCertificateType}`
-      );
-    }
-    if (certificateTemplateName !== undefined) {
-      form.certificateTemplateName = certificateTemplateName;
-      console.log(
-        `[FORM-PUB] ✓ Set certificateTemplateName: ${certificateTemplateName}`
-      );
-    }
-    if (isCertificateLinked !== undefined) {
-      form.isCertificateLinked = isCertificateLinked;
-      console.log(
-        `[FORM-PUB] ✓ Set isCertificateLinked: ${isCertificateLinked}`
-      );
-    }
-
-    console.log(`[FORM-PUB] Form certificate settings after update:`, {
-      isCertificateLinked: form.isCertificateLinked,
-      linkedCertificateId: form.linkedCertificateId,
-      linkedCertificateType: form.linkedCertificateType,
-      certificateTemplateName: form.certificateTemplateName,
-    });
-
     // Process selected students if provided
     if (
       selectedStudents &&
@@ -858,26 +792,19 @@ const publishForm = async (req, res) => {
                 await user.save();
               } catch (saveError) {
                 // Handle duplicate key error for googleId
-                if (
-                  saveError.code === 11000 &&
-                  saveError.keyPattern?.googleId
-                ) {
-                  console.log(
-                    "🔄 Duplicate googleId error - trying with unique ID..."
-                  );
+                if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
+                  console.log('🔄 Duplicate googleId error - trying with unique ID...');
 
                   // Generate a unique googleId for manual users
                   const timestamp = Date.now();
-                  const randomSuffix = Math.random()
-                    .toString(36)
-                    .substring(2, 8);
+                  const randomSuffix = Math.random().toString(36).substring(2, 8);
                   user.googleId = `manual_${timestamp}_${randomSuffix}`;
 
                   try {
                     await user.save();
-                    console.log("✅ User saved with generated googleId");
+                    console.log('✅ User saved with generated googleId');
                   } catch (retryError) {
-                    console.error("❌ Retry also failed:", retryError);
+                    console.error('❌ Retry also failed:', retryError);
                     // If retry fails, throw the original error to maintain error context
                     throw saveError;
                   }
@@ -1037,19 +964,14 @@ const submitFormResponse = async (req, res) => {
 
     // Process responses - handle both old format (array of answers) and new format (structured objects)
     let processedResponses = responses;
-
-    if (
-      responses &&
-      responses.length > 0 &&
-      typeof responses[0] === "object" &&
-      responses[0].questionId
-    ) {
+    
+    if (responses && responses.length > 0 && typeof responses[0] === 'object' && responses[0].questionId) {
       // New format with structured response objects - already contains section info
-      processedResponses = responses.map((response) => ({
+      processedResponses = responses.map(response => ({
         questionId: response.questionId,
         questionTitle: response.questionTitle,
         answer: response.answer,
-        sectionId: response.sectionId || "main",
+        sectionId: response.sectionId || "main"
       }));
     } else {
       // Legacy format - convert array of answers to structured format
@@ -1061,7 +983,7 @@ const submitFormResponse = async (req, res) => {
           questionId: question?._id?.toString() || `question_${index}`,
           questionTitle: question?.title || `Question ${index + 1}`,
           answer: answer,
-          sectionId: question?.sectionId || "main",
+          sectionId: question?.sectionId || "main"
         };
       });
     }
@@ -1092,7 +1014,7 @@ const submitFormResponse = async (req, res) => {
       );
 
       let shouldGenerateCertificate = false;
-
+      
       if (attendee) {
         attendee.hasResponded = true;
         // Generate certificate if the attendee hasn't received one yet
@@ -1102,12 +1024,9 @@ const submitFormResponse = async (req, res) => {
         shouldGenerateCertificate = true;
       }
 
-      // Generate certificate if needed
+      // Generate certificate if needed using linked template from form
       if (shouldGenerateCertificate) {
         try {
-          console.log(
-            `[CERT-GEN] Starting certificate generation for respondent: ${respondentEmail}`
-          );
           const certificateService = require("../../services/certificate/certificateService");
           const Event = require("../../models/Event");
 
@@ -1120,120 +1039,84 @@ const submitFormResponse = async (req, res) => {
               name: form.title,
               date: form.eventStartDate || form.createdAt,
               category: "evaluation",
-              description: form.description || `Evaluation form: ${form.title}`,
+              description:
+                form.description || `Evaluation form: ${form.title}`,
             });
             await event.save();
           }
 
           // Use respondent's name or fallback to attendee name or email username
-          const certificateName =
-            respondentName || attendee?.name || respondentEmail.split("@")[0];
+          const certificateName = respondentName ||
+                                attendee?.name ||
+                                respondentEmail.split('@')[0];
 
-          // Use linked certificate if available
-          let certificateType = "completion";
-          let customMessage = `For successfully completing the evaluation form: ${form.title}`;
-
-          console.log(`[CERT-GEN] Form certificate linking info:`, {
-            isCertificateLinked: form.isCertificateLinked,
-            linkedCertificateId: form.linkedCertificateId,
-            linkedCertificateType: form.linkedCertificateType,
-            certificateTemplateName: form.certificateTemplateName,
+          // Check if form has a linked certificate template
+          let certificateOptions = {
+            formId: form._id, // Link certificate to the form
+            certificateType: "completion",
+            customMessage: `For successfully completing the evaluation form: ${form.title}`,
+            sendEmail: true,
+            studentName: certificateName,
+            respondentEmail: respondentEmail,
             respondentName: respondentName,
-            certificateName: certificateName,
-          });
+          };
 
-          if (form.isCertificateLinked && form.linkedCertificateId) {
-            certificateType = form.linkedCertificateType || "completion";
-            // If there's a linked certificate, customize the message based on the template
-            if (form.certificateTemplateName) {
-              customMessage = `Certificate awarded for completing: ${form.title} - ${form.certificateTemplateName}`;
-            } else if (form.linkedCertificateId) {
-              customMessage = `Certificate awarded for completing: ${form.title} (${form.linkedCertificateId})`;
-            }
-            console.log(
-              `[CERT-GEN] ✓ Using linked certificate template: ${form.linkedCertificateId} for form ${form.title}`
-            );
-          } else {
-            console.log(
-              `[CERT-GEN] ✗ No linked certificate found for form ${form.title}`
-            );
-            console.log(`[CERT-GEN] Form object:`, {
-              isCertificateLinked: form.isCertificateLinked,
-              linkedCertificateId: form.linkedCertificateId,
+          // Use the linked certificate template if available
+          if (form.linkedCertificateId && form.isCertificateLinked) {
+            console.log(`Using linked certificate template: ${form.linkedCertificateId} for form ${form.title}`);
+            certificateOptions.templateId = form.linkedCertificateId;
+            certificateOptions.certificateType = form.linkedCertificateType || "completion";
+          }
+
+          // CRITICAL FIX: Find or create the respondent user for certificate generation
+          let respondentUser = null;
+          respondentUser = await User.findOne({ email: normalizedEmail });
+          
+          if (!respondentUser) {
+            // Create new user for the respondent if they don't exist
+            respondentUser = new User({
+              name: respondentName || normalizedEmail.split('@')[0],
+              email: normalizedEmail,
+              role: "participant",
             });
-          }
-
-          console.log(`[CERT-GEN] Calling generateCertificate with:`, {
-            userId: attendee?.userId || form.createdBy,
-            eventId: event._id,
-            formId: form._id,
-            templateId: form.linkedCertificateId || null,
-            certificateName: certificateName,
-          });
-          // Ensure attendee has a valid userId. If attendee exists but no userId, try to find/create a User
-          let resolvedUserId = attendee?.userId;
-          if (attendee && !resolvedUserId && respondentEmail) {
+            
             try {
-              const UserModel = require("../../models/User");
-              let foundUser = await UserModel.findOne({
-                email: respondentEmail.toLowerCase().trim(),
-              });
-              if (!foundUser) {
-                // Create a lightweight participant user to attach certificate to
-                foundUser = new UserModel({
-                  name: attendee.name || certificateName,
-                  email: respondentEmail.toLowerCase().trim(),
-                  role: "participant",
-                });
-                await foundUser.save();
-                console.log(
-                  `[CERT-GEN] Created new User for respondent ${respondentEmail} with id ${foundUser._id}`
-                );
+              await respondentUser.save();
+              console.log(`✅ Created new respondent user for certificate: ${respondentUser.name} (${respondentUser.email})`);
+            } catch (userSaveError) {
+              // Handle duplicate key error for googleId
+              if (userSaveError.code === 11000 && userSaveError.keyPattern?.googleId) {
+                console.log('🔄 Duplicate googleId error for respondent - trying with unique ID...');
+                const timestamp = Date.now();
+                const randomSuffix = Math.random().toString(36).substring(2, 8);
+                respondentUser.googleId = `respondent_${timestamp}_${randomSuffix}`;
+                await respondentUser.save();
+                console.log('✅ Respondent user saved with generated googleId');
+              } else {
+                throw userSaveError;
               }
-              resolvedUserId = foundUser._id;
-
-              // Persist the resolved userId on the attendee so future lookups succeed
-              attendee.userId = resolvedUserId;
-            } catch (userResolveError) {
-              console.error(
-                `[CERT-GEN] Failed to resolve/create user for ${respondentEmail}:`,
-                userResolveError
-              );
             }
           }
 
-          // Fallback to form creator if still missing
-          const userIdToUse = resolvedUserId || form.createdBy;
+          console.log(`🎓 Generating certificate for respondent: ${certificateName} (${respondentEmail})`);
 
-          certificateResult = await certificateService.generateCertificate(
-            userIdToUse,
-            event._id,
-            {
-              formId: form._id, // Link certificate to the form
-              certificateType: certificateType,
-              customMessage: customMessage,
-              sendEmail: true,
-              studentName: certificateName,
-              respondentEmail: respondentEmail,
-              respondentName: respondentName,
-              templateId: form.linkedCertificateId || null,
+          certificateResult =
+            await certificateService.generateCertificate(
+              respondentUser._id, // ALWAYS use the actual respondent's user ID
+              event._id, // Use the event ID
+              certificateOptions
+            );
+
+          if (certificateResult.success) {
+            if (attendee) {
+              attendee.certificateGenerated = true;
+              attendee.certificateId = certificateResult.certificateId;
             }
-          );
-
-          console.log(
-            `[CERT-GEN] Certificate generation result:`,
-            certificateResult
-          );
-
-          if (certificateResult.success && attendee) {
-            attendee.certificateGenerated = true;
-            attendee.certificateId = certificateResult.certificateId;
+            console.log(`✅ Certificate generated successfully: ${certificateResult.certificateId} for ${respondentName || respondentEmail}`);
           }
         } catch (certError) {
           console.error(
-            `Error generating certificate for ${
-              respondentName || respondentEmail
-            }:`,
+            `❌ Error generating certificate for ${respondentName || respondentEmail}:`,
             certError
           );
           // Don't fail the response submission if certificate generation fails
@@ -1381,9 +1264,7 @@ const uploadAttendeeList = [
             } catch (saveError) {
               // Handle duplicate key error for googleId
               if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
-                console.log(
-                  "🔄 Duplicate googleId error - trying with unique ID..."
-                );
+                console.log('🔄 Duplicate googleId error - trying with unique ID...');
 
                 // Generate a unique googleId for manual users
                 const timestamp = Date.now();
@@ -1392,9 +1273,9 @@ const uploadAttendeeList = [
 
                 try {
                   await user.save();
-                  console.log("✅ User saved with generated googleId");
+                  console.log('✅ User saved with generated googleId');
                 } catch (retryError) {
-                  console.error("❌ Retry also failed:", retryError);
+                  console.error('❌ Retry also failed:', retryError);
                   // If retry fails, throw the original error to maintain error context
                   throw saveError;
                 }
@@ -1406,7 +1287,7 @@ const uploadAttendeeList = [
           }
 
           return {
-            userId: user.__id,
+            userId: user._id,
             name: attendee.name ? attendee.name.trim() : user.name,
             email: normalizedEmail,
             hasResponded: false,
@@ -1455,112 +1336,6 @@ const uploadAttendeeList = [
     }
   },
 ];
-
-// POST /api/forms/:id/attendees-json - Update attendee list with JSON data
-const updateAttendeeListJson = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { attendeeFile } = req.body;
-
-    if (!attendeeFile || !attendeeFile.students || !Array.isArray(attendeeFile.students)) {
-      return res.status(400).json({
-        success: false,
-        message: "Attendee data must be provided in attendeeFile.students array",
-      });
-    }
-
-    const form = await Form.findOne({
-      _id: id,
-      createdBy: req.user._id,
-    });
-
-    if (!form) {
-      return res.status(404).json({
-        success: false,
-        message: "Form not found",
-      });
-    }
-
-    // Process attendee data (similar to file upload processing)
-    const processedAttendees = await Promise.all(
-      attendeeFile.students.map(async (attendee) => {
-        // Normalize email for consistency
-        const normalizedEmail = attendee.email
-          ? attendee.email.toLowerCase().trim()
-          : "";
-
-        let user = await User.findOne({ email: normalizedEmail });
-
-        if (!user) {
-          // Create new user if not found
-          user = new User({
-            name: attendee.name
-              ? attendee.name.trim()
-              : normalizedEmail
-              ? normalizedEmail.split("@")[0].trim()
-              : "Unknown",
-            email: normalizedEmail,
-            role: "participant",
-          });
-
-          try {
-            await user.save();
-          } catch (saveError) {
-            // Handle duplicate key error for googleId
-            if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
-              console.log(
-                "🔄 Duplicate googleId error - trying with unique ID..."
-              );
-
-              const timestamp = Date.now();
-              const randomSuffix = Math.random().toString(36).substring(2, 8);
-              user.googleId = `manual_${timestamp}_${randomSuffix}`;
-
-              try {
-                await user.save();
-                console.log("✅ User saved with generated googleId");
-              } catch (retryError) {
-                console.error("❌ Retry also failed:", retryError);
-                throw saveError;
-              }
-            } else {
-              throw saveError;
-            }
-          }
-        }
-
-        return {
-          userId: user._id,
-          name: attendee.name ? attendee.name.trim() : user.name,
-          email: normalizedEmail,
-          hasResponded: false,
-          uploadedAt: new Date(),
-        };
-      })
-    );
-
-    // Update form with processed attendee list
-    form.attendeeList = processedAttendees;
-
-    await form.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Attendee list updated successfully",
-      data: {
-        attendeeCount: form.attendeeList.length,
-        attendees: form.attendeeList,
-      },
-    });
-  } catch (error) {
-    console.error("Error updating attendee list with JSON:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update attendee list",
-      error: error.message,
-    });
-  }
-};
 
 // GET /api/forms/:id/attendees - Get attendee list for a form
 const getAttendeeList = async (req, res) => {
@@ -1612,26 +1387,6 @@ const getMyEvaluations = async (req, res) => {
       });
     }
 
-    console.log(`[MY-EVALUATIONS] Fetching forms for user: ${userEmail}`);
-
-    // First, let's check what published forms exist
-    const allPublishedForms = await Form.find({
-      status: "published",
-      type: { $in: [null, "evaluation"] },
-    }).select("title attendeeList createdAt");
-
-    console.log(`[MY-EVALUATIONS] Found ${allPublishedForms.length} published forms:`);
-    allPublishedForms.forEach((form, i) => {
-      const attendeeCount = form.attendeeList ? form.attendeeList.length : 0;
-      const hasUser = form.attendeeList?.some(a => a.email && a.email.toLowerCase().trim() === userEmail);
-      console.log(`  ${i+1}. "${form.title}" - Attendees: ${attendeeCount}, User assigned: ${hasUser}`);
-      if (attendeeCount > 0 && attendeeCount <= 3) {
-        form.attendeeList.forEach((attendee, j) => {
-          console.log(`    - ${attendee.name} <${attendee.email}>`);
-        });
-      }
-    });
-
     // Only include:
     // - Published evaluation forms
     // - Where the current user is explicitly in attendeeList
@@ -1649,15 +1404,6 @@ const getMyEvaluations = async (req, res) => {
       )
       .sort({ createdAt: -1 });
 
-    console.log(`[MY-EVALUATIONS] Found ${forms.length} assigned forms for ${userEmail}:`);
-    forms.forEach((form, i) => {
-      console.log(`  ${i+1}. "${form.title}" (ID: ${form._id})`);
-      console.log(`     Start: ${form.eventStartDate || 'No start date'}`);
-      console.log(`     End: ${form.eventEndDate || 'No end date'}`);
-    });
-
-    console.log(`[MY-EVALUATIONS] User ${userEmail} is assigned to ${forms.length} forms`);
-
     const now = new Date();
     const availableForms = forms.filter((form) => {
       const startDate = form.eventStartDate
@@ -1667,27 +1413,21 @@ const getMyEvaluations = async (req, res) => {
 
       // Only show evaluations that are currently open for responses.
       if (startDate && now < startDate) {
-        console.log(`[MY-EVALUATIONS] Form "${form.title}" filtered out - starts ${startDate}`);
         return false;
       }
 
       if (endDate && now > endDate) {
-        console.log(`[MY-EVALUATIONS] Form "${form.title}" filtered out - ended ${endDate}`);
         return false;
       }
 
-      console.log(`[MY-EVALUATIONS] Form "${form.title}" is available`);
       return true;
     });
 
-    console.log(`[MY-EVALUATIONS] Final result: ${availableForms.length} forms available for ${userEmail}`);
-
     // Normalize response objects so the frontend always has a stable _id field.
     const normalizedForms = availableForms.map((form) => {
-      const attendee =
-        form.attendeeList?.find(
-          (a) => a.email && a.email.toLowerCase().trim() === userEmail
-        ) || null;
+      const attendee = form.attendeeList?.find(
+        (a) => a.email && a.email.toLowerCase().trim() === userEmail
+      ) || null;
       return {
         _id: form._id,
         title: form.title,
@@ -1798,23 +1538,5 @@ module.exports = {
   getMyEvaluations,
   getCompletionStats,
   uploadAttendeeList,
-  updateAttendeeListJson,
   getAttendeeList,
 };
-
-// Test endpoint to verify server is running updated code
-const testDebugging = (req, res) => {
-  console.log(
-    "🧪 DEBUG TEST: Server is running updated code with debugging enabled"
-  );
-  console.log("Current timestamp:", new Date().toISOString());
-
-  res.json({
-    success: true,
-    message: "Debugging test successful",
-    timestamp: new Date().toISOString(),
-    debugging: "enabled",
-  });
-};
-
-module.exports.testDebugging = testDebugging;

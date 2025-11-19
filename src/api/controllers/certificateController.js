@@ -197,7 +197,7 @@ class CertificateController {
       }
 
       const validatedPath = certificateService.validateCertificatePath(
-        path.join(__dirname, "../../uploads/certificates"),
+        path.resolve(path.join(__dirname, "../../uploads/certificates")),
         certificate.filePath
       );
 
@@ -229,7 +229,7 @@ class CertificateController {
         error: error.message,
       });
     }
-  } // ✅ fixed missing closing brace
+  }
 
   /**
    * Get current user's certificates
@@ -353,7 +353,7 @@ class CertificateController {
         .populate("eventId", "name date")
         .sort({ issuedDate: -1 })
         .limit(limitNum)
-        .skip((pageNum - 1) * limitNum); // ✅ fixed pagination variables
+        .skip((pageNum - 1) * limitNum);
 
       const total = await Certificate.countDocuments({ userId });
 
@@ -408,8 +408,7 @@ class CertificateController {
         .populate("userId", "name email")
         .sort({ issuedDate: -1 })
         .limit(limitNum)
-        .skip((pageNum - 1) * limitNum); // ✅ fixed pagination variables
-
+        .skip((pageNum - 1) * limitNum);
       const total = await Certificate.countDocuments({ eventId });
 
       res.status(200).json({
@@ -630,6 +629,82 @@ class CertificateController {
       res.status(500).json({
         success: false,
         message: 'Failed to update certificate',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Update form certificate customizations
+   * PUT /api/certificates/customizations/:formId
+   */
+  async updateFormCustomizations(req, res) {
+    try {
+      const { formId } = req.params;
+      const customizations = req.body;
+
+      // Validate that the user owns the form
+      const Form = require("../../models/Form");
+      const form = await Form.findOne({ _id: formId, createdBy: req.user._id });
+
+      if (!form) {
+        return res.status(404).json({
+          success: false,
+          message: 'Form not found or you do not have permission to update it',
+        });
+      }
+
+      // Update the certificate customizations
+      form.certificateCustomizations = {
+        ...form.certificateCustomizations,
+        ...customizations,
+      };
+
+      await form.save();
+
+      res.status(200).json({
+        success: true,
+        message: 'Certificate customizations updated successfully',
+        data: { customizations: form.certificateCustomizations },
+      });
+    } catch (error) {
+      console.error('Error updating form customizations:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update certificate customizations',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Get form certificate customizations
+   * GET /api/certificates/customizations/:formId
+   */
+  async getFormCustomizations(req, res) {
+    try {
+      const { formId } = req.params;
+
+      // Validate that the user owns the form
+      const Form = require("../../models/Form");
+      const form = await Form.findOne({ _id: formId, createdBy: req.user._id });
+
+      if (!form) {
+        return res.status(404).json({
+          success: false,
+          message: 'Form not found or you do not have permission to view it',
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: { customizations: form.certificateCustomizations || {} },
+      });
+    } catch (error) {
+      console.error('Error fetching form customizations:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch certificate customizations',
         error: error.message,
       });
     }

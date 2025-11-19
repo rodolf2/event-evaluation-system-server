@@ -36,10 +36,51 @@ const getFormAnalytics = async (req, res) => {
     const remainingNonResponses = totalAttendees - respondedAttendees;
 
     // Analyze responses for sentiment and breakdown
-    const responseAnalysis = AnalysisService.analyzeResponses(form.responses || []);
-    
+    let responseAnalysis;
+    try {
+      responseAnalysis = AnalysisService.analyzeResponses(form.responses || []);
+      console.log(`[ANALYTICS] Response analysis completed:`, responseAnalysis?.sentimentBreakdown);
+
+      // Validate the response structure
+      if (!responseAnalysis || !responseAnalysis.sentimentBreakdown ||
+          !responseAnalysis.sentimentBreakdown.positive ||
+          !responseAnalysis.sentimentBreakdown.neutral ||
+          !responseAnalysis.sentimentBreakdown.negative) {
+        console.warn(`[ANALYTICS] Invalid response analysis structure, using fallback`);
+        throw new Error('Invalid analysis response structure');
+      }
+    } catch (analysisError) {
+      console.error(`[ANALYTICS] Response analysis failed:`, analysisError.message);
+      // Fallback to empty analysis
+      responseAnalysis = {
+        sentimentBreakdown: {
+          positive: { count: 0, percentage: 0 },
+          neutral: { count: 0, percentage: 0 },
+          negative: { count: 0, percentage: 0 }
+        }
+      };
+    }
+
     // Generate response overview time series data
-    const responseOverview = AnalysisService.generateResponseOverview(form.responses || []);
+    let responseOverview;
+    try {
+      responseOverview = AnalysisService.generateResponseOverview(form.responses || []);
+      console.log(`[ANALYTICS] Response overview generated: ${responseOverview.labels?.length || 0} data points`);
+    } catch (overviewError) {
+      console.error(`[ANALYTICS] Response overview generation failed:`, overviewError.message);
+      // Fallback to empty overview
+      responseOverview = {
+        labels: [],
+        data: [],
+        dateRange: "No data available"
+      };
+    }
+
+    // Safe access to sentiment breakdown with defaults
+    const sentimentBreakdown = responseAnalysis?.sentimentBreakdown || {};
+    const positive = sentimentBreakdown.positive || { percentage: 0, count: 0 };
+    const neutral = sentimentBreakdown.neutral || { percentage: 0, count: 0 };
+    const negative = sentimentBreakdown.negative || { percentage: 0, count: 0 };
 
     const analyticsData = {
       totalAttendees,
@@ -48,16 +89,16 @@ const getFormAnalytics = async (req, res) => {
       remainingNonResponses,
       responseBreakdown: {
         positive: {
-          percentage: responseAnalysis.sentimentBreakdown.positive.percentage,
-          count: responseAnalysis.sentimentBreakdown.positive.count
+          percentage: positive.percentage || 0,
+          count: positive.count || 0
         },
         neutral: {
-          percentage: responseAnalysis.sentimentBreakdown.neutral.percentage,
-          count: responseAnalysis.sentimentBreakdown.neutral.count
+          percentage: neutral.percentage || 0,
+          count: neutral.count || 0
         },
         negative: {
-          percentage: responseAnalysis.sentimentBreakdown.negative.percentage,
-          count: responseAnalysis.sentimentBreakdown.negative.count
+          percentage: negative.percentage || 0,
+          count: negative.count || 0
         }
       },
       responseOverview,

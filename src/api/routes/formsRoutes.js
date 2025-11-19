@@ -97,4 +97,35 @@ router.get(
   formsController.getFormResponses
 );
 
+// POST /api/forms/:id/attendees - Upload attendee list for a form (psas, club-officer can upload)
+router.post(
+  "/:id/attendees",
+  requireRole(["psas", "club-officer"]),
+  formsController.uploadAttendeeList
+);
+
+// POST /api/forms/:id/attendees-json - Update attendee list with JSON data (psas, club-officer can update)
+router.post(
+  "/:id/attendees-json",
+  requireRole(["psas", "club-officer"]),
+  formsController.updateAttendeeListJson
+);
+
+// GET /api/forms/:id/attendees - Get attendee list for a form (psas, club-officer can view)
+router.get(
+  "/:id/attendees",
+  requireRole(["psas", "club-officer"]),
+  formsController.getAttendeeList
+);
+
+// GET /api/forms/test-debug - Test endpoint to verify debugging is working
+router.get(
+  "/test-debug",
+  (req, res) => {
+    console.log('🧪 DEBUG TEST: Server is running updated code with debugging enabled');
+    console.log('Current timestamp:', new Date().toISOString());
+    return formsController.testDebugging(req, res);
+  }
+);
+
 module.exports = router;

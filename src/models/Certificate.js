@@ -40,6 +40,26 @@ const CertificateSchema = new mongoose.Schema({
   emailSentDate: {
     type: Date,
   },
+  emailDeliveryFailed: {
+    type: Boolean,
+    default: false,
+  },
+  emailRetryCount: {
+    type: Number,
+    default: 0,
+  },
+  emailLastAttempt: {
+    type: Date,
+  },
+  emailNextRetry: {
+    type: Date,
+  },
+  emailError: {
+    type: String,
+  },
+  emailFinalError: {
+    type: String,
+  },
   customMessage: {
     type: String,
     maxlength: 500,
@@ -52,6 +72,9 @@ const CertificateSchema = new mongoose.Schema({
     type: String,
   },
   respondentName: {
+    type: String,
+  },
+  templateId: {
     type: String,
   },
 });

@@ -368,6 +368,27 @@ class NotificationService {
     );
   }
 
+  async notifyCertificateEmailFailed(certificate, recipient) {
+    const title = "Certificate Email Delivery Failed";
+    const message = `We couldn't send your certificate for "${certificate.eventId?.name || 'Event'}" to your email. You can still download it from your certificates dashboard.`;
+
+    await this.createRoleBasedNotification(
+      title,
+      message,
+      [], // Target specific user
+      {
+        type: "warning",
+        priority: "medium",
+        targetUsers: [recipient],
+        relatedEntity: { type: "certificate", id: certificate._id },
+        data: {
+          certificateId: certificate.certificateId,
+          downloadUrl: `/api/certificates/download/${certificate.certificateId}`,
+        },
+      }
+    );
+  }
+
   // Get notification counts for dashboard
   async getUserNotificationCounts(userId, userRole) {
     try {

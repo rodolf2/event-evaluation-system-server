@@ -1,4 +1,5 @@
 const Form = require('../../models/Form');
+const Report = require('../../models/Report');
 const AnalysisService = require('../../services/analysis/analysisService');
 const mongoose = require('mongoose');
 
@@ -433,16 +434,16 @@ const getAllReportsWithLiveData = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-    // Get live data for each form
-    const reportsWithLiveData = forms.map(form => {
+    // Get live data for each form and save/update reports
+    const reportsWithLiveData = await Promise.all(forms.map(async (form) => {
       const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
       const totalResponses = form.responses ? form.responses.length : 0;
       const responseRate = totalAttendees > 0 ? (totalResponses / totalAttendees) * 100 : 0;
-      
+
       // Calculate average rating from scale responses
       const scaleResponses = extractScaleResponses(form.responses || []);
-      const averageRating = scaleResponses.length > 0 
-        ? scaleResponses.reduce((sum, r) => sum + r.value, 0) / scaleResponses.length 
+      const averageRating = scaleResponses.length > 0
+        ? scaleResponses.reduce((sum, r) => sum + r.value, 0) / scaleResponses.length
         : 0;
 
       // Get recent responses (last 7 days)
@@ -450,6 +451,66 @@ const getAllReportsWithLiveData = async (req, res) => {
         const responseDate = new Date(response.submittedAt);
         return responseDate >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       }).length : 0;
+
+      // Perform sentiment analysis
+      const responseAnalysis = await AnalysisService.analyzeResponses(form.responses || []);
+      const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
+        positive: { count: 0, percentage: 0 },
+        neutral: { count: 0, percentage: 0 },
+        negative: { count: 0, percentage: 0 }
+      };
+
+      // Generate chart data
+      const yearData = processYearlyDataFromForm(form, form.responses || []);
+      const ratingDistribution = processRatingDistributionFromForm(scaleResponses);
+      const statusBreakdown = processStatusBreakdownFromForm(form);
+      const responseTrends = processResponseTrendsFromForm(form.responses || []);
+
+      // Create or update report in database
+      const reportData = {
+        formId: form._id,
+        userId: userId,
+        title: form.title,
+        eventDate: form.eventStartDate || form.createdAt,
+        status: form.status,
+        feedbackCount: totalResponses,
+        averageRating: Math.round(averageRating * 100) / 100,
+        thumbnail: `/thumbnails/form-${form._id}.png`,
+        metadata: {
+          description: form.description,
+          attendeeCount: totalAttendees,
+          responseRate: Math.round(responseRate * 100) / 100,
+          eventStartDate: form.eventStartDate,
+          eventEndDate: form.eventEndDate
+        },
+        analytics: {
+          sentimentBreakdown,
+          quantitativeData: {
+            totalResponses,
+            totalAttendees,
+            responseRate: Math.round(responseRate * 100) / 100,
+            averageRating: Math.round(averageRating * 100) / 100
+          },
+          charts: {
+            yearData,
+            ratingDistribution,
+            statusBreakdown,
+            responseTrends
+          }
+        }
+      };
+
+      // Save or update report
+      const existingReport = await Report.findOne({ formId: form._id, userId });
+      if (existingReport) {
+        // Update existing report
+        Object.assign(existingReport, reportData);
+        await existingReport.save();
+      } else {
+        // Create new report
+        const newReport = new Report(reportData);
+        await newReport.save();
+      }
 
       return {
         id: form._id,
@@ -460,9 +521,8 @@ const getAllReportsWithLiveData = async (req, res) => {
         averageRating: Math.round(averageRating * 100) / 100,
         recentComments: recentResponses,
         creator: form.createdBy,
-        thumbnail: `/thumbnails/form-${form._id}.png`, // Generate or use default
+        thumbnail: `/thumbnails/form-${form._id}.png`,
         lastUpdated: new Date().toISOString(),
-        // Add filterable data
         metadata: {
           description: form.description,
           attendeeCount: totalAttendees,
@@ -471,7 +531,7 @@ const getAllReportsWithLiveData = async (req, res) => {
           eventEndDate: form.eventEndDate
         }
       };
-    });
+    }));
 
     // Get total count for pagination
     const totalCount = await Form.countDocuments(formFilter);
@@ -640,9 +700,121 @@ function processResponseTrendsFromForm(responses) {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
+/**
+ * Get saved reports from database
+ */
+const getSavedReports = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const {
+      status = 'all',
+      dateRange,
+      search,
+      limit = 50,
+      page = 1,
+      department,
+      ratingFilter
+    } = req.query;
+
+    // Build filter for reports
+    let reportFilter = { userId };
+
+    if (status !== 'all') {
+      reportFilter.status = status;
+    }
+
+    if (dateRange) {
+      const [start, end] = dateRange.split(',');
+      if (start && end) {
+        reportFilter.eventDate = {
+          $gte: new Date(start),
+          $lte: new Date(end)
+        };
+      }
+    }
+
+    if (search) {
+      reportFilter.title = {
+        $regex: search,
+        $options: 'i'
+      };
+    }
+
+    if (department) {
+      reportFilter['metadata.department'] = department;
+    }
+
+    if (ratingFilter) {
+      const [min, max] = ratingFilter.split('-').map(Number);
+      if (!isNaN(min) && !isNaN(max)) {
+        reportFilter.averageRating = {
+          $gte: min,
+          $lte: max
+        };
+      }
+    }
+
+    // Get reports with pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const reports = await Report.find(reportFilter)
+      .populate('formId', 'title description status')
+      .sort({ lastUpdated: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // Get total count for pagination
+    const totalCount = await Report.countDocuments(reportFilter);
+
+    // Format reports for frontend
+    const formattedReports = reports.map(report => ({
+      id: report._id,
+      title: report.title,
+      eventDate: report.eventDate,
+      status: report.status,
+      feedbackCount: report.feedbackCount,
+      averageRating: report.averageRating,
+      thumbnail: report.thumbnail,
+      lastUpdated: report.lastUpdated,
+      metadata: report.metadata,
+      analytics: report.analytics
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        reports: formattedReports,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: totalCount,
+          pages: Math.ceil(totalCount / parseInt(limit))
+        },
+        filters: {
+          status,
+          dateRange,
+          search,
+          department,
+          ratingFilter
+        },
+        lastUpdated: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching saved reports:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch saved reports',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getDynamicQuantitativeData,
   getDynamicQualitativeData,
   getDynamicCommentsData,
-  getAllReportsWithLiveData
+  getAllReportsWithLiveData,
+  getSavedReports
 };

@@ -137,6 +137,7 @@ if (process.env.NODE_ENV === "development") {
   const userTestRoutes = require("./api/routes/userTestRoutes");
   app.use("/api/test/users", userTestRoutes);
   console.log("🧪 Test routes enabled for development");
+  console.log("🔍 Certificate template debugging enabled");
 }
 
 // Global error handling middleware

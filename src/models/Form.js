@@ -238,6 +238,96 @@ const formSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Certificate customization options
+    certificateCustomizations: {
+      // Branding options
+      organizationName: {
+        type: String,
+        default: "La Verdad Christian College",
+        maxlength: [100, "Organization name cannot exceed 100 characters"],
+      },
+      organizationLogo: {
+        type: String, // URL or base64 data
+        default: null,
+      },
+      // Color scheme
+      primaryColor: {
+        type: String,
+        default: "#0f3b66", // Default blue
+        validate: {
+          validator: function(v) {
+            return /^#[0-9A-F]{6}$/i.test(v); // Hex color validation
+          },
+          message: 'Primary color must be a valid hex color code'
+        }
+      },
+      secondaryColor: {
+        type: String,
+        default: "#c89d28", // Default gold
+        validate: {
+          validator: function(v) {
+            return /^#[0-9A-F]{6}$/i.test(v); // Hex color validation
+          },
+          message: 'Secondary color must be a valid hex color code'
+        }
+      },
+      // Custom messages
+      customTitle: {
+        type: String,
+        default: "Certificate of Participation",
+        maxlength: [100, "Custom title cannot exceed 100 characters"],
+      },
+      customSubtitle: {
+        type: String,
+        default: "This certificate is proudly presented to",
+        maxlength: [200, "Custom subtitle cannot exceed 200 characters"],
+      },
+      customMessage: {
+        type: String,
+        default: null,
+        maxlength: [500, "Custom message cannot exceed 500 characters"],
+      },
+      // Signature customization
+      signature1Name: {
+        type: String,
+        default: "Dr. Sharene T. Labung",
+        maxlength: [100, "Signature 1 name cannot exceed 100 characters"],
+      },
+      signature1Title: {
+        type: String,
+        default: "Chancellor / Administrator",
+        maxlength: [100, "Signature 1 title cannot exceed 100 characters"],
+      },
+      signature2Name: {
+        type: String,
+        default: "Luckie Christine Villanueva",
+        maxlength: [100, "Signature 2 name cannot exceed 100 characters"],
+      },
+      signature2Title: {
+        type: String,
+        default: "PSAS Department Head",
+        maxlength: [100, "Signature 2 title cannot exceed 100 characters"],
+      },
+      // Download format preferences
+      defaultDownloadFormat: {
+        type: String,
+        enum: ['pdf', 'png', 'jpg'],
+        default: 'pdf',
+      },
+      // Additional participant details to include
+      includeEventDate: {
+        type: Boolean,
+        default: true,
+      },
+      includeCompletionDate: {
+        type: Boolean,
+        default: true,
+      },
+      includeFormTitle: {
+        type: Boolean,
+        default: true,
+      },
+    },
   },
   {
     timestamps: true,
