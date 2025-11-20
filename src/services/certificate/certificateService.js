@@ -702,18 +702,28 @@ class CertificateService {
   async renderTextbox(ctx, obj, certificateData) {
     const { user, event, studentName } = certificateData;
 
-    // Replace placeholder text
+    // Store the event name for bold rendering
+    const eventName = event.name || "Event";
+
+    // Replace placeholder text (with or without brackets)
     let text = obj.text || "";
     text = text.replace(
-      /Recipient Name|Participant Name/gi,
+      /\[?Recipient Name\]?|\[?Participant Name\]?/gi,
       studentName || user.name || "Participant"
     );
-    text = text.replace(/Event Name/gi, event.name || "Event");
+
+    // Replace event name placeholder
+    text = text.replace(/\[?Event Name\]?/gi, eventName);
+
+    // Replace issued date placeholder
+    const issuedDate = new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    text = text.replace(/\[?Issued Date\]?/gi, issuedDate);
 
     ctx.fillStyle = obj.fill || "#000000";
-    ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-      obj.fontFamily || "Arial"
-    }`;
     ctx.textAlign = obj.textAlign || "left";
     ctx.textBaseline = "top";
 
@@ -726,11 +736,143 @@ class CertificateService {
         : obj.fontSize * 1.2;
 
       for (const line of lines) {
-        ctx.fillText(line, obj.left, y);
+        // Check if this line contains the event name (to render it bold)
+        if (line.includes(eventName)) {
+          const parts = line.split(eventName);
+
+          // Calculate total width first to handle center alignment
+          ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+            obj.fontFamily || "Arial"
+          }`;
+          const beforeWidth = parts[0] ? ctx.measureText(parts[0]).width : 0;
+          const afterWidth = parts[1] ? ctx.measureText(parts[1]).width : 0;
+
+          ctx.font = `bold ${obj.fontSize || 24}px ${
+            obj.fontFamily || "Arial"
+          }`;
+          const eventWidth = ctx.measureText(eventName).width;
+
+          const totalWidth = beforeWidth + eventWidth + afterWidth;
+
+          // Calculate starting x based on alignment
+          let x = obj.left;
+          if (obj.textAlign === "center") {
+            x = obj.left - totalWidth / 2;
+          } else if (obj.textAlign === "right") {
+            x = obj.left - totalWidth;
+          }
+
+          // Set normal font for before text
+          ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+            obj.fontFamily || "Arial"
+          }`;
+
+          // Render text before event name
+          if (parts[0]) {
+            ctx.save();
+            ctx.textAlign = "left";
+            ctx.fillText(parts[0], x, y);
+            ctx.restore();
+            x += beforeWidth;
+          }
+
+          // Set bold font for event name
+          ctx.font = `bold ${obj.fontSize || 24}px ${
+            obj.fontFamily || "Arial"
+          }`;
+          ctx.save();
+          ctx.textAlign = "left";
+          ctx.fillText(eventName, x, y);
+          ctx.restore();
+          x += eventWidth;
+
+          // Set normal font for after text
+          ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+            obj.fontFamily || "Arial"
+          }`;
+
+          // Render text after event name
+          if (parts[1]) {
+            ctx.save();
+            ctx.textAlign = "left";
+            ctx.fillText(parts[1], x, y);
+            ctx.restore();
+          }
+        } else {
+          // Regular rendering for lines without event name
+          ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+            obj.fontFamily || "Arial"
+          }`;
+          ctx.fillText(line, obj.left, y);
+        }
         y += lineHeight;
       }
     } else {
-      ctx.fillText(text, obj.left, obj.top);
+      // Single line rendering
+      if (text.includes(eventName)) {
+        const parts = text.split(eventName);
+
+        // Calculate total width first to handle center alignment
+        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+          obj.fontFamily || "Arial"
+        }`;
+        const beforeWidth = parts[0] ? ctx.measureText(parts[0]).width : 0;
+        const afterWidth = parts[1] ? ctx.measureText(parts[1]).width : 0;
+
+        ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
+        const eventWidth = ctx.measureText(eventName).width;
+
+        const totalWidth = beforeWidth + eventWidth + afterWidth;
+
+        // Calculate starting x based on alignment
+        let x = obj.left;
+        if (obj.textAlign === "center") {
+          x = obj.left - totalWidth / 2;
+        } else if (obj.textAlign === "right") {
+          x = obj.left - totalWidth;
+        }
+
+        // Set normal font for before text
+        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+          obj.fontFamily || "Arial"
+        }`;
+
+        // Render text before event name
+        if (parts[0]) {
+          ctx.save();
+          ctx.textAlign = "left";
+          ctx.fillText(parts[0], x, obj.top);
+          ctx.restore();
+          x += beforeWidth;
+        }
+
+        // Set bold font for event name
+        ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
+        ctx.save();
+        ctx.textAlign = "left";
+        ctx.fillText(eventName, x, obj.top);
+        ctx.restore();
+        x += eventWidth;
+
+        // Set normal font for after text
+        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+          obj.fontFamily || "Arial"
+        }`;
+
+        // Render text after event name
+        if (parts[1]) {
+          ctx.save();
+          ctx.textAlign = "left";
+          ctx.fillText(parts[1], x, obj.top);
+          ctx.restore();
+        }
+      } else {
+        // Regular rendering for text without event name
+        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+          obj.fontFamily || "Arial"
+        }`;
+        ctx.fillText(text, obj.left, obj.top);
+      }
     }
   }
 
