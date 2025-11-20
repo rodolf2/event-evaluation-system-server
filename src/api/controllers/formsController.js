@@ -1406,7 +1406,7 @@ const uploadAttendeeList = [
           }
 
           return {
-            userId: user.__id,
+            userId: user._id,
             name: attendee.name ? attendee.name.trim() : user.name,
             email: normalizedEmail,
             hasResponded: false,
@@ -1462,10 +1462,15 @@ const updateAttendeeListJson = async (req, res) => {
     const { id } = req.params;
     const { attendeeFile } = req.body;
 
-    if (!attendeeFile || !attendeeFile.students || !Array.isArray(attendeeFile.students)) {
+    if (
+      !attendeeFile ||
+      !attendeeFile.students ||
+      !Array.isArray(attendeeFile.students)
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Attendee data must be provided in attendeeFile.students array",
+        message:
+          "Attendee data must be provided in attendeeFile.students array",
       });
     }
 
@@ -1617,14 +1622,26 @@ const getMyEvaluations = async (req, res) => {
     // First, let's check what published forms exist
     const allPublishedForms = await Form.find({
       status: "published",
-      type: { $in: [null, "evaluation"] },
+      $or: [
+        { type: { $exists: false } },
+        { type: null },
+        { type: "evaluation" },
+      ],
     }).select("title attendeeList createdAt");
 
-    console.log(`[MY-EVALUATIONS] Found ${allPublishedForms.length} published forms:`);
+    console.log(
+      `[MY-EVALUATIONS] Found ${allPublishedForms.length} published forms:`
+    );
     allPublishedForms.forEach((form, i) => {
       const attendeeCount = form.attendeeList ? form.attendeeList.length : 0;
-      const hasUser = form.attendeeList?.some(a => a.email && a.email.toLowerCase().trim() === userEmail);
-      console.log(`  ${i+1}. "${form.title}" - Attendees: ${attendeeCount}, User assigned: ${hasUser}`);
+      const hasUser = form.attendeeList?.some(
+        (a) => a.email && a.email.toLowerCase().trim() === userEmail
+      );
+      console.log(
+        `  ${i + 1}. "${
+          form.title
+        }" - Attendees: ${attendeeCount}, User assigned: ${hasUser}`
+      );
       if (attendeeCount > 0 && attendeeCount <= 3) {
         form.attendeeList.forEach((attendee, j) => {
           console.log(`    - ${attendee.name} <${attendee.email}>`);
@@ -1641,7 +1658,11 @@ const getMyEvaluations = async (req, res) => {
     const forms = await Form.find({
       status: "published",
       "attendeeList.email": userEmail,
-      type: { $in: [null, "evaluation"] },
+      $or: [
+        { type: { $exists: false } },
+        { type: null },
+        { type: "evaluation" },
+      ],
     })
       .populate("createdBy", "name email")
       .select(
@@ -1649,14 +1670,18 @@ const getMyEvaluations = async (req, res) => {
       )
       .sort({ createdAt: -1 });
 
-    console.log(`[MY-EVALUATIONS] Found ${forms.length} assigned forms for ${userEmail}:`);
+    console.log(
+      `[MY-EVALUATIONS] Found ${forms.length} assigned forms for ${userEmail}:`
+    );
     forms.forEach((form, i) => {
-      console.log(`  ${i+1}. "${form.title}" (ID: ${form._id})`);
-      console.log(`     Start: ${form.eventStartDate || 'No start date'}`);
-      console.log(`     End: ${form.eventEndDate || 'No end date'}`);
+      console.log(`  ${i + 1}. "${form.title}" (ID: ${form._id})`);
+      console.log(`     Start: ${form.eventStartDate || "No start date"}`);
+      console.log(`     End: ${form.eventEndDate || "No end date"}`);
     });
 
-    console.log(`[MY-EVALUATIONS] User ${userEmail} is assigned to ${forms.length} forms`);
+    console.log(
+      `[MY-EVALUATIONS] User ${userEmail} is assigned to ${forms.length} forms`
+    );
 
     const now = new Date();
     const availableForms = forms.filter((form) => {
@@ -1667,12 +1692,16 @@ const getMyEvaluations = async (req, res) => {
 
       // Only show evaluations that are currently open for responses.
       if (startDate && now < startDate) {
-        console.log(`[MY-EVALUATIONS] Form "${form.title}" filtered out - starts ${startDate}`);
+        console.log(
+          `[MY-EVALUATIONS] Form "${form.title}" filtered out - starts ${startDate}`
+        );
         return false;
       }
 
       if (endDate && now > endDate) {
-        console.log(`[MY-EVALUATIONS] Form "${form.title}" filtered out - ended ${endDate}`);
+        console.log(
+          `[MY-EVALUATIONS] Form "${form.title}" filtered out - ended ${endDate}`
+        );
         return false;
       }
 
@@ -1680,7 +1709,9 @@ const getMyEvaluations = async (req, res) => {
       return true;
     });
 
-    console.log(`[MY-EVALUATIONS] Final result: ${availableForms.length} forms available for ${userEmail}`);
+    console.log(
+      `[MY-EVALUATIONS] Final result: ${availableForms.length} forms available for ${userEmail}`
+    );
 
     // Normalize response objects so the frontend always has a stable _id field.
     const normalizedForms = availableForms.map((form) => {

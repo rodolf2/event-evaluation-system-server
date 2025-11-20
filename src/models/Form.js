@@ -133,6 +133,11 @@ const formSchema = new mongoose.Schema(
       enum: ["draft", "published"],
       default: "draft",
     },
+    type: {
+      type: String,
+      enum: ["evaluation", "notification", "config"],
+      default: "evaluation", // Default to evaluation for backward compatibility
+    },
     shareableLink: {
       type: String,
       trim: true,

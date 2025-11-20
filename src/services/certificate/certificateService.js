@@ -33,13 +33,21 @@ class CertificateService {
     }
 
     // Configure nodemailer transporter
-    this.transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      this.transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+      this.emailConfigured = true;
+    } else {
+      console.warn(
+        "[CERT-SVC] Email credentials missing in .env. Email sending will be disabled."
+      );
+      this.emailConfigured = false;
+    }
   }
 
   generateCertificateId() {
@@ -246,7 +254,8 @@ class CertificateService {
 
     // Use custom title and subtitle if provided
     const customTitle = formCustomizations?.customTitle || "CERTIFICATE";
-    const customSubtitle = formCustomizations?.customSubtitle || "OF PARTICIPATION";
+    const customSubtitle =
+      formCustomizations?.customSubtitle || "OF PARTICIPATION";
     const primaryColor = formCustomizations?.primaryColor || "#0f3b66";
 
     doc.font("Helvetica-Bold").fontSize(36).fillColor(primaryColor);
@@ -351,8 +360,10 @@ class CertificateService {
     const titleSpacing = 18;
 
     // Left signature - use custom names if provided
-    const signature1Name = formCustomizations?.signature1Name || "Dr. Sharene T. Labung";
-    const signature1Title = formCustomizations?.signature1Title || "Chancellor / Administrator";
+    const signature1Name =
+      formCustomizations?.signature1Name || "Dr. Sharene T. Labung";
+    const signature1Title =
+      formCustomizations?.signature1Title || "Chancellor / Administrator";
 
     doc.save();
     doc.font("Helvetica-Bold").fontSize(16).fillColor(primaryColor);
@@ -371,8 +382,10 @@ class CertificateService {
     doc.restore();
 
     // Right signature - use custom names if provided
-    const signature2Name = formCustomizations?.signature2Name || "Luckie Christine Villanueva";
-    const signature2Title = formCustomizations?.signature2Title || "PSAS Department Head";
+    const signature2Name =
+      formCustomizations?.signature2Name || "Luckie Christine Villanueva";
+    const signature2Title =
+      formCustomizations?.signature2Title || "PSAS Department Head";
 
     doc.save();
     doc.font("Helvetica-Bold").fontSize(16).fillColor(primaryColor);
@@ -409,9 +422,27 @@ class CertificateService {
     const { user, event, certificateId } = certificateData;
     let lastError;
 
+    if (!this.emailConfigured) {
+      console.warn(
+        `[CERT-SVC] Skipping email for ${certificateId}: Email not configured`
+      );
+      await Certificate.findOneAndUpdate(
+        { certificateId },
+        {
+          isEmailSent: false,
+          emailDeliveryFailed: true,
+          emailFinalError: "Email configuration missing in .env",
+          emailRetryCount: 0,
+        }
+      );
+      return;
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[EMAIL-RETRY] Attempt ${attempt}/${maxRetries} for certificate ${certificateId}`);
+        console.log(
+          `[EMAIL-RETRY] Attempt ${attempt}/${maxRetries} for certificate ${certificateId}`
+        );
 
         const mailOptions = {
           from: process.env.EMAIL_USER,
@@ -440,12 +471,16 @@ class CertificateService {
           }
         );
 
-        console.log(`[EMAIL-RETRY] ✓ Email sent successfully for certificate ${certificateId} on attempt ${attempt}`);
+        console.log(
+          `[EMAIL-RETRY] ✓ Email sent successfully for certificate ${certificateId} on attempt ${attempt}`
+        );
         return result;
-
       } catch (error) {
         lastError = error;
-        console.error(`[EMAIL-RETRY] ✗ Attempt ${attempt}/${maxRetries} failed for certificate ${certificateId}:`, error.message);
+        console.error(
+          `[EMAIL-RETRY] ✗ Attempt ${attempt}/${maxRetries} failed for certificate ${certificateId}:`,
+          error.message
+        );
 
         // Update certificate record with retry information
         await Certificate.findOneAndUpdate(
@@ -454,21 +489,28 @@ class CertificateService {
             emailRetryCount: attempt,
             emailLastAttempt: new Date(),
             emailError: error.message,
-            emailNextRetry: attempt < maxRetries ? new Date(Date.now() + Math.pow(2, attempt) * 60000) : null, // Exponential backoff
+            emailNextRetry:
+              attempt < maxRetries
+                ? new Date(Date.now() + Math.pow(2, attempt) * 60000)
+                : null, // Exponential backoff
           }
         );
 
         // Wait before retry (exponential backoff: 1min, 2min, 4min)
         if (attempt < maxRetries) {
           const delayMs = Math.pow(2, attempt) * 60000; // 2^attempt minutes
-          console.log(`[EMAIL-RETRY] Waiting ${delayMs/1000}s before retry...`);
-          await new Promise(resolve => setTimeout(resolve, delayMs));
+          console.log(
+            `[EMAIL-RETRY] Waiting ${delayMs / 1000}s before retry...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
       }
     }
 
     // All retries failed - mark as failed and create notification
-    console.error(`[EMAIL-RETRY] ❌ All ${maxRetries} email attempts failed for certificate ${certificateId}`);
+    console.error(
+      `[EMAIL-RETRY] ❌ All ${maxRetries} email attempts failed for certificate ${certificateId}`
+    );
 
     await Certificate.findOneAndUpdate(
       { certificateId },
@@ -483,18 +525,23 @@ class CertificateService {
     // Create notification for the user about email failure
     try {
       const notificationService = require("../../services/notificationService");
-      await notificationService.notifyCertificateEmailFailed({
-        _id: certificateData.certificateId,
-        certificateId: certificateData.certificateId,
-        eventId: { name: certificateData.event.name }
-      }, certificateData.user._id);
+      await notificationService.notifyCertificateEmailFailed(
+        {
+          _id: certificateData.certificateId,
+          certificateId: certificateData.certificateId,
+          eventId: { name: certificateData.event.name },
+        },
+        certificateData.user._id
+      );
     } catch (notificationError) {
-      console.error("[EMAIL-RETRY] Failed to create email failure notification:", notificationError);
+      console.error(
+        "[EMAIL-RETRY] Failed to create email failure notification:",
+        notificationError
+      );
     }
 
     throw lastError;
   }
-
 
   generateEmailTemplate(certificateData) {
     const { user, event, certificateType } = certificateData;
@@ -529,7 +576,7 @@ class CertificateService {
       // Load template from client templates directory
       const templatePath = path.join(
         __dirname,
-        "../../../client/src/templates",
+        "../../../../client/src/templates",
         `${templateId}.json`
       );
 
@@ -807,7 +854,10 @@ class CertificateService {
         const form = await Form.findById(options.formId);
         if (form && form.certificateCustomizations) {
           formCustomizations = form.certificateCustomizations;
-          console.log(`[CERT-SVC] Loaded form customizations:`, formCustomizations);
+          console.log(
+            `[CERT-SVC] Loaded form customizations:`,
+            formCustomizations
+          );
         }
       }
 

@@ -22,8 +22,14 @@ class CertificateController {
         });
       }
 
-      const { userId, eventId, certificateType, customMessage, sendEmail, studentName } =
-        req.body;
+      const {
+        userId,
+        eventId,
+        certificateType,
+        customMessage,
+        sendEmail,
+        studentName,
+      } = req.body;
 
       if (!userId || !eventId) {
         return res.status(400).json({
@@ -209,7 +215,7 @@ class CertificateController {
       }
 
       // Check if this is for inline viewing (from certificate viewer)
-      const isInline = req.query.inline === 'true';
+      const isInline = req.query.inline === "true";
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
@@ -238,7 +244,7 @@ class CertificateController {
   async getMyCertificates(req, res) {
     try {
       const userId = req.user._id;
-      console.log('getMyCertificates called for userId:', userId);
+      console.log("getMyCertificates called for userId:", userId);
 
       if (!userId) {
         return res.status(400).json({
@@ -266,40 +272,52 @@ class CertificateController {
         });
       }
 
-      console.log('Fetching certificates for userId:', userId, 'page:', pageNum, 'limit:', limitNum);
+      console.log(
+        "Fetching certificates for userId:",
+        userId,
+        "page:",
+        pageNum,
+        "limit:",
+        limitNum
+      );
 
       let certificates;
       try {
         certificates = await Certificate.find({ userId })
           .populate({
+            path: "userId",
+            select: "name email",
+            options: { lean: true },
+          })
+          .populate({
             path: "eventId",
             select: "name date",
-            options: { lean: true }
+            options: { lean: true },
           })
           .populate({
             path: "formId",
             select: "title",
-            options: { lean: true }
+            options: { lean: true },
           })
           .sort({ issuedDate: -1 })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
           .lean();
       } catch (populateError) {
-        console.error('Error in populate queries:', populateError);
+        console.error("Error in populate queries:", populateError);
         // Fallback to basic query without populate
         certificates = await Certificate.find({ userId })
           .sort({ issuedDate: -1 })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
-          .select('certificateId certificateType issuedDate')
+          .select("certificateId certificateType issuedDate")
           .lean();
       }
 
-      console.log('Found certificates:', certificates.length);
+      console.log("Found certificates:", certificates.length);
 
       const total = await Certificate.countDocuments({ userId });
-      console.log('Total certificates:', total);
+      console.log("Total certificates:", total);
 
       res.status(200).json({
         success: true,
@@ -615,20 +633,20 @@ class CertificateController {
       if (!certificate) {
         return res.status(404).json({
           success: false,
-          message: 'Certificate not found',
+          message: "Certificate not found",
         });
       }
 
       res.status(200).json({
         success: true,
-        message: 'Certificate updated successfully',
+        message: "Certificate updated successfully",
         data: { certificate },
       });
     } catch (error) {
-      console.error('Error updating certificate:', error);
+      console.error("Error updating certificate:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update certificate',
+        message: "Failed to update certificate",
         error: error.message,
       });
     }
@@ -650,7 +668,7 @@ class CertificateController {
       if (!form) {
         return res.status(404).json({
           success: false,
-          message: 'Form not found or you do not have permission to update it',
+          message: "Form not found or you do not have permission to update it",
         });
       }
 
@@ -664,14 +682,14 @@ class CertificateController {
 
       res.status(200).json({
         success: true,
-        message: 'Certificate customizations updated successfully',
+        message: "Certificate customizations updated successfully",
         data: { customizations: form.certificateCustomizations },
       });
     } catch (error) {
-      console.error('Error updating form customizations:', error);
+      console.error("Error updating form customizations:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update certificate customizations',
+        message: "Failed to update certificate customizations",
         error: error.message,
       });
     }
@@ -692,7 +710,7 @@ class CertificateController {
       if (!form) {
         return res.status(404).json({
           success: false,
-          message: 'Form not found or you do not have permission to view it',
+          message: "Form not found or you do not have permission to view it",
         });
       }
 
@@ -701,10 +719,10 @@ class CertificateController {
         data: { customizations: form.certificateCustomizations || {} },
       });
     } catch (error) {
-      console.error('Error fetching form customizations:', error);
+      console.error("Error fetching form customizations:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch certificate customizations',
+        message: "Failed to fetch certificate customizations",
         error: error.message,
       });
     }
