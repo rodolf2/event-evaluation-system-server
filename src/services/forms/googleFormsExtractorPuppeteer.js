@@ -83,12 +83,14 @@ class GoogleFormsExtractorPuppeteer {
           title: "",
           description: "",
           questions: [],
+          sections: [],
           debugInfo: {
             foundFBData: false,
             fbDataLength: 0,
             questionsDataLength: 0,
             domElementsFound: 0,
             errors: [],
+            logs: [],
           },
         };
 
@@ -119,6 +121,18 @@ class GoogleFormsExtractorPuppeteer {
                   ? parsedData.length
                   : 0;
 
+                // Log top-level structure
+                result.debugInfo.logs.push(`parsedData structure:`);
+                if (Array.isArray(parsedData)) {
+                  parsedData.forEach((item, idx) => {
+                    result.debugInfo.logs.push(
+                      `   parsedData[${idx}]: type=${typeof item}, isArray=${Array.isArray(
+                        item
+                      )}, length=${Array.isArray(item) ? item.length : "N/A"}`
+                    );
+                  });
+                }
+
                 if (Array.isArray(parsedData) && parsedData.length > 1) {
                   // Questions are typically in parsedData[1]
                   const questionsData = parsedData[1];
@@ -129,137 +143,165 @@ class GoogleFormsExtractorPuppeteer {
                     : 0;
 
                   if (Array.isArray(questionsData)) {
-                    let currentSection = null;
+                    let currentSectionId = "main";
                     let sectionCounter = 0;
+
+                    // Log first few items fully to understand structure
+                    result.debugInfo.logs.push(
+                      `First 10 items in questionsData:`
+                    );
+                    questionsData.slice(0, 10).forEach((q, idx) => {
+                      try {
+                        result.debugInfo.logs.push(
+                          `   Item ${idx}: ${JSON.stringify(q).substring(
+                            0,
+                            500
+                          )}`
+                        );
+                      } catch (e) {
+                        result.debugInfo.logs.push(
+                          `   Item ${idx}: [Error stringifying]`
+                        );
+                      }
+                    });
 
                     for (let i = 0; i < questionsData.length; i++) {
                       const q = questionsData[i];
 
-                      if (Array.isArray(q) && q.length >= 2) {
-                        // Check if this is a section header
-                        if (Array.isArray(q[1]) && q[1].length > 1) {
+                      try {
+                        if (Array.isArray(q) && q.length >= 2) {
+                          const itemId = q[0];
                           const qData = q[1];
-                          const title = qData[1];
-                          const questionType = qData[3] || 0;
 
-                          if (questionType === 8) {
-                            currentSection = title.trim();
-                            sectionCounter++;
-                            continue;
-                          }
+                          if (Array.isArray(qData) && qData.length > 1) {
+                            const title = qData[1];
+                            const questionType = qData[3] || 0;
 
-                          if (
-                            title &&
-                            typeof title === "string" &&
-                            title.trim().length > 0 &&
-                            questionType !== 8
-                          ) {
-                            const lowerTitle = title.toLowerCase().trim();
+                            // Handle Section Headers (Type 8)
+                            if (questionType === 8) {
+                              const sectionTitle =
+                                title || `Section ${sectionCounter + 1}`;
+                              const sectionDesc = qData[2] || "";
+                              // Ensure ID is a string to avoid type mismatches (number vs string) in frontend
+                              const sectionId = itemId
+                                ? String(itemId)
+                                : `section_${sectionCounter}`;
 
-                            // Skip common name/email questions
-                            const skipPatterns = [
-                              /^name$/i,
-                              /^full name$/i,
-                              /^email$/i,
-                              /^email address$/i,
-                            ];
+                              result.sections.push({
+                                id: sectionId,
+                                title: sectionTitle,
+                                description: sectionDesc,
+                                sectionNumber: sectionCounter + 1,
+                              });
 
-                            const shouldSkip = skipPatterns.some((pattern) =>
-                              pattern.test(lowerTitle)
-                            );
-
-                            if (shouldSkip) continue;
-
-                            // Extract options
-                            let options = [];
-                            if (qData[4] && Array.isArray(qData[4])) {
-                              let rawOptions = qData[4];
-
-                              // Handle nested options array
-                              if (
-                                rawOptions.length === 1 &&
-                                Array.isArray(rawOptions[0]) &&
-                                rawOptions[0].length > 0 &&
-                                Array.isArray(rawOptions[0][0])
-                              ) {
-                                rawOptions = rawOptions[0];
-                              }
-
-                              options = rawOptions
-                                .map((opt) => {
-                                  if (Array.isArray(opt)) {
-                                    // Safely convert to string before trim
-                                    const value = opt[0];
-                                    return value != null
-                                      ? String(value).trim()
-                                      : "";
-                                  }
-                                  return opt != null ? String(opt).trim() : "";
-                                })
-                                .filter((opt) => opt && opt.length > 0);
+                              currentSectionId = sectionId;
+                              sectionCounter++;
+                              continue;
                             }
 
-                            // Handle scale questions
-                            let low = 1,
-                              high = 5,
-                              lowLabel = "Poor",
-                              highLabel = "Excellent";
                             if (
-                              questionType === 5 &&
-                              qData[4] &&
-                              Array.isArray(qData[4]) &&
-                              qData[4].length >= 2
+                              title &&
+                              typeof title === "string" &&
+                              title.trim().length > 0
                             ) {
-                              const scaleData = qData[4];
-                              if (
-                                scaleData[0] &&
-                                Array.isArray(scaleData[0]) &&
-                                scaleData[0].length >= 2
-                              ) {
-                                low = scaleData[0][0] || 1;
-                                high = scaleData[0][1] || 5;
+                              const lowerTitle = title.toLowerCase().trim();
+
+                              // Extract options
+                              let options = [];
+                              if (qData[4] && Array.isArray(qData[4])) {
+                                let rawOptions = qData[4];
+
+                                // Handle nested options array
+                                if (
+                                  rawOptions.length === 1 &&
+                                  Array.isArray(rawOptions[0]) &&
+                                  rawOptions[0].length > 0 &&
+                                  Array.isArray(rawOptions[0][0])
+                                ) {
+                                  rawOptions = rawOptions[0];
+                                }
+
+                                options = rawOptions
+                                  .map((opt) => {
+                                    if (Array.isArray(opt)) {
+                                      // Safely convert to string before trim
+                                      const value = opt[0];
+                                      return value != null
+                                        ? String(value).trim()
+                                        : "";
+                                    }
+                                    return opt != null
+                                      ? String(opt).trim()
+                                      : "";
+                                  })
+                                  .filter((opt) => opt && opt.length > 0);
                               }
+
+                              // Handle scale questions
+                              let low = 1,
+                                high = 5,
+                                lowLabel = "Poor",
+                                highLabel = "Excellent";
                               if (
-                                scaleData[1] &&
-                                Array.isArray(scaleData[1]) &&
-                                scaleData[1].length >= 2
+                                questionType === 5 &&
+                                qData[4] &&
+                                Array.isArray(qData[4]) &&
+                                qData[4].length >= 2
                               ) {
-                                lowLabel = scaleData[1][0] || "Poor";
-                                highLabel = scaleData[1][1] || "Excellent";
+                                const scaleData = qData[4];
+                                if (
+                                  scaleData[0] &&
+                                  Array.isArray(scaleData[0]) &&
+                                  scaleData[0].length >= 2
+                                ) {
+                                  low = scaleData[0][0] || 1;
+                                  high = scaleData[0][1] || 5;
+                                }
+                                if (
+                                  scaleData[1] &&
+                                  Array.isArray(scaleData[1]) &&
+                                  scaleData[1].length >= 2
+                                ) {
+                                  lowLabel = scaleData[1][0] || "Poor";
+                                  highLabel = scaleData[1][1] || "Excellent";
+                                }
                               }
+
+                              const questionTypeMap = {
+                                0: "short_answer",
+                                1: "paragraph",
+                                2: "multiple_choice",
+                                3: "multiple_choice",
+                                4: "multiple_choice",
+                                5: "scale",
+                                6: "multiple_choice",
+                                7: "multiple_choice",
+                                9: "date",
+                                10: "time",
+                              };
+
+                              const isRequired = qData[2] === 1;
+
+                              result.questions.push({
+                                title: title.trim(),
+                                type:
+                                  questionTypeMap[questionType] ||
+                                  "short_answer",
+                                required: isRequired,
+                                options: options,
+                                sectionId: String(currentSectionId), // Ensure string
+                                low: low,
+                                high: high,
+                                lowLabel: lowLabel,
+                                highLabel: highLabel,
+                              });
                             }
-
-                            const questionTypeMap = {
-                              0: "short_answer",
-                              1: "paragraph",
-                              2: "multiple_choice",
-                              3: "multiple_choice",
-                              4: "multiple_choice",
-                              5: "scale",
-                              6: "multiple_choice",
-                              7: "multiple_choice",
-                              9: "date",
-                              10: "time",
-                            };
-
-                            const isRequired = qData[2] === 1;
-
-                            result.questions.push({
-                              title: title.trim(),
-                              type:
-                                questionTypeMap[questionType] || "short_answer",
-                              required: isRequired,
-                              options: options,
-                              section:
-                                currentSection ||
-                                `Section ${sectionCounter || 1}`,
-                              low: low,
-                              high: high,
-                              lowLabel: lowLabel,
-                              highLabel: highLabel,
-                            });
                           }
                         }
+                      } catch (itemError) {
+                        result.debugInfo.errors.push(
+                          `Error processing item ${i}: ${itemError.message}`
+                        );
                       }
                     }
 
@@ -414,7 +456,7 @@ class GoogleFormsExtractorPuppeteer {
               type: questionType,
               required: isRequired,
               options: options,
-              section: "Section 1",
+              sectionId: "main", // Default section for DOM extraction
               low: 1,
               high: 5,
               lowLabel: "Poor",
@@ -449,6 +491,7 @@ class GoogleFormsExtractorPuppeteer {
       console.log(`📊 [Puppeteer] Extraction complete:`);
       console.log(`   Title: ${formData.title}`);
       console.log(`   Questions: ${formData.questions.length}`);
+      console.log(`   Sections: ${formData.sections.length}`);
       console.log(`   Debug Info:`);
       console.log(
         `     - FB_PUBLIC_LOAD_DATA found: ${formData.debugInfo.foundFBData}`
@@ -462,6 +505,12 @@ class GoogleFormsExtractorPuppeteer {
       );
       if (formData.debugInfo.errors.length > 0) {
         console.log(`     - Errors: ${formData.debugInfo.errors.join(", ")}`);
+      }
+      if (formData.debugInfo.logs.length > 0) {
+        console.log(`     - Item Logs (first 50):`);
+        formData.debugInfo.logs
+          .slice(0, 50)
+          .forEach((log) => console.log(`       ${log}`));
       }
 
       return formData;

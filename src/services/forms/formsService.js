@@ -375,27 +375,28 @@ class FormsService {
 
                                 // Skip common name and email questions that Google Forms often includes
                                 const lowerTitle = title.toLowerCase().trim();
-                                const skipPatterns = [
-                                  /^name$/i,
-                                  /^full name$/i,
-                                  /^your name$/i,
-                                  /^email$/i,
-                                  /^email address$/i,
-                                  /^your email$/i,
-                                  /^e-mail$/i,
-                                  /^contact email$/i,
-                                  /^what is your name/i,
-                                  /^what's your name/i,
-                                  /^enter your name/i,
-                                  /^please enter your name/i,
-                                ];
+                                // Skip patterns removed to allow extracting all questions including Name and Email
+                                // const skipPatterns = [
+                                //   /^name$/i,
+                                //   /^full name$/i,
+                                //   /^your name$/i,
+                                //   /^email$/i,
+                                //   /^email address$/i,
+                                //   /^your email$/i,
+                                //   /^e-mail$/i,
+                                //   /^contact email$/i,
+                                //   /^what is your name/i,
+                                //   /^what's your name/i,
+                                //   /^enter your name/i,
+                                //   /^please enter your name/i,
+                                // ];
 
-                                const shouldSkip = skipPatterns.some(
-                                  (pattern) => pattern.test(lowerTitle)
-                                );
-                                if (shouldSkip) {
-                                  continue;
-                                }
+                                // const shouldSkip = skipPatterns.some(
+                                //   (pattern) => pattern.test(lowerTitle)
+                                // );
+                                // if (shouldSkip) {
+                                //   continue;
+                                // }
 
                                 // Extract options for multiple choice questions
                                 let options = [];
@@ -1059,26 +1060,27 @@ class FormsService {
 
                 // Skip name and email fields
                 const lowerTitle = questionText.toLowerCase().trim();
-                const skipPatterns = [
-                  /^name$/i,
-                  /^full name$/i,
-                  /^your name$/i,
-                  /^email$/i,
-                  /^email address$/i,
-                  /^your email$/i,
-                  /^e-mail$/i,
-                  /^what is your name/i,
-                  /^what's your name/i,
-                  /^enter your name/i,
-                  /^please enter your name/i,
-                ];
+                // Skip patterns removed to allow extracting all questions including Name and Email
+                // const skipPatterns = [
+                //   /^name$/i,
+                //   /^full name$/i,
+                //   /^your name$/i,
+                //   /^email$/i,
+                //   /^email address$/i,
+                //   /^your email$/i,
+                //   /^e-mail$/i,
+                //   /^what is your name/i,
+                //   /^what's your name/i,
+                //   /^enter your name/i,
+                //   /^please enter your name/i,
+                // ];
 
-                const shouldSkip = skipPatterns.some((pattern) =>
-                  pattern.test(lowerTitle)
-                );
-                if (shouldSkip) {
-                  return;
-                }
+                // const shouldSkip = skipPatterns.some((pattern) =>
+                //   pattern.test(lowerTitle)
+                // );
+                // if (shouldSkip) {
+                //   return;
+                // }
 
                 // Determine which section this question belongs to
                 let questionSection = "Section 1";

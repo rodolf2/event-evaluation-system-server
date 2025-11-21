@@ -94,6 +94,7 @@ class EnhancedFormsExtractor {
           description:
             puppeteerData.description || "Form imported from Google Forms",
           questions: puppeteerData.questions,
+          sections: puppeteerData.sections || [],
           googleFormId: formId,
           uploadedLinks: [
             {

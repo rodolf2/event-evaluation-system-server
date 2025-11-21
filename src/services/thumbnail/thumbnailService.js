@@ -76,13 +76,13 @@ class ThumbnailService {
       ctx.font = "12px Arial";
       ctx.fillText("Apalit, Pampanga", 140, 85);
 
-      // Main title - Dynamic
+      // Main title - Dynamic (e.g., "Sample Event Evaluation Report")
       ctx.fillStyle = "#000000";
-      ctx.font = "bold 36px Arial";
+      ctx.font = "bold 42px Arial";
       ctx.textAlign = "center";
 
       // Wrap title text if too long
-      const maxTitleWidth = 700;
+      const maxTitleWidth = 750;
       const words = formTitle.split(" ");
       let currentLine = "";
       let lines = [];
@@ -103,15 +103,15 @@ class ThumbnailService {
         lines.push(currentLine);
       }
 
-      // Draw title lines - this is the dynamic part (e.g., "Sample Event Evaluation Report")
-      const titleY = 135;
-      const lineHeight = 42;
+      // Draw title lines centered
+      const titleY = 180;
+      const lineHeight = 50;
       lines.forEach((line, index) => {
         ctx.fillText(line, this.width / 2, titleY + index * lineHeight);
       });
 
       // Underline after title
-      const underlineY = titleY + lines.length * lineHeight + 15;
+      const underlineY = titleY + lines.length * lineHeight + 20;
       ctx.strokeStyle = "#D8D8D8";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -120,22 +120,22 @@ class ThumbnailService {
       ctx.stroke();
 
       // Description text
-      ctx.font = "12px Arial";
-      ctx.fillStyle = "#4B5563";
+      ctx.font = "14px Arial";
+      ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
 
-      const descriptionY = underlineY + 25;
+      const descriptionY = underlineY + 30;
       const description1 =
         "This evaluation report serves as a guide for the institution to acknowledge the impact of the said event";
       const description2 =
         "on the welfare and enjoyment of the students at La Verdad Christian College - Apalit, Pampanga.";
 
       ctx.fillText(description1, this.width / 2, descriptionY);
-      ctx.fillText(description2, this.width / 2, descriptionY + 18);
+      ctx.fillText(description2, this.width / 2, descriptionY + 20);
 
-      // Event name section (in uppercase, smaller font)
-      const eventSectionY = descriptionY + 60;
-      ctx.font = "bold 14px Arial";
+      // Event name section (in uppercase, bold)
+      const eventSectionY = descriptionY + 70;
+      ctx.font = "bold 16px Arial";
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
 
@@ -144,12 +144,12 @@ class ThumbnailService {
       ctx.fillText(eventNameUpper, this.width / 2, eventSectionY);
 
       // "EVALUATION RESULT" text
-      ctx.font = "bold 16px Arial";
-      ctx.fillText("EVALUATION RESULT", this.width / 2, eventSectionY + 25);
+      ctx.font = "bold 18px Arial";
+      ctx.fillText("EVALUATION RESULT", this.width / 2, eventSectionY + 30);
 
       // "College Level" text
-      ctx.font = "14px Arial";
-      ctx.fillText("College Level", this.width / 2, eventSectionY + 45);
+      ctx.font = "16px Arial";
+      ctx.fillText("College Level", this.width / 2, eventSectionY + 55);
 
       // Save thumbnail
       const buffer = canvas.toBuffer("image/png");
@@ -165,7 +165,11 @@ class ThumbnailService {
       console.log(`✅ Generated thumbnail for form ${formId}: ${formTitle}`);
       return `/api/thumbnails/form-${formId}.png`;
     } catch (error) {
-      console.error(`Error generating thumbnail for form ${formId}:`, error);
+      console.error(
+        `❌ Error generating thumbnail for form ${formId}:`,
+        error.message
+      );
+      console.error(`Stack trace:`, error.stack);
       // Return a dynamic placeholder
       const encodedTitle = encodeURIComponent(formTitle || "Report");
       return `https://placehold.co/800x450/1e3a8a/ffffff?text=${encodedTitle}`;
