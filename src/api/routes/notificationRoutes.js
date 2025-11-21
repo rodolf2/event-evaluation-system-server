@@ -1,35 +1,44 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { requireAuth, requireRole } = require('../../middlewares/auth');
+const { requireAuth, requireRole } = require("../../middlewares/auth");
 const {
   getUserNotifications,
   createNotification,
   markAsRead,
   markMultipleAsRead,
+  markAllAsRead,
   deleteNotification,
   deleteMultiple,
-  getNotificationStats
-} = require('../controllers/notificationController');
+  getNotificationStats,
+} = require("../controllers/notificationController");
 
 // All authenticated users can get their notifications
-router.get('/', requireAuth, getUserNotifications);
+router.get("/", requireAuth, getUserNotifications);
 
 // All authenticated users can get notification stats
-router.get('/stats', requireAuth, getNotificationStats);
+router.get("/stats", requireAuth, getNotificationStats);
 
 // PSAS, Club Officers, School Admins, MIS can create notifications
-router.post('/', requireAuth, requireRole(['psas', 'club-officer', 'school-admin', 'mis']), createNotification);
+router.post(
+  "/",
+  requireAuth,
+  requireRole(["psas", "club-officer", "school-admin", "mis"]),
+  createNotification
+);
 
 // All authenticated users can mark notifications as read
-router.put('/:id/read', requireAuth, markAsRead);
+router.put("/:id/read", requireAuth, markAsRead);
 
 // All authenticated users can mark multiple notifications as read
-router.put('/read-multiple', requireAuth, markMultipleAsRead);
+router.put("/read-multiple", requireAuth, markMultipleAsRead);
+
+// All authenticated users can mark all notifications as read
+router.put("/read-all", requireAuth, markAllAsRead);
+
+// All authenticated users can delete multiple notifications
+router.delete("/multiple", requireAuth, deleteMultiple);
 
 // All authenticated users can delete their own notifications
-router.delete('/multiple', requireAuth, deleteMultiple);
-
-// All authenticated users can delete their own notifications
-router.delete('/:id', requireAuth, deleteNotification);
+router.delete("/:id", requireAuth, deleteNotification);
 
 module.exports = router;

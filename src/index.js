@@ -10,7 +10,7 @@ const connectDB = require("./utils/db");
 const User = require("./models/User");
 
 // Configure Passport
-require('./config/passport');
+require("./config/passport");
 
 const app = express();
 
@@ -45,17 +45,20 @@ app.use(passport.session());
 
 // Static file serving
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "../public")));
 
 // Connect to Database
 connectDB();
 
 // Environment variable validation
-const requiredEnvVars = ['JWT_SECRET', 'SESSION_SECRET'];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+const requiredEnvVars = ["JWT_SECRET", "SESSION_SECRET"];
+const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
-  console.error('❌ Missing required environment variables:', missingEnvVars.join(', '));
+  console.error(
+    "❌ Missing required environment variables:",
+    missingEnvVars.join(", ")
+  );
   process.exit(1);
 }
 
@@ -114,10 +117,10 @@ const bootstrapRoutes = require("./api/routes/bootstrapRoutes");
 const reminderRoutes = require("./api/routes/reminderRoutes");
 const notificationRoutes = require("./api/routes/notificationRoutes");
 const activityRoutes = require("./api/routes/activityRoutes");
-const eventRoutes = require('./api/routes/eventRoutes');
-const formsRoutes = require('./api/routes/formsRoutes');
-const uploadRoutes = require('./api/routes/uploadRoutes');
-const analyticsRoutes = require('./api/routes/analyticsRoutes');
+const eventRoutes = require("./api/routes/eventRoutes");
+const formsRoutes = require("./api/routes/formsRoutes");
+const uploadRoutes = require("./api/routes/uploadRoutes");
+const analyticsRoutes = require("./api/routes/analyticsRoutes");
 
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/certificates", certificateRoutes);
@@ -127,10 +130,11 @@ app.use("/api/reminders", reminderRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/activities", activityRoutes);
 app.use("/api/bootstrap", bootstrapRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api/forms', formsRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/analytics', analyticsRoutes);
+app.use("/api/events", eventRoutes);
+app.use("/api/forms", formsRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/thumbnails", require("./api/routes/thumbnailRoutes"));
 
 // Test routes for development
 if (process.env.NODE_ENV === "development") {
@@ -142,34 +146,34 @@ if (process.env.NODE_ENV === "development") {
 
 // Global error handling middleware
 app.use((error, req, res, next) => {
-  console.error('❌ Unhandled error:', error);
+  console.error("❌ Unhandled error:", error);
 
-  if (error.name === 'ValidationError') {
+  if (error.name === "ValidationError") {
     return res.status(400).json({
       success: false,
-      message: 'Validation Error',
+      message: "Validation Error",
       error: error.message,
     });
   }
 
-  if (error.name === 'JsonWebTokenError') {
+  if (error.name === "JsonWebTokenError") {
     return res.status(401).json({
       success: false,
-      message: 'Invalid token',
+      message: "Invalid token",
     });
   }
 
-  if (error.name === 'TokenExpiredError') {
+  if (error.name === "TokenExpiredError") {
     return res.status(401).json({
       success: false,
-      message: 'Token expired',
+      message: "Token expired",
     });
   }
 
   res.status(error.status || 500).json({
     success: false,
-    message: error.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
+    message: error.message || "Internal Server Error",
+    ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
   });
 });
 

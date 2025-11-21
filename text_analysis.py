@@ -13,44 +13,108 @@ import langid
 
 class MultilingualSentimentAnalyzer:
     def __init__(self):
-        # Enhanced Tagalog sentiment lexicons with intensifiers
+        # Enhanced Tagalog sentiment lexicons with phrase patterns
         self.tagalog_positive = {
-            # Basic positive words
+            # Basic positive words (weight: 1)
             'maganda': 1, 'mabuti': 1, 'masaya': 1, 'nakakatuwa': 1, 'galing': 1,
-            'bilib': 1, 'ang ganda': 2, 'napakaganda': 2, 'sobrang ganda': 2,
-            'napakagaling': 2, 'sobrang galing': 2, 'nakakaaliw': 1, 'nakakatuwa': 1,
-
-            # Intensifiers
-            'napaka': 1.5, 'sobra': 1.5, 'super': 1.5, 'very': 1.5, 'very much': 1.5,
-            'labis': 1.5, 'lubos': 1.5, 'totoo': 1, 'talaga': 1,
-
-            # Additional positive expressions
-            'thank you': 1, 'salamat': 1, 'maraming salamat': 2, 'grateful': 1,
-            'mahusay': 1, 'maayos': 1, 'mahusay ang': 1, 'effective': 1,
-            'efficient': 1, 'successful': 1, 'tagumpay': 1
+            'bilib': 1, 'husay': 1, 'magaling': 1, 'astig': 1, 'sulit': 1,
+            
+            # Strong positive (weight: 2)
+            'ang ganda': 2, 'napakaganda': 2, 'sobrang ganda': 2,
+            'napakagaling': 2, 'sobrang galing': 2, 'grabe ang ganda': 2,
+            'sobrang saya': 2, 'napakasaya': 2, 'the best': 2,
+            
+            # Intensifiers (weight: 1.5)
+            'napaka': 1.5, 'sobra': 1.5, 'super': 1.5, 'very': 1.5,
+            'labis': 1.5, 'lubos': 1.5, 'grabe': 1.5,
+            
+            # Gratitude and appreciation
+            'thank you': 1, 'salamat': 1, 'maraming salamat': 2, 'thank you so much': 2,
+            'grateful': 1, 'appreciate': 1, 'appreciated': 1,
+            
+            # Effectiveness indicators
+            'mahusay': 1, 'maayos': 1, 'effective': 1, 'efficient': 1,
+            'successful': 1, 'tagumpay': 1, 'productive': 1, 'organized': 1,
+            'well-planned': 1, 'excellent': 2, 'outstanding': 2, 'perfect': 2,
+            
+            # Learning and satisfaction
+            'natuto': 1, 'natutunan': 1, 'nakatulong': 1, 'helpful': 1,
+            'informative': 1, 'enlightening': 1, 'satisfied': 1,
+            'enjoyed': 1, 'enjoyable': 1, 'fun': 1, 'interesting': 1,
+            
+            # Filipino slang positive
+            'solid': 1, 'swabe': 1, 'oks': 0.5, 'goods': 1, 'nice': 1
         }
 
         self.tagalog_negative = {
-            # Basic negative words
+            # Basic negative words (weight: -1)
             'masama': -1, 'pangit': -1, 'nakakaasar': -1, 'nakakainis': -1,
             'galit': -1, 'ayaw': -1, 'badtrip': -1, 'nakakagalit': -1,
-            'nakakasuka': -1, 'nakakadiri': -1, 'hindi maganda': -1,
-
-            # Intensifiers for negative
+            'boring': -1, 'nakakaantok': -1, 'walang kwenta': -2,
+            
+            # Strong negative (weight: -2)
             'napakapangit': -2, 'sobrang pangit': -2, 'napakamasama': -2,
-            'sobrang masama': -2, 'napakagalit': -2,
-
-            # Additional negative expressions
-            'problem': -0.5, 'issue': -0.5, 'disappointed': -1, 'disappointing': -1,
-            'hindi': -0.5, 'ayaw ko': -1, 'galit ako': -1, 'bad': -1,
-            'poor': -1, 'terrible': -1, 'awful': -1, 'worst': -1
+            'sobrang masama': -2, 'napakagalit': -2, 'waste of time': -2,
+            'sayang': -1, 'hindi maganda': -1.5,
+            
+            # Disappointment
+            'disappointed': -1, 'disappointing': -1, 'nakakadismaya': -1,
+            'dismayado': -1, 'nabigo': -1, 'failed': -1,
+            
+            # Problems and issues
+            'problem': -0.7, 'issue': -0.7, 'problema': -0.7, 'mali': -0.8,
+            'kulang': -0.7, 'incomplete': -0.7, 'poor': -1, 'badly': -1,
+            
+            # Frustration and anger
+            'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
+            'bad': -1, 'terrible': -1.5, 'awful': -1.5, 'worst': -2,
+            'horrible': -1.5, 'pathetic': -1.5,
+            
+            # Organization issues
+            'disorganized': -1, 'chaotic': -1, 'confusing': -0.8, 'unclear': -0.7,
+            'messy': -0.8
         }
+
+        # Common Filipino phrases for context
+        self.positive_phrases = [
+            'very good', 'ang ganda', 'sobrang ganda', 'ang galing',
+            'maraming salamat', 'thank you so much', 'napakaganda',
+            'napakagaling', 'the best', 'well done', 'job well done',
+            'great job', 'excellent work', 'love it', 'loved it'
+        ]
+        
+        self.negative_phrases = [
+            'not good', 'not great', 'hindi maganda', 'walang kwenta',
+            'waste of time', 'sayang lang', 'hindi ako satisfied',
+            'bad experience', 'poor quality', 'very bad', 'so bad'
+        ]
 
         # Neutral words that might indicate mixed sentiment
         self.neutral_indicators = [
             'okay', 'okay lang', 'sige', 'pwede', 'maaari', 'maybe', 'perhaps',
-            'average', 'normal', 'ordinary', 'so-so', 'mediocre'
+            'average', 'normal', 'ordinary', 'so-so', 'mediocre', 'oks lang',
+            'pwede na', 'ganon lang', 'typical'
         ]
+        
+        # Negation words
+        self.negations = [
+            'not', 'no', 'never', 'hindi', 'wala', 'walang', 'di', 'di ko'
+        ]
+        
+        # Intensifiers and diminishers
+        self.intensifiers = [
+            'very', 'really', 'extremely', 'super', 'sobra', 'sobrang',
+            'napaka', 'labis', 'grabe', 'talaga', 'so', 'too'
+        ]
+        
+        self.diminishers = [
+            'slightly', 'somewhat', 'a bit', 'a little', 'medyo', 'konti',
+            'kaunti', 'bahagya'
+        ]
+        
+        # Emoticons and emoji patterns
+        self.positive_emoticons = ['😊', '😀', '😃', '😄', '👍', '❤️', '💯', '✨', '🎉', '😍', ':)', ':-)', ':D']
+        self.negative_emoticons = ['😞', '😢', '😠', '😡', '👎', '😕', '😔', ':(', ':-(', 'D:']
 
     def detect_language(self, text):
         """Detect language with confidence score"""
@@ -70,26 +134,41 @@ class MultilingualSentimentAnalyzer:
             }
 
     def analyze_english_sentiment(self, text):
-        """Analyze English text using TextBlob"""
+        """Analyze English text using TextBlob with enhanced context"""
         try:
             analysis = TextBlob(text)
             polarity = analysis.sentiment.polarity
             subjectivity = analysis.sentiment.subjectivity
 
-            # Classify based on polarity
-            if polarity > 0.1:
+            # Check for emoticons
+            emoticon_boost = 0
+            for emoticon in self.positive_emoticons:
+                if emoticon in text:
+                    emoticon_boost += 0.15
+            for emoticon in self.negative_emoticons:
+                if emoticon in text:
+                    emoticon_boost -= 0.15
+            
+            # Adjust polarity with emoticon boost
+            polarity = max(-1, min(1, polarity + emoticon_boost))
+
+            # Enhanced classification with tighter thresholds
+            if polarity > 0.15:
                 sentiment = "positive"
-            elif polarity < -0.1:
+            elif polarity < -0.15:
                 sentiment = "negative"
             else:
                 sentiment = "neutral"
+
+            # Enhanced confidence based on polarity magnitude and subjectivity
+            confidence = min((abs(polarity) + 0.2) * 1.2, 1.0)
 
             return {
                 'sentiment': sentiment,
                 'polarity': polarity,
                 'subjectivity': subjectivity,
-                'confidence': min(abs(polarity) * 2, 1.0),  # Higher polarity = higher confidence
-                'method': 'textblob_english'
+                'confidence': confidence,
+                'method': 'textblob_english_enhanced'
             }
         except Exception as e:
             return {
@@ -99,47 +178,101 @@ class MultilingualSentimentAnalyzer:
             }
 
     def analyze_tagalog_sentiment(self, text):
-        """Analyze Tagalog text using custom lexicon"""
+        """Analyze Tagalog/Filipino text using enhanced lexicon with context"""
         try:
             text_lower = text.lower()
-            words = text_lower.split()
-
+            
+            # Initialize scores
             positive_score = 0
             negative_score = 0
             neutral_count = 0
+            
+            # Check for emoticons first
+            emoticon_score = 0
+            for emoticon in self.positive_emoticons:
+                if emoticon in text:
+                    emoticon_score += 0.5
+            for emoticon in self.negative_emoticons:
+                if emoticon in text:
+                    emoticon_score -= 0.5
 
-            # Check for neutral indicators first
+            # Check for positive and negative phrases first (higher weight)
+            for phrase in self.positive_phrases:
+                if phrase in text_lower:
+                    positive_score += 2.5
+            
+            for phrase in self.negative_phrases:
+                if phrase in text_lower:
+                    negative_score += 2.5
+
+            # Check for neutral indicators
             for neutral in self.neutral_indicators:
                 if neutral in text_lower:
                     neutral_count += 1
 
-            # Score each word
-            for word in words:
+            # Word-by-word analysis with context
+            words = text_lower.split()
+            for i, word in enumerate(words):
+                # Check for negation before the word
+                is_negated = False
+                if i > 0 and words[i-1] in self.negations:
+                    is_negated = True
+                
+                # Check for intensifiers before the word
+                multiplier = 1.0
+                if i > 0 and words[i-1] in self.intensifiers:
+                    multiplier = 1.5
+                elif i > 0 and words[i-1] in self.diminishers:
+                    multiplier = 0.5
+                
+                # Score the word
                 if word in self.tagalog_positive:
-                    positive_score += self.tagalog_positive[word]
+                    score = self.tagalog_positive[word] * multiplier
+                    if is_negated:
+                        negative_score += score  # Flip to negative
+                    else:
+                        positive_score += score
+                        
                 elif word in self.tagalog_negative:
-                    negative_score += abs(self.tagalog_negative[word])  # Make negative scores positive for comparison
+                    score = abs(self.tagalog_negative[word]) * multiplier
+                    if is_negated:
+                        positive_score += score  # Flip to positive (double negative)
+                    else:
+                        negative_score += score
 
-            # Calculate final sentiment
+            # Add emoticon score
+            if emoticon_score > 0:
+                positive_score += emoticon_score
+            elif emoticon_score < 0:
+                negative_score += abs(emoticon_score)
+
+            # Calculate final sentiment with improved logic
             total_score = positive_score - negative_score
-
-            # Neutral if scores are close or neutral indicators present
-            if abs(total_score) < 0.5 or neutral_count > 0:
+            
+            # Determine sentiment with better thresholds
+            if neutral_count >= 2:
+                # Strong neutral indicator
+                sentiment = "neutral"
+                confidence = 0.6
+            elif abs(total_score) < 0.8:
+                # Scores are very close
                 sentiment = "neutral"
                 confidence = 0.5
             elif total_score > 0:
                 sentiment = "positive"
-                confidence = min(total_score / 3, 1.0)  # Normalize confidence
+                # Confidence based on score magnitude and clarity
+                confidence = min(0.5 + (total_score / 5), 0.95)
             else:
                 sentiment = "negative"
-                confidence = min(abs(total_score) / 3, 1.0)
+                confidence = min(0.5 + (abs(total_score) / 5), 0.95)
 
             return {
                 'sentiment': sentiment,
-                'positive_score': positive_score,
-                'negative_score': negative_score,
-                'confidence': confidence,
-                'method': 'tagalog_lexicon'
+                'positive_score': round(positive_score, 2),
+                'negative_score': round(negative_score, 2),
+                'total_score': round(total_score, 2),
+                'confidence': round(confidence, 2),
+                'method': 'tagalog_lexicon_enhanced'
             }
         except Exception as e:
             return {

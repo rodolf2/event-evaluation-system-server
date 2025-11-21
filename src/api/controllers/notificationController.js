@@ -2,51 +2,77 @@ const Notification = require("../../models/Notification");
 const NotificationRead = require("../../models/NotificationRead");
 const User = require("../../models/User");
 
-// @desc    Get all notifications for the logged-in user
+// Helper function to build visibility filter
+const buildVisibilityFilter = (userId, userRole) => {
+  return {
+    $and: [
+      {
+        $or: [{ targetRoles: userRole }, { targetUsers: userId }],
+      },
+      {
+        $or: [
+          { expiresAt: { $exists: false } },
+          { expiresAt: { $gt: new Date() } },
+        ],
+      },
+    ],
+  };
+};
+
+// @desc    Get all notifications for the logged-in user with pagination
 // @route   GET /api/notifications
 // @access  Private (All authenticated users)
 const getUserNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
     const userRole = req.user.role;
+    const {
+      page = 1,
+      limit = 20,
+      type,
+      priority,
+      unreadOnly = "false",
+    } = req.query;
 
     console.log("[getUserNotifications] Fetching notifications for user:", {
       userId,
       userRole,
+      page,
+      limit,
+      type,
+      priority,
+      unreadOnly,
     });
 
-    // Strict role-based filtering:
-    // - Role-targeted notifications: must include the user's role in targetRoles
-    // - Direct notifications: must include the user's userId in targetUsers
-    // - PSA (psas) notifications are naturally restricted by role matching; no PSA data is exposed to non-PSAS users
-    const visibilityFilter = {
-      $and: [
-        {
-          $or: [{ targetRoles: userRole }, { targetUsers: userId }],
-        },
-        {
-          $or: [
-            { expiresAt: { $exists: false } },
-            { expiresAt: { $gt: new Date() } },
-          ],
-        },
-      ],
-    };
+    // Build base visibility filter
+    const visibilityFilter = buildVisibilityFilter(userId, userRole);
 
-    console.log(
-      "[getUserNotifications] Visibility filter:",
-      JSON.stringify(visibilityFilter, null, 2)
-    );
+    // Add optional filters
+    if (type) {
+      visibilityFilter.$and.push({ type });
+    }
+    if (priority) {
+      visibilityFilter.$and.push({ priority });
+    }
 
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get notifications
     const notifications = await Notification.find(visibilityFilter)
-      .populate("createdBy", "name")
-      .sort({ createdAt: -1 });
+      .populate("createdBy", "name role")
+      .sort({ priority: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const totalCount = await Notification.countDocuments(visibilityFilter);
 
     console.log(
-      `[getUserNotifications] Found ${notifications.length} notifications for user ${userId}`
+      `[getUserNotifications] Found ${notifications.length} notifications (${totalCount} total) for user ${userId}`
     );
 
-    // Get read status for these notifications scoped to this user only
+    // Get read status for these notifications
     const notificationIds = notifications.map((n) => n._id);
     const readStatuses = await NotificationRead.find({
       notificationId: { $in: notificationIds },
@@ -58,16 +84,58 @@ const getUserNotifications = async (req, res) => {
       readMap.set(read.notificationId.toString(), read.readAt);
     });
 
-    // Attach read status; do not leak any PSA-only internal metadata
-    const notificationsWithReadStatus = notifications.map((notification) => ({
-      ...notification.toObject(),
-      isRead: readMap.has(notification._id.toString()),
-      readAt: readMap.get(notification._id.toString()) || null,
-    }));
+    // Attach read status and action URL
+    const notificationsWithReadStatus = notifications.map((notification) => {
+      const isRead = readMap.has(notification._id.toString());
+
+      // Generate action URL based on related entity
+      let actionUrl = null;
+      if (notification.relatedEntity) {
+        const { type: entityType, id } = notification.relatedEntity;
+        switch (entityType) {
+          case "form":
+            actionUrl =
+              userRole === "participant"
+                ? `/participant/forms/${id}`
+                : `/psas/forms/${id}`;
+            break;
+          case "certificate":
+            actionUrl = `/participant/certificates`;
+            break;
+          case "reminder":
+            actionUrl =
+              userRole === "participant"
+                ? `/participant/reminders`
+                : `/psas/reminders`;
+            break;
+          default:
+            actionUrl = null;
+        }
+      }
+
+      return {
+        ...notification.toObject(),
+        isRead,
+        readAt: readMap.get(notification._id.toString()) || null,
+        actionUrl,
+      };
+    });
+
+    // Filter by unread if requested
+    const finalNotifications =
+      unreadOnly === "true"
+        ? notificationsWithReadStatus.filter((n) => !n.isRead)
+        : notificationsWithReadStatus;
 
     res.json({
       success: true,
-      data: notificationsWithReadStatus,
+      data: finalNotifications,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalCount,
+        pages: Math.ceil(totalCount / parseInt(limit)),
+      },
     });
   } catch (error) {
     console.error("Error fetching user notifications:", error);
@@ -95,29 +163,41 @@ const createNotification = async (req, res) => {
       expiresAt,
     } = req.body;
 
-    if (!title || !message || !targetRoles || targetRoles.length === 0) {
+    if (!title || !message) {
       return res.status(400).json({
         success: false,
-        message: "Title, message, and target roles are required",
+        message: "Title and message are required",
       });
     }
 
-    // Validate target roles
-    const validRoles = [
-      "participant",
-      "psas",
-      "club-officer",
-      "school-admin",
-      "mis",
-    ];
-    const invalidRoles = targetRoles.filter(
-      (role) => !validRoles.includes(role)
-    );
-    if (invalidRoles.length > 0) {
+    if (
+      (!targetRoles || targetRoles.length === 0) &&
+      (!targetUsers || targetUsers.length === 0)
+    ) {
       return res.status(400).json({
         success: false,
-        message: `Invalid target roles: ${invalidRoles.join(", ")}`,
+        message: "At least one target role or target user is required",
       });
+    }
+
+    // Validate target roles if provided
+    if (targetRoles && targetRoles.length > 0) {
+      const validRoles = [
+        "participant",
+        "psas",
+        "club-officer",
+        "school-admin",
+        "mis",
+      ];
+      const invalidRoles = targetRoles.filter(
+        (role) => !validRoles.includes(role)
+      );
+      if (invalidRoles.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid target roles: ${invalidRoles.join(", ")}`,
+        });
+      }
     }
 
     const notificationData = {
@@ -125,7 +205,7 @@ const createNotification = async (req, res) => {
       message,
       type: type || "info",
       priority: priority || "medium",
-      targetRoles,
+      targetRoles: targetRoles || [],
       createdBy: req.user._id,
       isSystemGenerated: false,
     };
@@ -211,6 +291,7 @@ const markMultipleAsRead = async (req, res) => {
   try {
     const { notificationIds } = req.body;
     const userId = req.user._id;
+    const userRole = req.user.role;
 
     if (!notificationIds || !Array.isArray(notificationIds)) {
       return res.status(400).json({
@@ -222,25 +303,13 @@ const markMultipleAsRead = async (req, res) => {
     // Verify user can access these notifications
     const notifications = await Notification.find({
       _id: { $in: notificationIds },
-      $or: [{ targetRoles: req.user.role }, { targetUsers: userId }],
+      $or: [{ targetRoles: userRole }, { targetUsers: userId }],
     });
 
     const accessibleIds = notifications.map((n) => n._id.toString());
-    const inaccessibleIds = notificationIds.filter(
-      (id) => !accessibleIds.includes(id)
-    );
 
-    if (inaccessibleIds.length > 0) {
-      return res.status(403).json({
-        success: false,
-        message: `Access denied to notifications: ${inaccessibleIds.join(
-          ", "
-        )}`,
-      });
-    }
-
-    // Mark as read
-    const readOperations = notificationIds.map((notificationId) => ({
+    // Mark accessible ones as read
+    const readOperations = accessibleIds.map((notificationId) => ({
       updateOne: {
         filter: { notificationId, userId },
         update: { readAt: new Date() },
@@ -248,11 +317,13 @@ const markMultipleAsRead = async (req, res) => {
       },
     }));
 
-    await NotificationRead.bulkWrite(readOperations);
+    if (readOperations.length > 0) {
+      await NotificationRead.bulkWrite(readOperations);
+    }
 
     res.json({
       success: true,
-      message: `${notificationIds.length} notifications marked as read`,
+      message: `${accessibleIds.length} notifications marked as read`,
     });
   } catch (error) {
     console.error("Error marking multiple notifications as read:", error);
@@ -264,9 +335,52 @@ const markMultipleAsRead = async (req, res) => {
   }
 };
 
-// @desc    Delete a notification (admin only)
+// @desc    Mark all notifications as read for current user
+// @route   PUT /api/notifications/read-all
+// @access  Private
+const markAllAsRead = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    // Get all notifications for this user
+    const visibilityFilter = buildVisibilityFilter(userId, userRole);
+    const notifications = await Notification.find(visibilityFilter).select(
+      "_id"
+    );
+
+    const notificationIds = notifications.map((n) => n._id);
+
+    // Mark all as read
+    const readOperations = notificationIds.map((notificationId) => ({
+      updateOne: {
+        filter: { notificationId, userId },
+        update: { readAt: new Date() },
+        upsert: true,
+      },
+    }));
+
+    if (readOperations.length > 0) {
+      await NotificationRead.bulkWrite(readOperations);
+    }
+
+    res.json({
+      success: true,
+      message: `${notificationIds.length} notifications marked as read`,
+    });
+  } catch (error) {
+    console.error("Error marking all notifications as read:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark all notifications as read",
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Delete a notification
 // @route   DELETE /api/notifications/:id
-// @access  Private (School Admins, MIS only)
+// @access  Private
 const deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
@@ -284,7 +398,9 @@ const deleteNotification = async (req, res) => {
     // 1. User created the notification, OR
     // 2. Notification is targeted to user's role, OR
     // 3. User is school-admin or mis (can delete any notification)
-    const isCreator = notification.createdBy && notification.createdBy.toString() === req.user._id.toString();
+    const isCreator =
+      notification.createdBy &&
+      notification.createdBy.toString() === req.user._id.toString();
     const isTargetedToRole = notification.targetRoles.includes(req.user.role);
     const isAdmin = ["school-admin", "mis"].includes(req.user.role);
 
@@ -316,6 +432,9 @@ const deleteNotification = async (req, res) => {
   }
 };
 
+// @desc    Delete multiple notifications
+// @route   DELETE /api/notifications/delete-multiple
+// @access  Private
 const deleteMultiple = async (req, res) => {
   console.log("[deleteMultiple] === FUNCTION CALLED ===");
   console.log("[deleteMultiple] Request body:", req.body);
@@ -344,14 +463,18 @@ const deleteMultiple = async (req, res) => {
       _id: { $in: notificationIds },
     });
 
-    console.log(`[deleteMultiple] Found ${notifications.length} notifications to check`);
+    console.log(
+      `[deleteMultiple] Found ${notifications.length} notifications to check`
+    );
 
     // Check which notifications user can delete
     const deletableIds = [];
     const nonDeletableIds = [];
 
     for (const notification of notifications) {
-      const isCreator = notification.createdBy && notification.createdBy.toString() === req.user._id.toString();
+      const isCreator =
+        notification.createdBy &&
+        notification.createdBy.toString() === req.user._id.toString();
       const isTargetedToRole = notification.targetRoles.includes(req.user.role);
       const isAdmin = ["school-admin", "mis"].includes(req.user.role);
 
@@ -359,7 +482,9 @@ const deleteMultiple = async (req, res) => {
 
       console.log(`[deleteMultiple] Notification ${notification._id}:`, {
         canDelete,
-        createdBy: notification.createdBy ? notification.createdBy.toString() : null,
+        createdBy: notification.createdBy
+          ? notification.createdBy.toString()
+          : null,
         userId: req.user._id.toString(),
         isCreator,
         targetRoles: notification.targetRoles,
@@ -369,14 +494,18 @@ const deleteMultiple = async (req, res) => {
       });
 
       if (canDelete) {
-        deletableIds.push(notification._id.toString());
+        deletableIds.push(notification._id);
       } else {
         nonDeletableIds.push(notification._id.toString());
       }
     }
 
     if (nonDeletableIds.length > 0) {
-      console.log(`[deleteMultiple] Access denied to notifications: ${nonDeletableIds.join(", ")}`);
+      console.log(
+        `[deleteMultiple] Access denied to notifications: ${nonDeletableIds.join(
+          ", "
+        )}`
+      );
       return res.status(403).json({
         success: false,
         message: `Access denied to delete notifications: ${nonDeletableIds.join(
@@ -387,12 +516,12 @@ const deleteMultiple = async (req, res) => {
 
     // Delete notifications
     const deleteResult = await Notification.deleteMany({
-      _id: { $in: notificationIds },
+      _id: { $in: deletableIds },
     });
 
     // Also delete read statuses
     await NotificationRead.deleteMany({
-      notificationId: { $in: notificationIds },
+      notificationId: { $in: deletableIds },
     });
 
     res.json({
@@ -411,33 +540,53 @@ const deleteMultiple = async (req, res) => {
 
 // @desc    Get notification statistics
 // @route   GET /api/notifications/stats
-// @access  Private (PSAS, Club Officers, School Admins, MIS)
+// @access  Private
 const getNotificationStats = async (req, res) => {
   try {
     const userId = req.user._id;
     const userRole = req.user.role;
 
-    // Get total notifications for user
-    const totalNotifications = await Notification.countDocuments({
-      $or: [{ targetRoles: userRole }, { targetUsers: userId }],
-      $or: [
-        { expiresAt: { $exists: false } },
-        { expiresAt: { $gt: new Date() } },
-      ],
-    });
+    // Build visibility filter
+    const visibilityFilter = buildVisibilityFilter(userId, userRole);
 
-    // Get unread count
+    // Get total notifications for user
+    const totalNotifications = await Notification.countDocuments(
+      visibilityFilter
+    );
+
+    // Get read notification IDs
     const readNotificationIds = await NotificationRead.find({
       userId,
     }).distinct("notificationId");
-    const unreadCount = await Notification.countDocuments({
+
+    // Get unread count
+    const unreadFilter = {
+      ...visibilityFilter,
       _id: { $nin: readNotificationIds },
-      $or: [{ targetRoles: userRole }, { targetUsers: userId }],
-      $or: [
-        { expiresAt: { $exists: false } },
-        { expiresAt: { $gt: new Date() } },
-      ],
-    });
+    };
+    const unreadCount = await Notification.countDocuments(unreadFilter);
+
+    // Get counts by type
+    const typeStats = await Notification.aggregate([
+      { $match: visibilityFilter },
+      {
+        $group: {
+          _id: "$type",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Get counts by priority
+    const priorityStats = await Notification.aggregate([
+      { $match: visibilityFilter },
+      {
+        $group: {
+          _id: "$priority",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
 
     res.json({
       success: true,
@@ -445,6 +594,14 @@ const getNotificationStats = async (req, res) => {
         total: totalNotifications,
         unread: unreadCount,
         read: totalNotifications - unreadCount,
+        byType: typeStats.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+        byPriority: priorityStats.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
       },
     });
   } catch (error) {
@@ -462,6 +619,7 @@ module.exports = {
   createNotification,
   markAsRead,
   markMultipleAsRead,
+  markAllAsRead,
   deleteNotification,
   deleteMultiple,
   getNotificationStats,

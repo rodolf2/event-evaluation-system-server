@@ -1,6 +1,7 @@
 const Form = require("../../models/Form");
 const User = require("../../models/User"); // Import User model
 const formsService = require("../../services/forms/formsService");
+const enhancedFormsExtractor = require("../../services/forms/enhancedFormsExtractor");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -612,7 +613,7 @@ const extractFormByUrl = async (req, res) => {
     }
 
     // Extract data from Google Forms URL without creating form
-    const extractedData = await formsService.extractDataFromUrl({
+    const extractedData = await enhancedFormsExtractor.extractDataFromUrl({
       url,
       createdBy: req.user._id,
     });

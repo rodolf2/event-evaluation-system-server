@@ -1,12 +1,12 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Form = require("../../models/Form");
 const mongoose = require("mongoose");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const fileParser = require("../../utils/fileParser");
-const csv = require('csv-parser');
-const xlsx = require('xlsx');
-const fs = require('fs');
+const csv = require("csv-parser");
+const xlsx = require("xlsx");
+const fs = require("fs");
 
 class FormsService {
   // Extract data from uploaded file without creating form
@@ -25,13 +25,18 @@ class FormsService {
 
       // If no questions were extracted from the file, use dynamic fallback based on file type
       if (!questions || questions.length === 0) {
-        const fileExt = fileName.split('.').pop()?.toLowerCase();
+        const fileExt = fileName.split(".").pop()?.toLowerCase();
         questions = this.generateFallbackQuestions(fileName, fileExt);
       }
 
       const finalData = {
         title: extractedData?.title || this.generateTitleFromFilename(fileName),
-        description: extractedData?.description || `Form created from uploaded ${fileName.split('.').pop()?.toUpperCase()} file`,
+        description:
+          extractedData?.description ||
+          `Form created from uploaded ${fileName
+            .split(".")
+            .pop()
+            ?.toUpperCase()} file`,
         questions: questions,
         uploadedFiles: [
           {
@@ -50,13 +55,12 @@ class FormsService {
     }
   }
 
-
   // Generate appropriate fallback questions based on file type
   generateFallbackQuestions(fileName, fileExt) {
     const baseQuestions = [];
 
     switch (fileExt) {
-      case 'pdf':
+      case "pdf":
         baseQuestions.push(
           {
             title: "Please provide feedback on the document content",
@@ -77,8 +81,8 @@ class FormsService {
         );
         break;
 
-      case 'docx':
-      case 'doc':
+      case "docx":
+      case "doc":
         baseQuestions.push(
           {
             title: "Please provide feedback on the document",
@@ -95,9 +99,9 @@ class FormsService {
         );
         break;
 
-      case 'csv':
-      case 'xlsx':
-      case 'xls':
+      case "csv":
+      case "xlsx":
+      case "xls":
         baseQuestions.push(
           {
             title: "Please provide feedback on the data provided",
@@ -118,26 +122,22 @@ class FormsService {
         );
         break;
 
-      case 'txt':
-        baseQuestions.push(
-          {
-            title: "Please provide your thoughts on the text content",
-            type: "paragraph",
-            required: false,
-            options: [],
-          }
-        );
+      case "txt":
+        baseQuestions.push({
+          title: "Please provide your thoughts on the text content",
+          type: "paragraph",
+          required: false,
+          options: [],
+        });
         break;
 
       default:
-        baseQuestions.push(
-          {
-            title: "Please provide feedback on the uploaded file",
-            type: "paragraph",
-            required: false,
-            options: [],
-          }
-        );
+        baseQuestions.push({
+          title: "Please provide feedback on the uploaded file",
+          type: "paragraph",
+          required: false,
+          options: [],
+        });
     }
 
     return baseQuestions;
@@ -149,10 +149,10 @@ class FormsService {
     const nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
     // Replace underscores and hyphens with spaces, capitalize words
     const title = nameWithoutExt
-      .replace(/[_-]/g, ' ')
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
+      .replace(/[_-]/g, " ")
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
 
     return title || "Uploaded Form";
   }
@@ -160,7 +160,10 @@ class FormsService {
   // Create form from uploaded file
   async createFormFromUpload({ filePath, fileName, createdBy }) {
     try {
-      const extractedData = await this.extractDataFromFile({ filePath, fileName });
+      const extractedData = await this.extractDataFromFile({
+        filePath,
+        fileName,
+      });
 
       // Assign a guaranteed unique googleFormId
       const googleFormId =
@@ -205,7 +208,9 @@ class FormsService {
       }
       if (!formIdMatch) {
         // Try docs.google.com format
-        formIdMatch = finalUrl.match(/docs\.google\.com\/forms\/d\/([a-zA-Z0-9-_]+)/);
+        formIdMatch = finalUrl.match(
+          /docs\.google\.com\/forms\/d\/([a-zA-Z0-9-_]+)/
+        );
       }
       if (!formIdMatch) {
         // Try direct formId pattern
@@ -235,28 +240,39 @@ class FormsService {
         // For now, implement a robust HTML scraping approach based on the paper's requirements
         // The paper mentions supporting Google Forms integration, so we need to make this work
 
+        console.log(
+          `🔍 [Google Forms Extraction] Fetching form from: ${finalUrl}`
+        );
+        console.log(`🔍 [Google Forms Extraction] Form ID: ${formId}`);
+
         // Attempt to fetch form metadata from Google Forms
         const response = await axios.get(finalUrl, {
           timeout: 15000,
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Cache-Control': 'max-age=0',
-            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            'Sec-Ch-Ua-Mobile': '?0',
-            'Sec-Ch-Ua-Platform': '"Windows"',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Upgrade-Insecure-Requests': '1'
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Accept:
+              "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "max-age=0",
+            "Sec-Ch-Ua":
+              '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
           },
-          maxRedirects: 5
+          maxRedirects: 5,
         });
 
         const html = response.data;
+        console.log(
+          `✅ [Google Forms Extraction] Successfully fetched HTML (${html.length} characters)`
+        );
 
         // Extract title and description from HTML directly
 
@@ -264,12 +280,17 @@ class FormsService {
         if (!formTitle || formTitle === "Imported Google Form") {
           const titleMatch = html.match(/<title>(.*?)<\/title>/i);
           if (titleMatch && titleMatch[1]) {
-            formTitle = titleMatch[1].replace(/ - Google Forms$/, '').trim();
+            formTitle = titleMatch[1].replace(/ - Google Forms$/, "").trim();
           }
         }
 
-        if (!formDescription || formDescription === "Form imported from Google Forms") {
-          const descMatch = html.match(/<meta name="description" content="(.*?)"/i);
+        if (
+          !formDescription ||
+          formDescription === "Form imported from Google Forms"
+        ) {
+          const descMatch = html.match(
+            /<meta name="description" content="(.*?)"/i
+          );
           if (descMatch && descMatch[1]) {
             formDescription = descMatch[1];
           }
@@ -279,14 +300,17 @@ class FormsService {
 
         try {
           // Strategy 1: Look for FB_PUBLIC_LOAD_DATA scripts (most common)
-          const scriptRegex = /<script[^>]*>[\s\S]*?FB_PUBLIC_LOAD_DATA_[\s\S]*?<\/script>/gi;
+          const scriptRegex =
+            /<script[^>]*>[\s\S]*?FB_PUBLIC_LOAD_DATA_[\s\S]*?<\/script>/gi;
           const scriptMatches = html.match(scriptRegex);
 
           if (scriptMatches) {
             for (const scriptTag of scriptMatches) {
               try {
                 // Extract the JSON array from the script tag
-                let dataMatch = scriptTag.match(/FB_PUBLIC_LOAD_DATA_[^=]*=\s*(\[[\s\S]*?\]);/);
+                let dataMatch = scriptTag.match(
+                  /FB_PUBLIC_LOAD_DATA_[^=]*=\s*(\[[\s\S]*?\]);/
+                );
                 if (!dataMatch) {
                   // Try alternative pattern
                   dataMatch = scriptTag.match(/(\[[\s\S]*?\])\s*;\s*$/);
@@ -300,7 +324,6 @@ class FormsService {
                     const questionsData = parsedData[1];
 
                     if (Array.isArray(questionsData)) {
-
                       extractedQuestions = [];
                       let currentSection = null;
                       let sectionCounter = 0;
@@ -319,10 +342,15 @@ class FormsService {
                               const questionType = qData[3] || 0;
 
                               // Type 8 or other indicators might be sections
-                              if (questionType === 8 || (title && typeof title === 'string' && title.trim().length > 0 &&
-                                  (title.toLowerCase().includes('section') ||
-                                    title.toLowerCase().includes('page') ||
-                                    questionType === 8))) {
+                              if (
+                                questionType === 8 ||
+                                (title &&
+                                  typeof title === "string" &&
+                                  title.trim().length > 0 &&
+                                  (title.toLowerCase().includes("section") ||
+                                    title.toLowerCase().includes("page") ||
+                                    questionType === 8))
+                              ) {
                                 // This is a section
                                 currentSection = title.trim();
                                 sectionCounter++;
@@ -337,8 +365,13 @@ class FormsService {
                               const isRequired = qData[2] === 1;
                               const questionType = qData[3] || 0;
 
-                              if (title && typeof title === 'string' && title.trim().length > 0 &&
-                                  questionType !== 8) { // Skip section headers
+                              if (
+                                title &&
+                                typeof title === "string" &&
+                                title.trim().length > 0 &&
+                                questionType !== 8
+                              ) {
+                                // Skip section headers
 
                                 // Skip common name and email questions that Google Forms often includes
                                 const lowerTitle = title.toLowerCase().trim();
@@ -354,10 +387,12 @@ class FormsService {
                                   /^what is your name/i,
                                   /^what's your name/i,
                                   /^enter your name/i,
-                                  /^please enter your name/i
+                                  /^please enter your name/i,
                                 ];
 
-                                const shouldSkip = skipPatterns.some(pattern => pattern.test(lowerTitle));
+                                const shouldSkip = skipPatterns.some(
+                                  (pattern) => pattern.test(lowerTitle)
+                                );
                                 if (shouldSkip) {
                                   continue;
                                 }
@@ -365,20 +400,51 @@ class FormsService {
                                 // Extract options for multiple choice questions
                                 let options = [];
                                 if (qData[4] && Array.isArray(qData[4])) {
-                                  options = qData[4].map(opt =>
-                                    Array.isArray(opt) ? (opt[0] || '').trim() : String(opt).trim()
-                                  ).filter(opt => opt && opt.length > 0);
+                                  let rawOptions = qData[4];
+                                  // Check for nested options array [[["Opt1"], ["Opt2"]]] which happens in some form versions
+                                  if (
+                                    rawOptions.length === 1 &&
+                                    Array.isArray(rawOptions[0]) &&
+                                    rawOptions[0].length > 0 &&
+                                    Array.isArray(rawOptions[0][0])
+                                  ) {
+                                    rawOptions = rawOptions[0];
+                                  }
+
+                                  options = rawOptions
+                                    .map((opt) =>
+                                      Array.isArray(opt)
+                                        ? (opt[0] || "").trim()
+                                        : String(opt).trim()
+                                    )
+                                    .filter((opt) => opt && opt.length > 0);
                                 }
 
                                 // Handle scale questions - extract scale parameters
-                                let low = 1, high = 5, lowLabel = "Poor", highLabel = "Excellent";
-                                if (questionType === 5 && qData[4] && Array.isArray(qData[4]) && qData[4].length >= 2) {
+                                let low = 1,
+                                  high = 5,
+                                  lowLabel = "Poor",
+                                  highLabel = "Excellent";
+                                if (
+                                  questionType === 5 &&
+                                  qData[4] &&
+                                  Array.isArray(qData[4]) &&
+                                  qData[4].length >= 2
+                                ) {
                                   const scaleData = qData[4];
-                                  if (scaleData[0] && Array.isArray(scaleData[0]) && scaleData[0].length >= 2) {
+                                  if (
+                                    scaleData[0] &&
+                                    Array.isArray(scaleData[0]) &&
+                                    scaleData[0].length >= 2
+                                  ) {
                                     low = scaleData[0][0] || 1;
                                     high = scaleData[0][1] || 5;
                                   }
-                                  if (scaleData[1] && Array.isArray(scaleData[1]) && scaleData[1].length >= 2) {
+                                  if (
+                                    scaleData[1] &&
+                                    Array.isArray(scaleData[1]) &&
+                                    scaleData[1].length >= 2
+                                  ) {
                                     lowLabel = scaleData[1][0] || "Poor";
                                     highLabel = scaleData[1][1] || "Excellent";
                                   }
@@ -394,26 +460,35 @@ class FormsService {
                                   6: "multiple_choice", // Multiple choice grid
                                   7: "multiple_choice", // Checkbox grid
                                   9: "date",
-                                  10: "time"
+                                  10: "time",
                                 };
 
                                 extractedQuestions.push({
                                   title: title.trim(),
-                                  type: questionTypeMap[questionType] || "short_answer",
+                                  type:
+                                    questionTypeMap[questionType] ||
+                                    "short_answer",
                                   required: isRequired,
                                   options: options,
-                                  section: currentSection || `Section ${sectionCounter || 1}`,
+                                  section:
+                                    currentSection ||
+                                    `Section ${sectionCounter || 1}`,
                                   low: low,
                                   high: high,
                                   lowLabel: lowLabel,
-                                  highLabel: highLabel
+                                  highLabel: highLabel,
                                 });
                                 questionFound = true;
                               }
                             }
 
                             // Strategy 2: Alternative structure [null, "question text", null, type, options]
-                            if (!questionFound && q[1] && typeof q[1] === 'string' && q[1].trim()) {
+                            if (
+                              !questionFound &&
+                              q[1] &&
+                              typeof q[1] === "string" &&
+                              q[1].trim()
+                            ) {
                               const title = q[1].trim();
 
                               const questionTypeMap = {
@@ -426,62 +501,79 @@ class FormsService {
                                 6: "multiple_choice", // Multiple choice grid
                                 7: "multiple_choice", // Checkbox grid
                                 9: "date",
-                                10: "time"
+                                10: "time",
                               };
 
                               // Extract options
                               let options = [];
                               if (q[4] && Array.isArray(q[4])) {
-                                options = q[4].map(opt =>
-                                  Array.isArray(opt) ? opt[0] : opt
-                                ).filter(opt => opt && typeof opt === 'string');
+                                options = q[4]
+                                  .map((opt) =>
+                                    Array.isArray(opt) ? opt[0] : opt
+                                  )
+                                  .filter(
+                                    (opt) => opt && typeof opt === "string"
+                                  );
                               }
 
                               extractedQuestions.push({
                                 title: title,
-                                type: questionTypeMap[q[3] || 0] || "short_answer",
+                                type:
+                                  questionTypeMap[q[3] || 0] || "short_answer",
                                 required: false,
                                 options: options,
-                                section: currentSection || `Section ${sectionCounter || 1}`,
+                                section:
+                                  currentSection ||
+                                  `Section ${sectionCounter || 1}`,
                                 low: 1,
                                 high: 5,
                                 lowLabel: "Poor",
-                                highLabel: "Excellent"
+                                highLabel: "Excellent",
                               });
                               questionFound = true;
                             }
                           }
 
                           // Strategy 3: Handle string-only questions (less common but possible)
-                          else if (typeof q === 'string' && q.trim() && !Array.isArray(q)) {
+                          else if (
+                            typeof q === "string" &&
+                            q.trim() &&
+                            !Array.isArray(q)
+                          ) {
                             // Only add if it's clearly a question-like string
                             const trimmed = q.trim();
-                            if (trimmed.length > 3 && trimmed.length < 200 &&
-                                !trimmed.includes('@') &&
-                                !trimmed.includes('http') &&
-                                !trimmed.match(/^event.*address/i) &&
-                                !trimmed.match(/^contact.*us/i)) {
+                            if (
+                              trimmed.length > 3 &&
+                              trimmed.length < 200 &&
+                              !trimmed.includes("@") &&
+                              !trimmed.includes("http") &&
+                              !trimmed.match(/^event.*address/i) &&
+                              !trimmed.match(/^contact.*us/i)
+                            ) {
                               extractedQuestions.push({
                                 title: trimmed,
                                 type: "short_answer",
                                 required: false,
                                 options: [],
-                                section: currentSection || `Section ${sectionCounter || 1}`,
+                                section:
+                                  currentSection ||
+                                  `Section ${sectionCounter || 1}`,
                                 low: 1,
                                 high: 5,
                                 lowLabel: "Poor",
-                                highLabel: "Excellent"
+                                highLabel: "Excellent",
                               });
                             }
                           }
-
                         } catch (questionError) {
                           continue;
                         }
                       }
 
                       // Filter out any remaining nulls and duplicates
-                      extractedQuestions = extractedQuestions.filter(q => q !== null);
+                      extractedQuestions = extractedQuestions.filter(
+                        (q) => q !== null
+                      );
 
                       if (extractedQuestions.length > 0) {
                         break; // Found questions, stop processing
@@ -494,7 +586,6 @@ class FormsService {
               }
             }
           }
-
         } catch (parsingError) {
           extractedQuestions = [];
 
@@ -504,14 +595,14 @@ class FormsService {
 
             // Enhanced selectors for different Google Forms versions
             const questionSelectors = [
-              '.freebirdFormviewerComponentsQuestionBaseRoot',
-              '[data-item-id]',
-              '.freebirdFormviewerViewItemsItemItem',
+              ".freebirdFormviewerComponentsQuestionBaseRoot",
+              "[data-item-id]",
+              ".freebirdFormviewerViewItemsItemItem",
               '[jsname="ibnC6b"]',
-              '.exportContent',
-              '.freebirdFormviewerComponentsQuestionBaseTitle',
+              ".exportContent",
+              ".freebirdFormviewerComponentsQuestionBaseTitle",
               '[role="listitem"]',
-              '.question'
+              ".question",
             ];
 
             let allQuestions = [];
@@ -519,29 +610,35 @@ class FormsService {
             // First, try to extract header/intro blocks (colored blocks on the left)
             const headerBlocks = [];
             const headerSelectors = [
-              '.freebirdFormviewerViewHeaderCard',
-              '.freebirdFormviewerViewFormCard',
+              ".freebirdFormviewerViewHeaderCard",
+              ".freebirdFormviewerViewFormCard",
               '[data-card-type="header"]',
-              '.freebirdFormviewerViewHeaderTitleRow',
-              '.freebirdFormviewerViewHeaderDescription'
+              ".freebirdFormviewerViewHeaderTitleRow",
+              ".freebirdFormviewerViewHeaderDescription",
             ];
 
-            headerSelectors.forEach(selector => {
+            headerSelectors.forEach((selector) => {
               $(selector).each((index, element) => {
                 const $elem = $(element);
                 const headerText = $elem.text().trim();
 
-                if (headerText && headerText.length > 0 && headerText.length < 1000) {
+                if (
+                  headerText &&
+                  headerText.length > 0 &&
+                  headerText.length < 1000
+                ) {
                   // Check if it looks like a header/intro
                   const lowerText = headerText.toLowerCase();
-                  if (!lowerText.includes('submit') &&
-                      !lowerText.includes('privacy') &&
-                      !lowerText.includes('terms') &&
-                      !lowerText.match(/^\d+\./)) {
+                  if (
+                    !lowerText.includes("submit") &&
+                    !lowerText.includes("privacy") &&
+                    !lowerText.includes("terms") &&
+                    !lowerText.match(/^\d+\./)
+                  ) {
                     headerBlocks.push({
-                      type: 'header',
+                      type: "header",
                       title: headerText,
-                      section: 'Intro'
+                      section: "Intro",
                     });
                   }
                 }
@@ -551,27 +648,39 @@ class FormsService {
             // Extract sections from colored left blocks
             const sections = [];
             const sectionSelectors = [
-              '.freebirdFormviewerViewSectionCard',
+              ".freebirdFormviewerViewSectionCard",
               '[data-card-type="section"]',
-              '.freebirdFormviewerViewSectionTitle'
+              ".freebirdFormviewerViewSectionTitle",
             ];
 
-            sectionSelectors.forEach(selector => {
+            sectionSelectors.forEach((selector) => {
               $(selector).each((index, element) => {
                 const $elem = $(element);
-                const sectionTitle = $elem.find('.freebirdFormviewerViewSectionTitle, h2, .section-title').first().text().trim() ||
-                                  $elem.text().trim();
+                const sectionTitle =
+                  $elem
+                    .find(
+                      ".freebirdFormviewerViewSectionTitle, h2, .section-title"
+                    )
+                    .first()
+                    .text()
+                    .trim() || $elem.text().trim();
 
-                if (sectionTitle && sectionTitle.length > 0 && sectionTitle.length < 200) {
+                if (
+                  sectionTitle &&
+                  sectionTitle.length > 0 &&
+                  sectionTitle.length < 200
+                ) {
                   // Check if it looks like a section title
                   const lowerTitle = sectionTitle.toLowerCase();
-                  if (!lowerTitle.includes('submit') &&
-                      !lowerTitle.includes('privacy') &&
-                      !lowerTitle.includes('terms') &&
-                      !lowerTitle.match(/^\d+\./)) {
+                  if (
+                    !lowerTitle.includes("submit") &&
+                    !lowerTitle.includes("privacy") &&
+                    !lowerTitle.includes("terms") &&
+                    !lowerTitle.match(/^\d+\./)
+                  ) {
                     sections.push({
                       title: sectionTitle,
-                      index: sections.length + 1
+                      index: sections.length + 1,
                     });
                   }
                 }
@@ -580,20 +689,22 @@ class FormsService {
 
             // Try each selector and collect questions
             let currentSectionIndex = 0;
-            questionSelectors.forEach(selector => {
+            questionSelectors.forEach((selector) => {
               $(selector).each((index, element) => {
                 const $elem = $(element);
 
                 // Extract question text with multiple fallbacks
-                let questionText = '';
+                let questionText = "";
                 const textSelectors = [
-                  '.freebirdFormviewerComponentsQuestionBaseTitle',
+                  ".freebirdFormviewerComponentsQuestionBaseTitle",
+                  '[role="heading"]',
                   '[jsname="V67aGc"]',
-                  '.exportContent',
-                  'span',
-                  'div',
-                  'label',
-                  '.question-title'
+                  ".exportContent",
+                  ".question-title",
+                  "div[role='heading']",
+                  "span",
+                  "div",
+                  "label",
                 ];
 
                 for (const textSel of textSelectors) {
@@ -616,62 +727,71 @@ class FormsService {
 
                 // Skip common non-question elements
                 const lowerText = questionText.toLowerCase();
-                if (lowerText.includes('submit') ||
-                    lowerText.includes('next') ||
-                    lowerText.includes('previous') ||
-                    lowerText.includes('required') ||
-                    lowerText.includes('privacy') ||
-                    lowerText.includes('terms') ||
-                    lowerText.match(/^\d+\.$/) || // Just numbers
-                    lowerText.length > 500) { // Too long
+                if (
+                  lowerText.includes("submit") ||
+                  lowerText.includes("next") ||
+                  lowerText.includes("previous") ||
+                  lowerText.includes("required") ||
+                  lowerText.includes("privacy") ||
+                  lowerText.includes("terms") ||
+                  lowerText.match(/^\d+\.$/) || // Just numbers
+                  lowerText.length > 500
+                ) {
+                  // Too long
                   return;
                 }
 
                 // Enhanced question type and options detection
-                let questionType = 'short_answer';
+                let questionType = "short_answer";
                 let options = [];
                 let allowMultipleSelection = false;
 
                 // Analyze form elements with priority-based detection
-                const inputs = $elem.find('input, select, textarea');
-                const hasTextarea = $elem.find('textarea').length > 0;
-                const hasSelect = $elem.find('select').length > 0;
+                const inputs = $elem.find("input, select, textarea");
+                const hasTextarea = $elem.find("textarea").length > 0;
+                const hasSelect = $elem.find("select").length > 0;
                 const hasRadio = $elem.find('input[type="radio"]').length > 0;
-                const hasCheckbox = $elem.find('input[type="checkbox"]').length > 0;
-                const hasScale = $elem.find('.freebirdFormviewerComponentsQuestionScaleSlider, [role="radiogroup"]').length > 0;
+                const hasCheckbox =
+                  $elem.find('input[type="checkbox"]').length > 0;
+                const hasScale =
+                  $elem.find(
+                    '.freebirdFormviewerComponentsQuestionScaleSlider, [role="radiogroup"]'
+                  ).length > 0;
                 const hasDate = $elem.find('input[type="date"]').length > 0;
                 const hasTime = $elem.find('input[type="time"]').length > 0;
 
                 // Determine question type with priority (most specific first)
                 if (hasTextarea) {
-                  questionType = 'paragraph';
+                  questionType = "paragraph";
                 } else if (hasScale) {
-                  questionType = 'scale';
+                  questionType = "scale";
                 } else if (hasDate) {
-                  questionType = 'date';
+                  questionType = "date";
                 } else if (hasTime) {
-                  questionType = 'time';
+                  questionType = "time";
                 } else if (hasSelect) {
-                  questionType = 'multiple_choice';
+                  questionType = "multiple_choice";
                   // Extract select options precisely
-                  $elem.find('select option').each((j, option) => {
+                  $elem.find("select option").each((j, option) => {
                     const $option = $(option);
                     const optText = $option.text().trim();
-                    const optValue = $option.attr('value');
+                    const optValue = $option.attr("value");
 
                     // Skip placeholder options
-                    if (optText &&
-                        !optText.match(/^(choose|select|please select)/i) &&
-                        !optText.includes('...') &&
-                        optValue !== '') {
+                    if (
+                      optText &&
+                      !optText.match(/^(choose|select|please select)/i) &&
+                      !optText.includes("...") &&
+                      optValue !== ""
+                    ) {
                       options.push(optText);
                     }
                   });
                 } else if (hasRadio) {
-                  questionType = 'multiple_choice';
+                  questionType = "multiple_choice";
                   allowMultipleSelection = false;
                 } else if (hasCheckbox) {
-                  questionType = 'multiple_choice';
+                  questionType = "multiple_choice";
                   allowMultipleSelection = true; // Checkboxes allow multiple selection
                 }
 
@@ -682,35 +802,55 @@ class FormsService {
 
                   $elem.find('input[type="radio"]').each((i, radio) => {
                     const $radio = $(radio);
-                    const radioName = $radio.attr('name') || `radio-group-${i}`;
-                    const radioValue = $radio.attr('value') || i.toString();
+                    const radioName = $radio.attr("name") || `radio-group-${i}`;
+                    const radioValue = $radio.attr("value") || i.toString();
 
                     // Find associated label with multiple strategies
-                    let label = '';
+                    let label = "";
+
+                    // Strategy 0: Common Google Forms class
+                    const container = $radio.closest(
+                      ".docssharedWizToggleLabeledContainer"
+                    );
+                    if (container.length > 0) {
+                      label = container
+                        .find(".docssharedWizToggleLabeledLabelText")
+                        .text()
+                        .trim();
+                    }
 
                     // Strategy 1: aria-labelledby
-                    const ariaLabelledBy = $radio.attr('aria-labelledby');
+                    const ariaLabelledBy = $radio.attr("aria-labelledby");
                     if (ariaLabelledBy) {
                       label = $elem.find(`#${ariaLabelledBy}`).text().trim();
                     }
 
                     // Strategy 2: Associated label element
                     if (!label) {
-                      const labelId = $radio.attr('id');
+                      const labelId = $radio.attr("id");
                       if (labelId) {
-                        label = $elem.find(`label[for="${labelId}"]`).text().trim();
+                        label = $elem
+                          .find(`label[for="${labelId}"]`)
+                          .text()
+                          .trim();
                       }
                     }
 
                     // Strategy 3: Same container text
                     if (!label) {
-                      const $container = $radio.closest('.freebirdFormviewerComponentsQuestionRadioChoice, div');
+                      const $container = $radio.closest(
+                        ".freebirdFormviewerComponentsQuestionRadioChoice, div"
+                      );
                       const containerText = $container.text().trim();
                       if (containerText && containerText !== questionText) {
                         // Extract only the option text, not the question
-                        const questionIndex = containerText.toLowerCase().indexOf(questionText.toLowerCase());
+                        const questionIndex = containerText
+                          .toLowerCase()
+                          .indexOf(questionText.toLowerCase());
                         if (questionIndex !== -1) {
-                          label = containerText.substring(questionIndex + questionText.length).trim();
+                          label = containerText
+                            .substring(questionIndex + questionText.length)
+                            .trim();
                         } else {
                           label = containerText;
                         }
@@ -719,28 +859,45 @@ class FormsService {
 
                     // Strategy 4: Next text elements
                     if (!label) {
-                      label = $radio.parent().contents().filter(function() {
-                        return this.nodeType === 3 && $(this).text().trim();
-                      }).first().text().trim();
+                      label = $radio
+                        .parent()
+                        .contents()
+                        .filter(function () {
+                          return this.nodeType === 3 && $(this).text().trim();
+                        })
+                        .first()
+                        .text()
+                        .trim();
                     }
 
                     // Clean up the label
                     if (label) {
-                      label = label.replace(/\*/g, '').trim(); // Remove asterisks
-                      label = label.replace(/\n/g, ' ').trim(); // Replace newlines with spaces
+                      label = label.replace(/\*/g, "").trim(); // Remove asterisks
+                      label = label.replace(/\n/g, " ").trim(); // Replace newlines with spaces
 
                       // Avoid duplicating the question text
-                      if (label.toLowerCase().includes(questionText.toLowerCase())) {
-                        const questionWords = questionText.toLowerCase().split(/\s+/);
+                      if (
+                        label.toLowerCase().includes(questionText.toLowerCase())
+                      ) {
+                        const questionWords = questionText
+                          .toLowerCase()
+                          .split(/\s+/);
                         const labelWords = label.toLowerCase().split(/\s+/);
-                        label = labelWords.filter(word =>
-                          !questionWords.includes(word) || word.length < 3
-                        ).join(' ').trim();
+                        label = labelWords
+                          .filter(
+                            (word) =>
+                              !questionWords.includes(word) || word.length < 3
+                          )
+                          .join(" ")
+                          .trim();
                       }
 
-                      if (label && label.length > 0 && label.length < 200 &&
-                          !radioGroups[radioName]?.includes(label)) {
-
+                      if (
+                        label &&
+                        label.length > 0 &&
+                        label.length < 200 &&
+                        !radioGroups[radioName]?.includes(label)
+                      ) {
                         if (!radioGroups[radioName]) {
                           radioGroups[radioName] = [];
                         }
@@ -750,7 +907,7 @@ class FormsService {
                   });
 
                   // Collect unique options from all radio groups
-                  Object.values(radioGroups).forEach(groupOptions => {
+                  Object.values(radioGroups).forEach((groupOptions) => {
                     options.push(...groupOptions);
                   });
 
@@ -765,33 +922,43 @@ class FormsService {
 
                   $elem.find('input[type="checkbox"]').each((i, checkbox) => {
                     const $checkbox = $(checkbox);
-                    const checkboxName = $checkbox.attr('name') || `checkbox-group-${i}`;
+                    const checkboxName =
+                      $checkbox.attr("name") || `checkbox-group-${i}`;
 
                     // Find associated label with same strategies as radio
-                    let label = '';
+                    let label = "";
 
                     // Strategy 1: aria-labelledby
-                    const ariaLabelledBy = $checkbox.attr('aria-labelledby');
+                    const ariaLabelledBy = $checkbox.attr("aria-labelledby");
                     if (ariaLabelledBy) {
                       label = $elem.find(`#${ariaLabelledBy}`).text().trim();
                     }
 
                     // Strategy 2: Associated label element
                     if (!label) {
-                      const labelId = $checkbox.attr('id');
+                      const labelId = $checkbox.attr("id");
                       if (labelId) {
-                        label = $elem.find(`label[for="${labelId}"]`).text().trim();
+                        label = $elem
+                          .find(`label[for="${labelId}"]`)
+                          .text()
+                          .trim();
                       }
                     }
 
                     // Strategy 3: Same container text
                     if (!label) {
-                      const $container = $checkbox.closest('.freebirdFormviewerComponentsQuestionCheckboxChoice, div');
+                      const $container = $checkbox.closest(
+                        ".freebirdFormviewerComponentsQuestionCheckboxChoice, div"
+                      );
                       const containerText = $container.text().trim();
                       if (containerText && containerText !== questionText) {
-                        const questionIndex = containerText.toLowerCase().indexOf(questionText.toLowerCase());
+                        const questionIndex = containerText
+                          .toLowerCase()
+                          .indexOf(questionText.toLowerCase());
                         if (questionIndex !== -1) {
-                          label = containerText.substring(questionIndex + questionText.length).trim();
+                          label = containerText
+                            .substring(questionIndex + questionText.length)
+                            .trim();
                         } else {
                           label = containerText;
                         }
@@ -800,28 +967,45 @@ class FormsService {
 
                     // Strategy 4: Next text elements
                     if (!label) {
-                      label = $checkbox.parent().contents().filter(function() {
-                        return this.nodeType === 3 && $(this).text().trim();
-                      }).first().text().trim();
+                      label = $checkbox
+                        .parent()
+                        .contents()
+                        .filter(function () {
+                          return this.nodeType === 3 && $(this).text().trim();
+                        })
+                        .first()
+                        .text()
+                        .trim();
                     }
 
                     // Clean up the label
                     if (label) {
-                      label = label.replace(/\*/g, '').trim();
-                      label = label.replace(/\n/g, ' ').trim();
+                      label = label.replace(/\*/g, "").trim();
+                      label = label.replace(/\n/g, " ").trim();
 
                       // Avoid duplicating the question text
-                      if (label.toLowerCase().includes(questionText.toLowerCase())) {
-                        const questionWords = questionText.toLowerCase().split(/\s+/);
+                      if (
+                        label.toLowerCase().includes(questionText.toLowerCase())
+                      ) {
+                        const questionWords = questionText
+                          .toLowerCase()
+                          .split(/\s+/);
                         const labelWords = label.toLowerCase().split(/\s+/);
-                        label = labelWords.filter(word =>
-                          !questionWords.includes(word) || word.length < 3
-                        ).join(' ').trim();
+                        label = labelWords
+                          .filter(
+                            (word) =>
+                              !questionWords.includes(word) || word.length < 3
+                          )
+                          .join(" ")
+                          .trim();
                       }
 
-                      if (label && label.length > 0 && label.length < 200 &&
-                          !checkboxGroups[checkboxName]?.includes(label)) {
-
+                      if (
+                        label &&
+                        label.length > 0 &&
+                        label.length < 200 &&
+                        !checkboxGroups[checkboxName]?.includes(label)
+                      ) {
                         if (!checkboxGroups[checkboxName]) {
                           checkboxGroups[checkboxName] = [];
                         }
@@ -831,7 +1015,7 @@ class FormsService {
                   });
 
                   // Collect unique options from all checkbox groups
-                  Object.values(checkboxGroups).forEach(groupOptions => {
+                  Object.values(checkboxGroups).forEach((groupOptions) => {
                     checkboxOptions.push(...groupOptions);
                   });
 
@@ -840,13 +1024,21 @@ class FormsService {
                 }
 
                 // Extract scale parameters if it's a scale question
-                let low = 1, high = 5, lowLabel = "Poor", highLabel = "Excellent";
-                if (questionType === 'scale') {
+                let low = 1,
+                  high = 5,
+                  lowLabel = "Poor",
+                  highLabel = "Excellent";
+                if (questionType === "scale") {
                   // Try to find scale labels
-                  const scaleLabels = $elem.find('.freebirdFormviewerComponentsQuestionScaleSlider label, .scale-label');
+                  const scaleLabels = $elem.find(
+                    ".freebirdFormviewerComponentsQuestionScaleSlider label, .scale-label"
+                  );
                   if (scaleLabels.length >= 2) {
                     lowLabel = $(scaleLabels[0]).text().trim() || "Poor";
-                    highLabel = $(scaleLabels[scaleLabels.length - 1]).text().trim() || "Excellent";
+                    highLabel =
+                      $(scaleLabels[scaleLabels.length - 1])
+                        .text()
+                        .trim() || "Excellent";
                   }
 
                   // Count scale points (radio buttons in scale)
@@ -857,30 +1049,44 @@ class FormsService {
                 }
 
                 // Check if required
-                const isRequired = $elem.text().includes('*') ||
-                                 $elem.find('[aria-required="true"]').length > 0 ||
-                                 $elem.closest('[aria-required="true"]').length > 0 ||
-                                 $elem.find('.freebirdFormviewerComponentsQuestionBaseRequiredAsterisk').length > 0;
+                const isRequired =
+                  $elem.text().includes("*") ||
+                  $elem.find('[aria-required="true"]').length > 0 ||
+                  $elem.closest('[aria-required="true"]').length > 0 ||
+                  $elem.find(
+                    ".freebirdFormviewerComponentsQuestionBaseRequiredAsterisk"
+                  ).length > 0;
 
                 // Skip name and email fields
                 const lowerTitle = questionText.toLowerCase().trim();
                 const skipPatterns = [
-                  /^name$/i, /^full name$/i, /^your name$/i,
-                  /^email$/i, /^email address$/i, /^your email$/i, /^e-mail$/i,
-                  /^what is your name/i, /^what's your name/i,
-                  /^enter your name/i, /^please enter your name/i
+                  /^name$/i,
+                  /^full name$/i,
+                  /^your name$/i,
+                  /^email$/i,
+                  /^email address$/i,
+                  /^your email$/i,
+                  /^e-mail$/i,
+                  /^what is your name/i,
+                  /^what's your name/i,
+                  /^enter your name/i,
+                  /^please enter your name/i,
                 ];
 
-                const shouldSkip = skipPatterns.some(pattern => pattern.test(lowerTitle));
+                const shouldSkip = skipPatterns.some((pattern) =>
+                  pattern.test(lowerTitle)
+                );
                 if (shouldSkip) {
                   return;
                 }
 
                 // Determine which section this question belongs to
-                let questionSection = 'Section 1';
+                let questionSection = "Section 1";
                 if (sections.length > 0) {
                   // Find the closest section before this question
-                  questionSection = sections[Math.min(currentSectionIndex, sections.length - 1)].title;
+                  questionSection =
+                    sections[Math.min(currentSectionIndex, sections.length - 1)]
+                      .title;
                 }
 
                 // Create question object with all extracted data
@@ -893,11 +1099,14 @@ class FormsService {
                   low: low,
                   high: high,
                   lowLabel: lowLabel,
-                  highLabel: highLabel
+                  highLabel: highLabel,
                 };
 
                 // Add multiple selection flag for checkboxes
-                if (allowMultipleSelection && questionType === 'multiple_choice') {
+                if (
+                  allowMultipleSelection &&
+                  questionType === "multiple_choice"
+                ) {
                   questionObj.allowMultipleSelection = true;
                 }
 
@@ -909,23 +1118,28 @@ class FormsService {
             const uniqueQuestions = [];
             const seen = new Set();
 
-            allQuestions.forEach(q => {
+            allQuestions.forEach((q) => {
               const key = `${q.title}-${q.type}`;
-              if (!seen.has(key) && q.title.length > 3 && q.title.length < 300) {
+              if (
+                !seen.has(key) &&
+                q.title.length > 3 &&
+                q.title.length < 300
+              ) {
                 seen.add(key);
                 uniqueQuestions.push(q);
               }
             });
 
             extractedQuestions = uniqueQuestions;
-
           } catch (scrapingError) {
             extractedQuestions = [];
           }
         }
-
       } catch (error) {
-        console.log("Could not extract form details from Google Forms:", error.message);
+        console.log(
+          "Could not extract form details from Google Forms:",
+          error.message
+        );
       }
 
       return {
@@ -952,47 +1166,53 @@ class FormsService {
   async parseAttendeeFile(filePath) {
     try {
       const attendees = [];
-      const fileExtension = filePath.split('.').pop().toLowerCase();
+      const fileExtension = filePath.split(".").pop().toLowerCase();
 
-      if (fileExtension === 'csv') {
+      if (fileExtension === "csv") {
         // Parse CSV file
         return new Promise((resolve, reject) => {
           const results = [];
           fs.createReadStream(filePath)
             .pipe(csv())
-            .on('data', (data) => {
+            .on("data", (data) => {
               // Look for name and email columns (case insensitive)
-              const nameKeys = Object.keys(data).filter(key =>
-                key.toLowerCase().includes('name') ||
-                key.toLowerCase().includes('full name') ||
-                key.toLowerCase().includes('full_name') ||
-                key.toLowerCase().includes('student name')
+              const nameKeys = Object.keys(data).filter(
+                (key) =>
+                  key.toLowerCase().includes("name") ||
+                  key.toLowerCase().includes("full name") ||
+                  key.toLowerCase().includes("full_name") ||
+                  key.toLowerCase().includes("student name")
               );
 
-              const emailKeys = Object.keys(data).filter(key =>
-                key.toLowerCase().includes('email') ||
-                key.toLowerCase().includes('e-mail') ||
-                key.toLowerCase().includes('email address')
+              const emailKeys = Object.keys(data).filter(
+                (key) =>
+                  key.toLowerCase().includes("email") ||
+                  key.toLowerCase().includes("e-mail") ||
+                  key.toLowerCase().includes("email address")
               );
 
-              const name = nameKeys.length > 0 ? data[nameKeys[0]]?.trim() : '';
-              const email = emailKeys.length > 0 ? data[emailKeys[0]]?.trim() : '';
+              const name = nameKeys.length > 0 ? data[nameKeys[0]]?.trim() : "";
+              const email =
+                emailKeys.length > 0 ? data[emailKeys[0]]?.trim() : "";
 
               if (name && email) {
                 results.push({ name, email: email.toLowerCase() });
               } else if (email) {
                 // If only email is present, use email as name
-                results.push({ name: email.split('@')[0], email: email.toLowerCase() });
+                results.push({
+                  name: email.split("@")[0],
+                  email: email.toLowerCase(),
+                });
               }
             })
-            .on('end', () => {
+            .on("end", () => {
               resolve(results);
             })
-            .on('error', (error) => {
+            .on("error", (error) => {
               reject(error);
             });
         });
-      } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      } else if (fileExtension === "xlsx" || fileExtension === "xls") {
         // Parse Excel file
         const workbook = xlsx.readFile(filePath);
         const sheetName = workbook.SheetNames[0];
@@ -1000,38 +1220,47 @@ class FormsService {
         const jsonData = xlsx.utils.sheet_to_json(worksheet);
 
         const results = [];
-        jsonData.forEach(row => {
+        jsonData.forEach((row) => {
           // Look for name and email columns (case insensitive)
-          const nameKeys = Object.keys(row).filter(key =>
-            key.toLowerCase().includes('name') ||
-            key.toLowerCase().includes('full name') ||
-            key.toLowerCase().includes('full_name') ||
-            key.toLowerCase().includes('student name')
+          const nameKeys = Object.keys(row).filter(
+            (key) =>
+              key.toLowerCase().includes("name") ||
+              key.toLowerCase().includes("full name") ||
+              key.toLowerCase().includes("full_name") ||
+              key.toLowerCase().includes("student name")
           );
 
-          const emailKeys = Object.keys(row).filter(key =>
-            key.toLowerCase().includes('email') ||
-            key.toLowerCase().includes('e-mail') ||
-            key.toLowerCase().includes('email address')
+          const emailKeys = Object.keys(row).filter(
+            (key) =>
+              key.toLowerCase().includes("email") ||
+              key.toLowerCase().includes("e-mail") ||
+              key.toLowerCase().includes("email address")
           );
 
-          const name = nameKeys.length > 0 ? String(row[nameKeys[0]] || '').trim() : '';
-          const email = emailKeys.length > 0 ? String(row[emailKeys[0]] || '').trim() : '';
+          const name =
+            nameKeys.length > 0 ? String(row[nameKeys[0]] || "").trim() : "";
+          const email =
+            emailKeys.length > 0 ? String(row[emailKeys[0]] || "").trim() : "";
 
           if (name && email) {
             results.push({ name, email: email.toLowerCase() });
           } else if (email) {
             // If only email is present, use email username as name
-            results.push({ name: email.split('@')[0], email: email.toLowerCase() });
+            results.push({
+              name: email.split("@")[0],
+              email: email.toLowerCase(),
+            });
           }
         });
 
         return results;
       } else {
-        throw new Error('Unsupported file format. Only CSV and Excel files are supported.');
+        throw new Error(
+          "Unsupported file format. Only CSV and Excel files are supported."
+        );
       }
     } catch (error) {
-      console.error('Error parsing attendee file:', error);
+      console.error("Error parsing attendee file:", error);
       throw new Error(`Failed to parse attendee file: ${error.message}`);
     }
   }
@@ -1041,12 +1270,16 @@ class FormsService {
     try {
       // Find all forms where this email is in the attendee list
       const forms = await Form.find({
-        'attendeeList.email': email,
-        status: 'published'
-      }).select('title description attendeeList.$ shareableLink eventStartDate eventEndDate responses');
+        "attendeeList.email": email,
+        status: "published",
+      }).select(
+        "title description attendeeList.$ shareableLink eventStartDate eventEndDate responses"
+      );
 
-      const dashboardData = forms.map(form => {
-        const attendeeInfo = form.attendeeList.find(attendee => attendee.email === email);
+      const dashboardData = forms.map((form) => {
+        const attendeeInfo = form.attendeeList.find(
+          (attendee) => attendee.email === email
+        );
         const hasResponded = attendeeInfo ? attendeeInfo.hasResponded : false;
 
         return {
@@ -1058,13 +1291,15 @@ class FormsService {
           eventStartDate: form.eventStartDate,
           eventEndDate: form.eventEndDate,
           // Include response data if they have responded
-          response: hasResponded ? form.responses.find(r => r.respondentEmail === email) : null
+          response: hasResponded
+            ? form.responses.find((r) => r.respondentEmail === email)
+            : null,
         };
       });
 
       return dashboardData;
     } catch (error) {
-      console.error('Error fetching attendee dashboard:', error);
+      console.error("Error fetching attendee dashboard:", error);
       throw error;
     }
   }
@@ -1163,7 +1398,10 @@ class FormsService {
               fs.unlinkSync(file.path);
               console.log(`🗑️ Deleted file: ${file.path}`);
             } catch (fileError) {
-              console.warn(`⚠️ Failed to delete file ${file.path}:`, fileError.message);
+              console.warn(
+                `⚠️ Failed to delete file ${file.path}:`,
+                fileError.message
+              );
             }
           }
         }
@@ -1173,17 +1411,24 @@ class FormsService {
       // These are typically stored in the uploads/csv directory with timestamp-based names
       if (form.uploadedLinks && Array.isArray(form.uploadedLinks)) {
         for (const link of form.uploadedLinks) {
-          if (link.url && link.url.includes('/uploads/csv/')) {
+          if (link.url && link.url.includes("/uploads/csv/")) {
             // Extract file path from URL
-            const fileName = link.url.split('/').pop();
-            const fullPath = path.join(__dirname, '../../../uploads/csv', fileName);
-            
+            const fileName = link.url.split("/").pop();
+            const fullPath = path.join(
+              __dirname,
+              "../../../uploads/csv",
+              fileName
+            );
+
             if (fs.existsSync(fullPath)) {
               try {
                 fs.unlinkSync(fullPath);
                 console.log(`🗑️ Deleted CSV file: ${fullPath}`);
               } catch (csvError) {
-                console.warn(`⚠️ Failed to delete CSV file ${fullPath}:`, csvError.message);
+                console.warn(
+                  `⚠️ Failed to delete CSV file ${fullPath}:`,
+                  csvError.message
+                );
               }
             }
           }
@@ -1196,7 +1441,9 @@ class FormsService {
         createdBy: userId,
       });
 
-      console.log(`✅ Form ${formId} and associated files deleted successfully`);
+      console.log(
+        `✅ Form ${formId} and associated files deleted successfully`
+      );
       return form;
     } catch (error) {
       console.error("Error deleting form:", error);
