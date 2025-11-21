@@ -17,8 +17,6 @@ class GoogleFormsExtractorPuppeteer {
    * @returns {Promise<Object>} Extracted form data
    */
   async extractForm(url) {
-    console.log(`🚀 [Puppeteer] Starting browser for form extraction...`);
-
     const browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -43,15 +41,26 @@ class GoogleFormsExtractorPuppeteer {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       );
 
-      console.log(`🌐 [Puppeteer] Navigating to: ${url}`);
-
-      // Navigate and wait for network idle (page fully loaded)
-      await page.goto(url, {
-        waitUntil: "networkidle0",
-        timeout: 30000,
+      // Optimize: Block unnecessary resources
+      await page.setRequestInterception(true);
+      page.on("request", (req) => {
+        const resourceType = req.resourceType();
+        if (
+          ["image", "stylesheet", "font", "media", "other"].includes(
+            resourceType
+          )
+        ) {
+          req.abort();
+        } else {
+          req.continue();
+        }
       });
 
-      console.log(`✅ [Puppeteer] Page loaded successfully`);
+      // Navigate and wait only for DOM content (much faster than networkidle0)
+      await page.goto(url, {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      });
 
       // First, let's check what scripts are available
       const scriptInfo = await page.evaluate(() => {
@@ -70,12 +79,6 @@ class GoogleFormsExtractorPuppeteer {
             .map((s) => s.textContent.substring(0, 200)),
         };
       });
-
-      console.log(`📝 [Puppeteer] Script analysis:`);
-      console.log(`   Total scripts: ${scriptInfo.totalScripts}`);
-      console.log(
-        `   Has FB_PUBLIC_LOAD_DATA: ${scriptInfo.hasFBPublicLoadData}`
-      );
 
       // Extract form data from the page
       const formData = await page.evaluate(() => {
@@ -142,15 +145,27 @@ class GoogleFormsExtractorPuppeteer {
                     ? questionsData.length
                     : 0;
 
-                  if (Array.isArray(questionsData)) {
+                  if (
+                    Array.isArray(questionsData) &&
+                    questionsData.length > 1
+                  ) {
+                    // The actual questions array is at index 1 of questionsData
+                    const actualQuestionsArray = questionsData[1];
+                    if (!Array.isArray(actualQuestionsArray)) {
+                      result.debugInfo.errors.push(
+                        "Questions array not found in expected location"
+                      );
+                      continue;
+                    }
+
                     let currentSectionId = "main";
                     let sectionCounter = 0;
 
                     // Log first few items fully to understand structure
                     result.debugInfo.logs.push(
-                      `First 10 items in questionsData:`
+                      `First 10 items in actualQuestionsArray:`
                     );
-                    questionsData.slice(0, 10).forEach((q, idx) => {
+                    actualQuestionsArray.slice(0, 10).forEach((q, idx) => {
                       try {
                         result.debugInfo.logs.push(
                           `   Item ${idx}: ${JSON.stringify(q).substring(
@@ -165,138 +180,171 @@ class GoogleFormsExtractorPuppeteer {
                       }
                     });
 
-                    for (let i = 0; i < questionsData.length; i++) {
-                      const q = questionsData[i];
+                    for (let i = 0; i < actualQuestionsArray.length; i++) {
+                      const q = actualQuestionsArray[i];
 
                       try {
-                        if (Array.isArray(q) && q.length >= 2) {
+                        if (Array.isArray(q) && q.length >= 5) {
                           const itemId = q[0];
-                          const qData = q[1];
+                          const title = q[1];
+                          const description = q[2];
+                          const questionType = q[3] || 0;
+                          const optionsData = q[4];
 
-                          if (Array.isArray(qData) && qData.length > 1) {
-                            const title = qData[1];
-                            const questionType = qData[3] || 0;
+                          // Handle Section Headers (Type 8)
+                          if (questionType === 8) {
+                            const sectionTitle =
+                              title || `Section ${sectionCounter + 1}`;
+                            const sectionDesc = description || "";
+                            // Ensure ID is a string to avoid type mismatches (number vs string) in frontend
+                            const sectionId = itemId
+                              ? String(itemId)
+                              : `section_${sectionCounter}`;
 
-                            // Handle Section Headers (Type 8)
-                            if (questionType === 8) {
-                              const sectionTitle =
-                                title || `Section ${sectionCounter + 1}`;
-                              const sectionDesc = qData[2] || "";
-                              // Ensure ID is a string to avoid type mismatches (number vs string) in frontend
-                              const sectionId = itemId
-                                ? String(itemId)
-                                : `section_${sectionCounter}`;
+                            result.sections.push({
+                              id: sectionId,
+                              title: sectionTitle,
+                              description: sectionDesc,
+                              sectionNumber: sectionCounter + 1,
+                            });
 
-                              result.sections.push({
-                                id: sectionId,
-                                title: sectionTitle,
-                                description: sectionDesc,
-                                sectionNumber: sectionCounter + 1,
-                              });
+                            currentSectionId = sectionId;
+                            sectionCounter++;
+                            continue;
+                          }
 
-                              currentSectionId = sectionId;
-                              sectionCounter++;
-                              continue;
+                          // Process all questions, even those with empty titles (they might have titles in other positions)
+                          let processedTitle = title;
+                          if (
+                            !processedTitle ||
+                            typeof processedTitle !== "string" ||
+                            processedTitle.trim().length === 0
+                          ) {
+                            // Try to get title from the last element if it's an array with title
+                            // BUT only if this doesn't look like it came from a section
+                            if (
+                              Array.isArray(q[q.length - 1]) &&
+                              q[q.length - 1][1] &&
+                              typeof q[q.length - 1][1] === "string"
+                            ) {
+                              const potentialTitle = q[q.length - 1][1];
+                              // Strip HTML tags and check if it looks valid
+                              const cleanTitle = potentialTitle
+                                .replace(/<[^>]*>/g, "")
+                                .trim();
+                              // Only use it if it's not empty and doesn't match recent section titles
+                              const isRecentSectionTitle = result.sections.some(
+                                (s) => s.title === cleanTitle
+                              );
+                              if (cleanTitle && !isRecentSectionTitle) {
+                                processedTitle = cleanTitle;
+                              }
                             }
 
+                            // If still no valid title, skip this item entirely (it's likely malformed)
                             if (
-                              title &&
-                              typeof title === "string" &&
-                              title.trim().length > 0
+                              !processedTitle ||
+                              typeof processedTitle !== "string" ||
+                              processedTitle.trim().length === 0
                             ) {
-                              const lowerTitle = title.toLowerCase().trim();
-
-                              // Extract options
-                              let options = [];
-                              if (qData[4] && Array.isArray(qData[4])) {
-                                let rawOptions = qData[4];
-
-                                // Handle nested options array
-                                if (
-                                  rawOptions.length === 1 &&
-                                  Array.isArray(rawOptions[0]) &&
-                                  rawOptions[0].length > 0 &&
-                                  Array.isArray(rawOptions[0][0])
-                                ) {
-                                  rawOptions = rawOptions[0];
-                                }
-
-                                options = rawOptions
-                                  .map((opt) => {
-                                    if (Array.isArray(opt)) {
-                                      // Safely convert to string before trim
-                                      const value = opt[0];
-                                      return value != null
-                                        ? String(value).trim()
-                                        : "";
-                                    }
-                                    return opt != null
-                                      ? String(opt).trim()
-                                      : "";
-                                  })
-                                  .filter((opt) => opt && opt.length > 0);
-                              }
-
-                              // Handle scale questions
-                              let low = 1,
-                                high = 5,
-                                lowLabel = "Poor",
-                                highLabel = "Excellent";
-                              if (
-                                questionType === 5 &&
-                                qData[4] &&
-                                Array.isArray(qData[4]) &&
-                                qData[4].length >= 2
-                              ) {
-                                const scaleData = qData[4];
-                                if (
-                                  scaleData[0] &&
-                                  Array.isArray(scaleData[0]) &&
-                                  scaleData[0].length >= 2
-                                ) {
-                                  low = scaleData[0][0] || 1;
-                                  high = scaleData[0][1] || 5;
-                                }
-                                if (
-                                  scaleData[1] &&
-                                  Array.isArray(scaleData[1]) &&
-                                  scaleData[1].length >= 2
-                                ) {
-                                  lowLabel = scaleData[1][0] || "Poor";
-                                  highLabel = scaleData[1][1] || "Excellent";
-                                }
-                              }
-
-                              const questionTypeMap = {
-                                0: "short_answer",
-                                1: "paragraph",
-                                2: "multiple_choice",
-                                3: "multiple_choice",
-                                4: "multiple_choice",
-                                5: "scale",
-                                6: "multiple_choice",
-                                7: "multiple_choice",
-                                9: "date",
-                                10: "time",
-                              };
-
-                              const isRequired = qData[2] === 1;
-
-                              result.questions.push({
-                                title: title.trim(),
-                                type:
-                                  questionTypeMap[questionType] ||
-                                  "short_answer",
-                                required: isRequired,
-                                options: options,
-                                sectionId: String(currentSectionId), // Ensure string
-                                low: low,
-                                high: high,
-                                lowLabel: lowLabel,
-                                highLabel: highLabel,
-                              });
+                              continue; // Skip this question entirely
                             }
                           }
+
+                          // Extract options
+                          let options = [];
+                          if (optionsData && Array.isArray(optionsData)) {
+                            optionsData.forEach((optArr) => {
+                              if (
+                                Array.isArray(optArr) &&
+                                optArr.length > 1 &&
+                                Array.isArray(optArr[1])
+                              ) {
+                                optArr[1].forEach((option) => {
+                                  if (
+                                    Array.isArray(option) &&
+                                    option[0] != null
+                                  ) {
+                                    const optionText = String(option[0]).trim();
+                                    if (
+                                      optionText &&
+                                      !options.includes(optionText)
+                                    ) {
+                                      options.push(optionText);
+                                    }
+                                  }
+                                });
+                              }
+                            });
+                          }
+
+                          // Handle scale questions
+                          let low = 1,
+                            high = 5,
+                            lowLabel = "Poor",
+                            highLabel = "Excellent";
+                          if (
+                            questionType === 5 &&
+                            optionsData &&
+                            Array.isArray(optionsData) &&
+                            optionsData.length >= 2
+                          ) {
+                            const scaleData = optionsData;
+                            if (
+                              scaleData[0] &&
+                              Array.isArray(scaleData[0]) &&
+                              scaleData[0].length >= 2
+                            ) {
+                              low = scaleData[0][0] || 1;
+                              high = scaleData[0][1] || 5;
+                            }
+                            if (
+                              scaleData[1] &&
+                              Array.isArray(scaleData[1]) &&
+                              scaleData[1].length >= 2
+                            ) {
+                              lowLabel = scaleData[1][0] || "Poor";
+                              highLabel = scaleData[1][1] || "Excellent";
+                            }
+                          }
+
+                          const questionTypeMap = {
+                            0: "short_answer",
+                            1: "paragraph",
+                            2: "multiple_choice",
+                            3: "multiple_choice",
+                            4: "multiple_choice",
+                            5: "scale",
+                            6: "multiple_choice",
+                            7: "multiple_choice",
+                            9: "date",
+                            10: "time",
+                          };
+
+                          // Check if required - look for the nested array that contains the required flag
+                          let isRequired = false;
+                          if (optionsData && Array.isArray(optionsData)) {
+                            optionsData.forEach((optArr) => {
+                              if (Array.isArray(optArr) && optArr.length > 2) {
+                                if (optArr[2] === 1) {
+                                  isRequired = true;
+                                }
+                              }
+                            });
+                          }
+
+                          result.questions.push({
+                            title: processedTitle.trim(),
+                            type:
+                              questionTypeMap[questionType] || "short_answer",
+                            required: isRequired,
+                            options: options,
+                            sectionId: String(currentSectionId), // Ensure string
+                            low: low,
+                            high: high,
+                            lowLabel: lowLabel,
+                            highLabel: highLabel,
+                          });
                         }
                       } catch (itemError) {
                         result.debugInfo.errors.push(
@@ -488,38 +536,11 @@ class GoogleFormsExtractorPuppeteer {
         return result;
       });
 
-      console.log(`📊 [Puppeteer] Extraction complete:`);
-      console.log(`   Title: ${formData.title}`);
-      console.log(`   Questions: ${formData.questions.length}`);
-      console.log(`   Sections: ${formData.sections.length}`);
-      console.log(`   Debug Info:`);
-      console.log(
-        `     - FB_PUBLIC_LOAD_DATA found: ${formData.debugInfo.foundFBData}`
-      );
-      console.log(`     - FB data length: ${formData.debugInfo.fbDataLength}`);
-      console.log(
-        `     - Questions data length: ${formData.debugInfo.questionsDataLength}`
-      );
-      console.log(
-        `     - DOM elements found: ${formData.debugInfo.domElementsFound}`
-      );
-      if (formData.debugInfo.errors.length > 0) {
-        console.log(`     - Errors: ${formData.debugInfo.errors.join(", ")}`);
-      }
-      if (formData.debugInfo.logs.length > 0) {
-        console.log(`     - Item Logs (first 50):`);
-        formData.debugInfo.logs
-          .slice(0, 50)
-          .forEach((log) => console.log(`       ${log}`));
-      }
-
       return formData;
     } catch (error) {
-      console.error(`❌ [Puppeteer] Error during extraction:`, error);
       throw error;
     } finally {
       await browser.close();
-      console.log(`🔒 [Puppeteer] Browser closed`);
     }
   }
 }
