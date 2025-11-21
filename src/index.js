@@ -35,6 +35,7 @@ const authRoutes = require('./api/routes/authRoutes');
 const protectedRoutes = require('./api/routes/protectedRoutes');
 const userRoutes = require('./api/routes/userRoutes');
 const reminderRoutes = require('./api/routes/reminderRoutes');
+const googleFormsRoutes = require('./api/routes/googleFormsRoutes');
 
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/events', eventRoutes);
@@ -43,6 +44,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/protected', protectedRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reminders', reminderRoutes);
+app.use('/api/google-forms', googleFormsRoutes);
 
 const PORT = process.env.PORT || 5000;
 
