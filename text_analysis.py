@@ -68,7 +68,7 @@ class MultilingualSentimentAnalyzer:
             # Frustration and anger
             'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
             'bad': -1, 'terrible': -1.5, 'awful': -1.5, 'worst': -2,
-            'horrible': -1.5, 'pathetic': -1.5,
+            'horrible': -1.5, 'pathetic': -1.5, 'nakakaasar': -1,
             
             # Organization issues
             'disorganized': -1, 'chaotic': -1, 'confusing': -0.8, 'unclear': -0.7,

@@ -727,6 +727,51 @@ class CertificateController {
       });
     }
   }
+
+  /**
+   * Get the ID of the latest certificate
+   * GET /api/certificates/latest/id
+   */
+  async getLatestCertificateId(req, res) {
+    try {
+      const userId = req.user?._id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "User not authenticated",
+        });
+      }
+
+      // Find the latest certificate issued to the participant
+      const latestCertificate = await Certificate.findOne({ userId })
+        .sort({ issuedDate: -1 })
+        .select("_id certificateId")
+        .limit(1);
+
+      if (!latestCertificate) {
+        return res.status(404).json({
+          success: false,
+          message: "No certificates found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: {
+          id: latestCertificate._id,
+          certificateId: latestCertificate.certificateId,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching latest certificate ID:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch latest certificate ID",
+        error: error.message,
+      });
+    }
+  }
 }
 
 module.exports = new CertificateController();

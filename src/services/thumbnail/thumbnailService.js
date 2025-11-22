@@ -196,6 +196,143 @@ class ThumbnailService {
       console.error(`Error deleting thumbnail for form ${formId}:`, error);
     }
   }
+
+  async generateCertificateThumbnail(
+    certificateId,
+    userName,
+    certificateType = "participation"
+  ) {
+    try {
+      const thumbnailPath = path.join(
+        this.thumbnailDir,
+        `certificate-${certificateId}.png`
+      );
+
+      // Check if thumbnail exists
+      try {
+        await fs.access(thumbnailPath);
+        // If file exists, return path immediately
+        return `/api/thumbnails/certificate-${certificateId}.png`;
+      } catch (err) {
+        // File doesn't exist, proceed to generate
+      }
+
+      await this.ensureThumbnailDirectory();
+
+      const canvas = createCanvas(this.width, this.height);
+      const ctx = canvas.getContext("2d");
+
+      // Gradient background (gold/elegant theme)
+      const gradient = ctx.createLinearGradient(0, 0, this.width, this.height);
+      gradient.addColorStop(0, "#f4e4c1");
+      gradient.addColorStop(1, "#e5c896");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, this.width, this.height);
+
+      // Decorative border
+      ctx.strokeStyle = "#8b6914";
+      ctx.lineWidth = 8;
+      ctx.strokeRect(20, 20, this.width - 40, this.height - 40);
+
+      // Inner border
+      ctx.strokeStyle = "#d4a855";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(30, 30, this.width - 60, this.height - 60);
+
+      // Certificate header
+      ctx.fillStyle = "#5a4a1f";
+      ctx.font = "bold 48px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("CERTIFICATE", this.width / 2, 100);
+
+      // Certificate type
+      ctx.font = "24px Arial";
+      ctx.fillText(
+        `of ${
+          certificateType.charAt(0).toUpperCase() + certificateType.slice(1)
+        }`,
+        this.width / 2,
+        140
+      );
+
+      // Decorative line
+      ctx.strokeStyle = "#8b6914";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(this.width / 2 - 150, 160);
+      ctx.lineTo(this.width / 2 + 150, 160);
+      ctx.stroke();
+
+      // "This is to certify that"
+      ctx.fillStyle = "#3a3a3a";
+      ctx.font = "italic 20px Arial";
+      ctx.fillText("This is to certify that", this.width / 2, 210);
+
+      // Recipient name
+      ctx.fillStyle = "#1a1a1a";
+      ctx.font = "bold 36px Arial";
+      const displayName = userName || "Participant";
+      ctx.fillText(displayName, this.width / 2, 260);
+
+      // Underline for name
+      const nameWidth = ctx.measureText(displayName).width;
+      ctx.strokeStyle = "#8b6914";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(this.width / 2 - nameWidth / 2, 270);
+      ctx.lineTo(this.width / 2 + nameWidth / 2, 270);
+      ctx.stroke();
+
+      // Certificate description
+      ctx.fillStyle = "#3a3a3a";
+      ctx.font = "20px Arial";
+      ctx.fillText(
+        "has successfully completed the requirements",
+        this.width / 2,
+        310
+      );
+      ctx.fillText(
+        "and is hereby recognized for their achievement",
+        this.width / 2,
+        340
+      );
+
+      // Date section
+      ctx.font = "16px Arial";
+      ctx.fillStyle = "#5a5a5a";
+      const currentDate = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      ctx.fillText(`Date: ${currentDate}`, this.width / 2, 390);
+
+      // Save thumbnail
+      const buffer = canvas.toBuffer("image/png");
+      await fs.writeFile(thumbnailPath, buffer);
+
+      // Verify file size
+      const stats = await fs.stat(thumbnailPath);
+      if (stats.size === 0) {
+        await fs.unlink(thumbnailPath);
+        throw new Error("Generated certificate thumbnail is 0 bytes");
+      }
+
+      console.log(
+        `✅ Generated certificate thumbnail for ${certificateId}: ${userName}`
+      );
+      return `/api/thumbnails/certificate-${certificateId}.png`;
+    } catch (error) {
+      console.error(
+        `❌ Error generating certificate thumbnail for ${certificateId}:`,
+        error.message
+      );
+      console.error(`Stack trace:`, error.stack);
+      // Return a placeholder
+      const encodedName = encodeURIComponent(userName || "Certificate");
+      return `https://placehold.co/800x450/d4a855/5a4a1f?text=${encodedName}`;
+    }
+  }
 }
 
 module.exports = new ThumbnailService();

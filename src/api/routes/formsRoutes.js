@@ -24,6 +24,13 @@ router.get(
   formsController.getCompletionStats
 );
 
+// GET /api/forms/latest/id - Get the ID of the latest form for the authenticated user
+router.get(
+  "/latest/id",
+  requireRole(["participant", "psas", "club-officer", "school-admin", "mis"]),
+  formsController.getLatestFormId
+);
+
 // GET /api/forms/:id - Get a specific form by ID (psas, club-officer, school-admin, mis, and participants assigned to form)
 router.get(
   "/:id",
@@ -119,13 +126,12 @@ router.get(
 );
 
 // GET /api/forms/test-debug - Test endpoint to verify debugging is working
-router.get(
-  "/test-debug",
-  (req, res) => {
-    console.log('🧪 DEBUG TEST: Server is running updated code with debugging enabled');
-    console.log('Current timestamp:', new Date().toISOString());
-    return formsController.testDebugging(req, res);
-  }
-);
+router.get("/test-debug", (req, res) => {
+  console.log(
+    "🧪 DEBUG TEST: Server is running updated code with debugging enabled"
+  );
+  console.log("Current timestamp:", new Date().toISOString());
+  return formsController.testDebugging(req, res);
+});
 
 module.exports = router;

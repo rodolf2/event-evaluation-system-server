@@ -49,10 +49,36 @@ const generateQualitativeReport = async (eventId) => {
     // Call Python script for advanced multilingual sentiment analysis
     const pythonResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
-      const pythonPath =
-        process.platform === "win32"
-          ? path.resolve(__dirname, "../../../venv", "Scripts", "python.exe")
-          : path.resolve(__dirname, "../../../venv", "bin", "python");
+
+      // Try to find the python executable in venv, otherwise fall back to system python
+      let pythonPath;
+      const venvPathWin = path.resolve(
+        __dirname,
+        "../../../venv",
+        "Scripts",
+        "python.exe"
+      );
+      const venvPathUnix = path.resolve(
+        __dirname,
+        "../../../venv",
+        "bin",
+        "python"
+      );
+
+      if (
+        process.platform === "win32" &&
+        require("fs").existsSync(venvPathWin)
+      ) {
+        pythonPath = venvPathWin;
+      } else if (
+        process.platform !== "win32" &&
+        require("fs").existsSync(venvPathUnix)
+      ) {
+        pythonPath = venvPathUnix;
+      } else {
+        // Fallback to system python
+        pythonPath = "python";
+      }
 
       console.log("Calling Python script for sentiment analysis:", scriptPath);
       console.log("Python path:", pythonPath);
@@ -175,10 +201,36 @@ const generateQuantitativeReport = async (eventId) => {
     // Use Python for statistical analysis
     const quantitativeResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
-      const pythonPath =
-        process.platform === "win32"
-          ? path.resolve(__dirname, "../../../venv", "Scripts", "python.exe")
-          : path.resolve(__dirname, "../../../venv", "bin", "python");
+
+      // Try to find the python executable in venv, otherwise fall back to system python
+      let pythonPath;
+      const venvPathWin = path.resolve(
+        __dirname,
+        "../../../venv",
+        "Scripts",
+        "python.exe"
+      );
+      const venvPathUnix = path.resolve(
+        __dirname,
+        "../../../venv",
+        "bin",
+        "python"
+      );
+
+      if (
+        process.platform === "win32" &&
+        require("fs").existsSync(venvPathWin)
+      ) {
+        pythonPath = venvPathWin;
+      } else if (
+        process.platform !== "win32" &&
+        require("fs").existsSync(venvPathUnix)
+      ) {
+        pythonPath = venvPathUnix;
+      } else {
+        // Fallback to system python
+        pythonPath = "python";
+      }
       const pyshell = new PythonShell(scriptPath, { pythonPath });
 
       pyshell.send(
@@ -793,10 +845,36 @@ async function analyzeResponses(responses, usePython = true) {
     // Call Python script for advanced sentiment analysis
     const pythonResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
-      const pythonPath =
-        process.platform === "win32"
-          ? path.resolve(__dirname, "../../../venv", "Scripts", "python.exe")
-          : path.resolve(__dirname, "../../../venv", "bin", "python");
+
+      // Try to find the python executable in venv, otherwise fall back to system python
+      let pythonPath;
+      const venvPathWin = path.resolve(
+        __dirname,
+        "../../../venv",
+        "Scripts",
+        "python.exe"
+      );
+      const venvPathUnix = path.resolve(
+        __dirname,
+        "../../../venv",
+        "bin",
+        "python"
+      );
+
+      if (
+        process.platform === "win32" &&
+        require("fs").existsSync(venvPathWin)
+      ) {
+        pythonPath = venvPathWin;
+      } else if (
+        process.platform !== "win32" &&
+        require("fs").existsSync(venvPathUnix)
+      ) {
+        pythonPath = venvPathUnix;
+      } else {
+        // Fallback to system python
+        pythonPath = "python";
+      }
 
       const pyshell = new PythonShell(scriptPath, {
         pythonPath,

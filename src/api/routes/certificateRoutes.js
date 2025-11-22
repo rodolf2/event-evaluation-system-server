@@ -16,6 +16,13 @@ router.get(
   CertificateController.getMyCertificates.bind(CertificateController)
 );
 
+// Static routes - GET /api/certificates/latest/id
+router.get(
+  "/latest/id",
+  requireAuth,
+  CertificateController.getLatestCertificateId.bind(CertificateController)
+);
+
 // Static routes - POST /api/certificates/generate
 router.post(
   "/generate",

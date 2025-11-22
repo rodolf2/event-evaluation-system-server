@@ -54,4 +54,11 @@ router.get(
   reportController.getAllReportsWithLiveData
 );
 
+// POST /api/analytics/reports/generate/:formId - Generate a report
+router.post(
+  "/reports/generate/:formId",
+  requireRole(["psas", "club-officer", "school-admin", "mis"]),
+  reportController.generateReport
+);
+
 module.exports = router;

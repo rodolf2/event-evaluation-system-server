@@ -1814,6 +1814,71 @@ const getCompletionStats = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/forms/latest/id
+ * Get the ID and title of the latest form
+ */
+const getLatestFormId = async (req, res) => {
+  try {
+    const userEmail = req.user?.email
+      ? req.user.email.toLowerCase().trim()
+      : "";
+    const userId = req.user?._id;
+    const userRole = req.user?.role;
+
+    if (!userEmail || !userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication failed",
+      });
+    }
+
+    let latestForm;
+
+    // For PSAS, club-officer, school-admin, MIS - get latest form they created
+    if (["psas", "club-officer", "school-admin", "mis"].includes(userRole)) {
+      latestForm = await Form.findOne({
+        createdBy: userId,
+        status: "published",
+      })
+        .sort({ createdAt: -1 })
+        .select("_id title")
+        .limit(1);
+    } else {
+      // For participants - get latest form they're assigned to
+      latestForm = await Form.findOne({
+        status: "published",
+        "attendeeList.email": userEmail,
+      })
+        .sort({ createdAt: -1 })
+        .select("_id title")
+        .limit(1);
+    }
+
+    if (!latestForm) {
+      return res.status(404).json({
+        success: false,
+        message: "No forms found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: latestForm._id,
+        title: latestForm.title,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching latest form ID:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch latest form ID",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getAllForms,
   getFormById,
@@ -1832,6 +1897,7 @@ module.exports = {
   uploadAttendeeList,
   updateAttendeeListJson,
   getAttendeeList,
+  getLatestFormId,
 };
 
 // Test endpoint to verify server is running updated code

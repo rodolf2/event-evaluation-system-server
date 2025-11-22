@@ -161,7 +161,7 @@ const getDynamicQualitativeData = async (req, res) => {
     const textResponses = extractTextResponses(responses);
 
     // Perform sentiment analysis
-    const analysis = await AnalysisService.analyzeResponses(textResponses);
+    const analysis = await AnalysisService.analyzeResponses(responses);
 
     // Filter by sentiment if specified
     let filteredTextResponses = textResponses;
@@ -499,7 +499,7 @@ const getDynamicCommentsData = async (req, res) => {
 };
 
 /**
- * Get all reports with live data and metrics
+ * Get all reports with live data and metrics (Only generated reports)
  */
 const getAllReportsWithLiveData = async (req, res) => {
   try {
@@ -512,17 +512,17 @@ const getAllReportsWithLiveData = async (req, res) => {
       page = 1,
     } = req.query;
 
-    // Build filter for forms
-    let formFilter = { createdBy: userId };
+    // Build filter for REPORTS
+    let reportFilter = { userId: userId, isGenerated: true };
 
     if (status !== "all") {
-      formFilter.status = status;
+      reportFilter.status = status;
     }
 
     if (dateRange) {
       const [start, end] = dateRange.split(",");
       if (start && end) {
-        formFilter.createdAt = {
+        reportFilter.eventDate = {
           $gte: new Date(start),
           $lte: new Date(end),
         };
@@ -530,23 +530,40 @@ const getAllReportsWithLiveData = async (req, res) => {
     }
 
     if (search) {
-      formFilter.title = {
+      reportFilter.title = {
         $regex: search,
         $options: "i",
       };
     }
 
-    // Get forms with pagination
+    // Get reports with pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const forms = await Form.find(formFilter)
-      .populate("createdBy", "name email role")
-      .sort({ createdAt: -1 })
+    const reports = await Report.find(reportFilter)
+      .populate("formId") // Populate form to access responses
+      .sort({ lastUpdated: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
-    // Get live data for each form and save/update reports
+    // Update each report with live data
     const reportsWithLiveData = await Promise.all(
-      forms.map(async (form) => {
+      reports.map(async (report) => {
+        const form = report.formId;
+
+        // If form is deleted or missing, just return the stored report
+        if (!form)
+          return {
+            id: report._id,
+            title: report.title,
+            eventDate: report.eventDate,
+            status: report.status,
+            feedbackCount: report.feedbackCount,
+            averageRating: report.averageRating,
+            thumbnail: report.thumbnail,
+            lastUpdated: report.lastUpdated,
+            metadata: report.metadata,
+            analytics: report.analytics,
+          };
+
         const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
         const totalResponses = form.responses ? form.responses.length : 0;
         const responseRate =
@@ -570,11 +587,9 @@ const getAllReportsWithLiveData = async (req, res) => {
             }).length
           : 0;
 
-        // Perform sentiment analysis
-        // Perform sentiment analysis (use JS fallback for speed in list view)
+        // Perform sentiment analysis (use Python for consistency)
         const responseAnalysis = await AnalysisService.analyzeResponses(
-          form.responses || [],
-          false
+          form.responses || []
         );
         const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
           positive: { count: 0, percentage: 0 },
@@ -591,85 +606,53 @@ const getAllReportsWithLiveData = async (req, res) => {
           form.responses || []
         );
 
-        // Generate dynamic thumbnail with form title
-        const thumbnail = await ThumbnailService.generateReportThumbnail(
-          form._id,
-          form.title || "Event Evaluation Report"
-        );
-
-        // Create or update report in database
-        const reportData = {
-          formId: form._id,
-          userId: userId,
-          title: form.title,
-          eventDate: form.eventStartDate || form.createdAt,
-          status: form.status,
-          feedbackCount: totalResponses,
-          averageRating: Math.round(averageRating * 100) / 100,
-          thumbnail: thumbnail,
-          metadata: {
-            description: form.description,
-            attendeeCount: totalAttendees,
+        // Update report in database with live data
+        report.feedbackCount = totalResponses;
+        report.averageRating = Math.round(averageRating * 100) / 100;
+        report.metadata = {
+          description: form.description,
+          attendeeCount: totalAttendees,
+          responseRate: Math.round(responseRate * 100) / 100,
+          eventStartDate: form.eventStartDate,
+          eventEndDate: form.eventEndDate,
+        };
+        report.analytics = {
+          sentimentBreakdown,
+          quantitativeData: {
+            totalResponses,
+            totalAttendees,
             responseRate: Math.round(responseRate * 100) / 100,
-            eventStartDate: form.eventStartDate,
-            eventEndDate: form.eventEndDate,
+            averageRating: Math.round(averageRating * 100) / 100,
           },
-          analytics: {
-            sentimentBreakdown,
-            quantitativeData: {
-              totalResponses,
-              totalAttendees,
-              responseRate: Math.round(responseRate * 100) / 100,
-              averageRating: Math.round(averageRating * 100) / 100,
-            },
-            charts: {
-              yearData,
-              ratingDistribution,
-              statusBreakdown,
-              responseTrends,
-            },
+          charts: {
+            yearData,
+            ratingDistribution,
+            statusBreakdown,
+            responseTrends,
           },
         };
 
-        // Save or update report
-        const existingReport = await Report.findOne({
-          formId: form._id,
-          userId,
-        });
-        if (existingReport) {
-          // Update existing report
-          Object.assign(existingReport, reportData);
-          await existingReport.save();
-        } else {
-          // Create new report
-          const newReport = new Report(reportData);
-          await newReport.save();
-        }
+        await report.save();
 
         return {
-          id: form._id,
-          title: form.title,
-          eventDate: form.eventStartDate || form.createdAt,
-          status: form.status,
+          id: report._id, // Use report ID, not form ID
+          formId: form._id,
+          title: report.title,
+          eventDate: report.eventDate,
+          status: report.status,
           feedbackCount: totalResponses,
           averageRating: Math.round(averageRating * 100) / 100,
           recentComments: recentResponses,
-          creator: form.createdBy,
-          thumbnail: thumbnail,
-          lastUpdated: new Date().toISOString(),
-          metadata: {
-            description: form.description,
-            attendeeCount: totalAttendees,
-            responseRate: Math.round(responseRate * 100) / 100,
-            eventStartDate: form.eventStartDate,
-            eventEndDate: form.eventEndDate,
-          },
+          creator: form.createdBy, // Or report.userId
+          thumbnail: report.thumbnail,
+          lastUpdated: report.lastUpdated,
+          metadata: report.metadata,
         };
       })
     );
 
     // Get total count for pagination
-    const totalCount = await Form.countDocuments(formFilter);
+    const totalCount = await Report.countDocuments(reportFilter);
 
     res.status(200).json({
       success: true,
@@ -696,6 +679,129 @@ const getAllReportsWithLiveData = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch reports with live data",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Generate a report for a form (sets isGenerated to true)
+ */
+const generateReport = async (req, res) => {
+  try {
+    const { formId } = req.params;
+    const userId = req.user._id;
+
+    // Find the form
+    const form = await Form.findOne({ _id: formId, createdBy: userId });
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: "Form not found or access denied",
+      });
+    }
+
+    // Calculate response rate
+    const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
+    const totalResponses = form.responses ? form.responses.length : 0;
+    const responseRate =
+      totalAttendees > 0 ? (totalResponses / totalAttendees) * 100 : 0;
+
+    // Check if response rate is sufficient (>= 50%)
+    if (responseRate < 50) {
+      return res.status(400).json({
+        success: false,
+        message: "Response rate must be at least 50% to generate a report",
+        currentRate: Math.round(responseRate * 100) / 100,
+      });
+    }
+
+    // Perform analysis and generate report data
+    // Perform sentiment analysis (use Python for consistency)
+    const responseAnalysis = await AnalysisService.analyzeResponses(
+      form.responses || []
+    );
+    const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
+      positive: { count: 0, percentage: 0 },
+      neutral: { count: 0, percentage: 0 },
+      negative: { count: 0, percentage: 0 },
+    };
+
+    // Calculate average rating
+    const scaleResponses = extractScaleResponses(form.responses || []);
+    const averageRating =
+      scaleResponses.length > 0
+        ? scaleResponses.reduce((sum, r) => sum + r.value, 0) /
+          scaleResponses.length
+        : 0;
+
+    // Generate chart data
+    const yearData = processYearlyDataFromForm(form, form.responses || []);
+    const ratingDistribution =
+      processRatingDistributionFromForm(scaleResponses);
+    const statusBreakdown = processStatusBreakdownFromForm(form);
+    const responseTrends = processResponseTrendsFromForm(form.responses || []);
+
+    // Generate thumbnail
+    const thumbnail = await ThumbnailService.generateReportThumbnail(
+      form._id,
+      form.title || "Event Evaluation Report"
+    );
+
+    const reportData = {
+      formId: form._id,
+      userId: userId,
+      title: form.title,
+      eventDate: form.eventStartDate || form.createdAt,
+      status: form.status,
+      isGenerated: true, // Mark as generated
+      feedbackCount: totalResponses,
+      averageRating: Math.round(averageRating * 100) / 100,
+      thumbnail: thumbnail,
+      metadata: {
+        description: form.description,
+        attendeeCount: totalAttendees,
+        responseRate: Math.round(responseRate * 100) / 100,
+        eventStartDate: form.eventStartDate,
+        eventEndDate: form.eventEndDate,
+      },
+      analytics: {
+        sentimentBreakdown,
+        quantitativeData: {
+          totalResponses,
+          totalAttendees,
+          responseRate: Math.round(responseRate * 100) / 100,
+          averageRating: Math.round(averageRating * 100) / 100,
+        },
+        charts: {
+          yearData,
+          ratingDistribution,
+          statusBreakdown,
+          responseTrends,
+        },
+      },
+    };
+
+    // Save or update report
+    let report = await Report.findOne({ formId: form._id, userId });
+    if (report) {
+      Object.assign(report, reportData);
+      await report.save();
+    } else {
+      report = new Report(reportData);
+      await report.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Report generated successfully",
+      data: report,
+    });
+  } catch (error) {
+    console.error("Error generating report:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate report",
       error: error.message,
     });
   }
@@ -955,4 +1061,5 @@ module.exports = {
   getDynamicCommentsData,
   getAllReportsWithLiveData,
   getSavedReports,
+  generateReport,
 };

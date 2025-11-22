@@ -16,63 +16,89 @@ const getFormAnalytics = async (req, res) => {
     if (!form) {
       return res.status(404).json({
         success: false,
-        message: "Form not found or you don't have permission to view its analytics",
+        message:
+          "Form not found or you don't have permission to view its analytics",
       });
     }
 
     // Calculate total attendees from attendeeList
     const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
-    
+
     // Calculate total responses
     const totalResponses = form.responses ? form.responses.length : 0;
-    
+
     // Calculate response rate based on actual attendee list
-    const responseRate = totalAttendees > 0 ?
-      Math.round((totalResponses / totalAttendees) * 100 * 100) / 100 : 0;
-    
+    const responseRate =
+      totalAttendees > 0
+        ? Math.round((totalResponses / totalAttendees) * 100 * 100) / 100
+        : 0;
+
     // Calculate remaining non-responses - those who haven't responded from the attendee list
-    const respondedAttendees = form.attendeeList ?
-      form.attendeeList.filter(attendee => attendee.hasResponded).length : 0;
+    const respondedAttendees = form.attendeeList
+      ? form.attendeeList.filter((attendee) => attendee.hasResponded).length
+      : 0;
     const remainingNonResponses = totalAttendees - respondedAttendees;
 
     // Analyze responses for sentiment and breakdown
     let responseAnalysis;
     try {
-      responseAnalysis = AnalysisService.analyzeResponses(form.responses || []);
-      console.log(`[ANALYTICS] Response analysis completed:`, responseAnalysis?.sentimentBreakdown);
+      responseAnalysis = await AnalysisService.analyzeResponses(
+        form.responses || []
+      );
+      console.log(
+        `[ANALYTICS] Response analysis completed:`,
+        responseAnalysis?.sentimentBreakdown
+      );
 
       // Validate the response structure
-      if (!responseAnalysis || !responseAnalysis.sentimentBreakdown ||
-          !responseAnalysis.sentimentBreakdown.positive ||
-          !responseAnalysis.sentimentBreakdown.neutral ||
-          !responseAnalysis.sentimentBreakdown.negative) {
-        console.warn(`[ANALYTICS] Invalid response analysis structure, using fallback`);
-        throw new Error('Invalid analysis response structure');
+      if (
+        !responseAnalysis ||
+        !responseAnalysis.sentimentBreakdown ||
+        !responseAnalysis.sentimentBreakdown.positive ||
+        !responseAnalysis.sentimentBreakdown.neutral ||
+        !responseAnalysis.sentimentBreakdown.negative
+      ) {
+        console.warn(
+          `[ANALYTICS] Invalid response analysis structure, using fallback`
+        );
+        throw new Error("Invalid analysis response structure");
       }
     } catch (analysisError) {
-      console.error(`[ANALYTICS] Response analysis failed:`, analysisError.message);
+      console.error(
+        `[ANALYTICS] Response analysis failed:`,
+        analysisError.message
+      );
       // Fallback to empty analysis
       responseAnalysis = {
         sentimentBreakdown: {
           positive: { count: 0, percentage: 0 },
           neutral: { count: 0, percentage: 0 },
-          negative: { count: 0, percentage: 0 }
-        }
+          negative: { count: 0, percentage: 0 },
+        },
       };
     }
 
     // Generate response overview time series data
     let responseOverview;
     try {
-      responseOverview = AnalysisService.generateResponseOverview(form.responses || []);
-      console.log(`[ANALYTICS] Response overview generated: ${responseOverview.labels?.length || 0} data points`);
+      responseOverview = AnalysisService.generateResponseOverview(
+        form.responses || []
+      );
+      console.log(
+        `[ANALYTICS] Response overview generated: ${
+          responseOverview.labels?.length || 0
+        } data points`
+      );
     } catch (overviewError) {
-      console.error(`[ANALYTICS] Response overview generation failed:`, overviewError.message);
+      console.error(
+        `[ANALYTICS] Response overview generation failed:`,
+        overviewError.message
+      );
       // Fallback to empty overview
       responseOverview = {
         labels: [],
         data: [],
-        dateRange: "No data available"
+        dateRange: "No data available",
       };
     }
 
@@ -90,16 +116,16 @@ const getFormAnalytics = async (req, res) => {
       responseBreakdown: {
         positive: {
           percentage: positive.percentage || 0,
-          count: positive.count || 0
+          count: positive.count || 0,
         },
         neutral: {
           percentage: neutral.percentage || 0,
-          count: neutral.count || 0
+          count: neutral.count || 0,
         },
         negative: {
           percentage: negative.percentage || 0,
-          count: negative.count || 0
-        }
+          count: negative.count || 0,
+        },
       },
       responseOverview,
       formInfo: {
@@ -109,8 +135,8 @@ const getFormAnalytics = async (req, res) => {
         createdAt: form.createdAt,
         publishedAt: form.publishedAt,
         eventStartDate: form.eventStartDate,
-        eventEndDate: form.eventEndDate
-      }
+        eventEndDate: form.eventEndDate,
+      },
     };
 
     res.status(200).json({
@@ -134,14 +160,18 @@ const getMyFormsAnalytics = async (req, res) => {
 
     const forms = await Form.find({
       createdBy: userId,
-      status: "published"
-    }).select("title attendeeList responses createdAt publishedAt eventStartDate eventEndDate");
+      status: "published",
+    }).select(
+      "title attendeeList responses createdAt publishedAt eventStartDate eventEndDate"
+    );
 
-    const analyticsSummary = forms.map(form => {
+    const analyticsSummary = forms.map((form) => {
       const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
       const totalResponses = form.responses ? form.responses.length : 0;
-      const responseRate = totalAttendees > 0 ? 
-        Math.round((totalResponses / totalAttendees) * 100 * 100) / 100 : 0;
+      const responseRate =
+        totalAttendees > 0
+          ? Math.round((totalResponses / totalAttendees) * 100 * 100) / 100
+          : 0;
 
       return {
         formId: form._id,
@@ -152,7 +182,7 @@ const getMyFormsAnalytics = async (req, res) => {
         createdAt: form.createdAt,
         publishedAt: form.publishedAt,
         eventStartDate: form.eventStartDate,
-        eventEndDate: form.eventEndDate
+        eventEndDate: form.eventEndDate,
       };
     });
 
@@ -161,9 +191,17 @@ const getMyFormsAnalytics = async (req, res) => {
       data: {
         forms: analyticsSummary,
         totalForms: forms.length,
-        averageResponseRate: analyticsSummary.length > 0 ?
-          Math.round(analyticsSummary.reduce((sum, form) => sum + form.responseRate, 0) / analyticsSummary.length * 100) / 100
-          : 0
+        averageResponseRate:
+          analyticsSummary.length > 0
+            ? Math.round(
+                (analyticsSummary.reduce(
+                  (sum, form) => sum + form.responseRate,
+                  0
+                ) /
+                  analyticsSummary.length) *
+                  100
+              ) / 100
+            : 0,
       },
     });
   } catch (error) {
