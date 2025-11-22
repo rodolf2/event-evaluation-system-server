@@ -29,8 +29,10 @@ router.get("/:filename", async (req, res) => {
     return res.sendFile(thumbnailPath);
   }
 
-  // Extract ID from filename (format: form-{id}.png or certificate-{id}.png)
-  const match = filename.match(/^(form|certificate)-([a-zA-Z0-9]+)\.png$/);
+  // Extract ID from filename (format: form-{id}.png, certificate-{id}.png, or analytics-{id}.png)
+  const match = filename.match(
+    /^(form|certificate|analytics)-([a-zA-Z0-9]+)\.png$/
+  );
 
   if (match) {
     const [, type, id] = match;
@@ -44,6 +46,114 @@ router.get("/:filename", async (req, res) => {
           await thumbnailService.generateReportThumbnail(id, form.title);
 
           // Check if it was generated successfully
+          if (fs.existsSync(thumbnailPath)) {
+            return res.sendFile(thumbnailPath);
+          }
+        }
+      } else if (type === "analytics") {
+        // Get form data directly for accurate analytics
+        const form = await Form.findById(id).select(
+          "title attendeeList responses"
+        );
+
+        if (form) {
+          console.log(
+            `Generating analytics thumbnail for form ${id}: ${form.title}`
+          );
+
+          // Calculate accurate analytics data (same logic as analytics controller)
+          const totalAttendees = form.attendeeList
+            ? form.attendeeList.length
+            : 0;
+          const totalResponses = form.responses ? form.responses.length : 0;
+
+          const responseRate =
+            totalAttendees > 0
+              ? Math.round((totalResponses / totalAttendees) * 100 * 100) / 100
+              : 0;
+
+          // Calculate remaining non-responses
+          const respondedAttendees = form.attendeeList
+            ? form.attendeeList.filter((attendee) => attendee.hasResponded)
+                .length
+            : 0;
+          const remainingNonResponses = totalAttendees - respondedAttendees;
+
+          // Calculate sentiment breakdown from actual responses (simplified for thumbnail)
+          let sentimentBreakdown = {
+            positive: { percentage: 0, count: 0 },
+            neutral: { percentage: 0, count: 0 },
+            negative: { percentage: 0, count: 0 },
+          };
+
+          if (
+            totalResponses > 0 &&
+            form.responses &&
+            form.responses.length > 0
+          ) {
+            // Simple sentiment analysis for thumbnail (faster than full analysis)
+            let positiveCount = 0;
+            let neutralCount = 0;
+            let negativeCount = 0;
+
+            form.responses.forEach((response) => {
+              // Check for positive/negative keywords in responses
+              const text = JSON.stringify(response).toLowerCase();
+              if (
+                text.includes("good") ||
+                text.includes("great") ||
+                text.includes("excellent") ||
+                text.includes("amazing") ||
+                text.includes("love") ||
+                text.includes("perfect")
+              ) {
+                positiveCount++;
+              } else if (
+                text.includes("bad") ||
+                text.includes("poor") ||
+                text.includes("terrible") ||
+                text.includes("hate") ||
+                text.includes("awful") ||
+                text.includes("worst")
+              ) {
+                negativeCount++;
+              } else {
+                neutralCount++;
+              }
+            });
+
+            sentimentBreakdown = {
+              positive: {
+                percentage: Math.round((positiveCount / totalResponses) * 100),
+                count: positiveCount,
+              },
+              neutral: {
+                percentage: Math.round((neutralCount / totalResponses) * 100),
+                count: neutralCount,
+              },
+              negative: {
+                percentage: Math.round((negativeCount / totalResponses) * 100),
+                count: negativeCount,
+              },
+            };
+          }
+
+          const thumbnailData = {
+            totalAttendees,
+            totalResponses,
+            responseRate,
+            remainingNonResponses,
+            responseBreakdown: sentimentBreakdown,
+          };
+
+          console.log(
+            `✅ Using accurate analytics data for form ${id}:`,
+            thumbnailData
+          );
+
+          // Generate thumbnail with accurate data
+          await thumbnailService.generateAnalyticsThumbnail(id, thumbnailData);
+
           if (fs.existsSync(thumbnailPath)) {
             return res.sendFile(thumbnailPath);
           }

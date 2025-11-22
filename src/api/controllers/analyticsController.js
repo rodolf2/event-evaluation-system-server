@@ -139,6 +139,29 @@ const getFormAnalytics = async (req, res) => {
       },
     };
 
+    // Generate/update analytics thumbnail with current data
+    try {
+      const thumbnailService = require("../../services/thumbnail/thumbnailService");
+      await thumbnailService.generateAnalyticsThumbnail(
+        formId,
+        {
+          totalAttendees,
+          totalResponses,
+          responseRate,
+          remainingNonResponses,
+          responseBreakdown: analyticsData.responseBreakdown,
+        },
+        true
+      ); // Force regeneration to ensure latest data
+      console.log(`✅ Analytics thumbnail generated for form ${formId}`);
+    } catch (thumbnailError) {
+      console.error(
+        `⚠️ Failed to generate analytics thumbnail:`,
+        thumbnailError.message
+      );
+      // Continue even if thumbnail generation fails
+    }
+
     res.status(200).json({
       success: true,
       data: analyticsData,

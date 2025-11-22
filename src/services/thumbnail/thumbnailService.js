@@ -197,6 +197,357 @@ class ThumbnailService {
     }
   }
 
+  async generateAnalyticsThumbnail(formId, analyticsData = {}, force = false) {
+    try {
+      const thumbnailPath = path.join(
+        this.thumbnailDir,
+        `analytics-${formId}.png`
+      );
+
+      // Check if thumbnail exists
+      if (!force) {
+        try {
+          await fs.access(thumbnailPath);
+          // If file exists, return path immediately
+          return `/api/thumbnails/analytics-${formId}.png`;
+        } catch (err) {
+          // File doesn't exist, proceed to generate
+        }
+      }
+
+      await this.ensureThumbnailDirectory();
+
+      const canvas = createCanvas(this.width, this.height);
+      const ctx = canvas.getContext("2d");
+
+      // Light background with subtle gradient
+      const bgGradient = ctx.createLinearGradient(0, 0, 0, this.height);
+      bgGradient.addColorStop(0, "#F8FAFC");
+      bgGradient.addColorStop(1, "#F1F5F9");
+      ctx.fillStyle = bgGradient;
+      ctx.fillRect(0, 0, this.width, this.height);
+
+      // Get analytics data with defaults
+      const {
+        totalAttendees = 0,
+        totalResponses = 0,
+        responseRate = 0,
+        remainingNonResponses = 0,
+        responseBreakdown = {
+          positive: { percentage: 0, count: 0 },
+          neutral: { percentage: 0, count: 0 },
+          negative: { percentage: 0, count: 0 },
+        },
+      } = analyticsData;
+
+      // Container with white background and rounded corners
+      const containerPadding = 30;
+      const containerRadius = 20;
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.roundRect(
+        containerPadding,
+        containerPadding,
+        this.width - containerPadding * 2,
+        this.height - containerPadding * 2,
+        containerRadius
+      );
+      ctx.fill();
+
+      // Add subtle shadow effect
+      ctx.shadowColor = "rgba(0, 0, 0, 0.1)";
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(
+        containerPadding,
+        containerPadding,
+        this.width - containerPadding * 2,
+        this.height - containerPadding * 2
+      );
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+
+      // Stats cards at the top
+      const cardWidth = 200;
+      const cardHeight = 80;
+      const cardSpacing = 20;
+      const cardStartX = (this.width - (cardWidth * 3 + cardSpacing * 2)) / 2;
+      const cardStartY = 60;
+
+      // Card 1: Total Event Attendees (Blue gradient)
+      const card1X = cardStartX;
+      const card1Y = cardStartY;
+
+      const gradient1 = ctx.createLinearGradient(
+        card1X,
+        card1Y,
+        card1X,
+        card1Y + cardHeight
+      );
+      gradient1.addColorStop(0, "#1E40AF");
+      gradient1.addColorStop(1, "#1E3A8A");
+      ctx.fillStyle = gradient1;
+      ctx.beginPath();
+      ctx.roundRect(card1X, card1Y, cardWidth, cardHeight, 10);
+      ctx.fill();
+
+      // Card 1 icon and text
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "10px Arial";
+      ctx.textAlign = "left";
+      ctx.fillText("👥 Total Event Attendees", card1X + 15, card1Y + 25);
+      ctx.font = "bold 32px Arial";
+      ctx.fillText(totalAttendees.toString(), card1X + 15, card1Y + 60);
+
+      // Card 2: Total Responses (Light background)
+      const card2X = cardStartX + cardWidth + cardSpacing;
+      const card2Y = cardStartY;
+
+      ctx.fillStyle = "#F8FAFC";
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(card2X, card2Y, cardWidth, cardHeight, 10);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#1E3A8A";
+      ctx.font = "10px Arial";
+      ctx.textAlign = "left";
+      ctx.fillText("📊 Total Responses", card2X + 15, card2Y + 25);
+      ctx.font = "bold 32px Arial";
+      ctx.fillText(totalResponses.toString(), card2X + 15, card2Y + 60);
+
+      // Card 3: Remaining Non-Responses (Blue gradient)
+      const card3X = cardStartX + (cardWidth + cardSpacing) * 2;
+      const card3Y = cardStartY;
+
+      const gradient3 = ctx.createLinearGradient(
+        card3X,
+        card3Y,
+        card3X,
+        card3Y + cardHeight
+      );
+      gradient3.addColorStop(0, "#1E40AF");
+      gradient3.addColorStop(1, "#1E3A8A");
+      ctx.fillStyle = gradient3;
+      ctx.beginPath();
+      ctx.roundRect(card3X, card3Y, cardWidth, cardHeight, 10);
+      ctx.fill();
+
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "10px Arial";
+      ctx.textAlign = "left";
+      ctx.fillText("📋 Remaining Non-Responses", card3X + 15, card3Y + 25);
+      ctx.font = "bold 32px Arial";
+      ctx.fillText(remainingNonResponses.toString(), card3X + 15, card3Y + 60);
+
+      // Charts section
+      const chartsY = cardStartY + cardHeight + 40;
+
+      // LEFT: Response Rate Gauge Chart
+      const gaugeX = this.width * 0.3;
+      const gaugeY = chartsY + 80;
+      const gaugeRadius = 70;
+      const gaugeWidth = 20;
+
+      // Gauge background (gray arc)
+      ctx.strokeStyle = "#E5E7EB";
+      ctx.lineWidth = gaugeWidth;
+      ctx.beginPath();
+      ctx.arc(gaugeX, gaugeY, gaugeRadius, Math.PI, 2 * Math.PI);
+      ctx.stroke();
+
+      // Gauge foreground (blue arc for response rate)
+      const gaugeAngle = Math.PI + (responseRate / 100) * Math.PI;
+      ctx.strokeStyle = "#1E40AF";
+      ctx.lineWidth = gaugeWidth;
+      ctx.beginPath();
+      ctx.arc(gaugeX, gaugeY, gaugeRadius, Math.PI, gaugeAngle);
+      ctx.stroke();
+
+      // Response rate percentage text
+      ctx.fillStyle = "#1E3A8A";
+      ctx.font = "bold 36px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(`${Math.round(responseRate)}%`, gaugeX, gaugeY - 10);
+
+      // Label below gauge
+      ctx.fillStyle = "#64748B";
+      ctx.font = "14px Arial";
+      ctx.fillText("Response Rate", gaugeX, gaugeY + 50);
+
+      // RIGHT: Response Breakdown Donut Chart
+      const donutX = this.width * 0.7;
+      const donutY = chartsY + 60;
+      const donutOuterRadius = 60;
+      const donutInnerRadius = 35;
+
+      // Calculate total for proper percentages
+      const total =
+        responseBreakdown.positive.count +
+        responseBreakdown.neutral.count +
+        responseBreakdown.negative.count;
+
+      if (total > 0) {
+        let currentAngle = -Math.PI / 2; // Start at top
+
+        // Positive segment (dark blue)
+        const positiveAngle =
+          (responseBreakdown.positive.count / total) * 2 * Math.PI;
+        ctx.fillStyle = "#1E3A8A";
+        ctx.beginPath();
+        ctx.arc(
+          donutX,
+          donutY,
+          donutOuterRadius,
+          currentAngle,
+          currentAngle + positiveAngle
+        );
+        ctx.arc(
+          donutX,
+          donutY,
+          donutInnerRadius,
+          currentAngle + positiveAngle,
+          currentAngle,
+          true
+        );
+        ctx.closePath();
+        ctx.fill();
+        currentAngle += positiveAngle;
+
+        // Neutral segment (medium blue)
+        const neutralAngle =
+          (responseBreakdown.neutral.count / total) * 2 * Math.PI;
+        ctx.fillStyle = "#3B82F6";
+        ctx.beginPath();
+        ctx.arc(
+          donutX,
+          donutY,
+          donutOuterRadius,
+          currentAngle,
+          currentAngle + neutralAngle
+        );
+        ctx.arc(
+          donutX,
+          donutY,
+          donutInnerRadius,
+          currentAngle + neutralAngle,
+          currentAngle,
+          true
+        );
+        ctx.closePath();
+        ctx.fill();
+        currentAngle += neutralAngle;
+
+        // Negative segment (light blue)
+        const negativeAngle =
+          (responseBreakdown.negative.count / total) * 2 * Math.PI;
+        ctx.fillStyle = "#93C5FD";
+        ctx.beginPath();
+        ctx.arc(
+          donutX,
+          donutY,
+          donutOuterRadius,
+          currentAngle,
+          currentAngle + negativeAngle
+        );
+        ctx.arc(
+          donutX,
+          donutY,
+          donutInnerRadius,
+          currentAngle + negativeAngle,
+          currentAngle,
+          true
+        );
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        // Empty state - gray donut
+        ctx.fillStyle = "#E5E7EB";
+        ctx.beginPath();
+        ctx.arc(donutX, donutY, donutOuterRadius, 0, 2 * Math.PI);
+        ctx.arc(donutX, donutY, donutInnerRadius, 2 * Math.PI, 0, true);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Donut legend
+      const legendX = donutX - 100;
+      const legendY = donutY + donutOuterRadius + 30;
+      const legendSpacing = 25;
+
+      ctx.textAlign = "left";
+      ctx.font = "12px Arial";
+
+      // Positive legend
+      ctx.fillStyle = "#1E3A8A";
+      ctx.fillRect(legendX, legendY, 12, 12);
+      ctx.fillStyle = "#1E3A8A";
+      ctx.fillText(
+        `Positive    ${responseBreakdown.positive.count} (${responseBreakdown.positive.percentage}%)`,
+        legendX + 20,
+        legendY + 10
+      );
+
+      // Neutral legend
+      ctx.fillStyle = "#3B82F6";
+      ctx.fillRect(legendX, legendY + legendSpacing, 12, 12);
+      ctx.fillStyle = "#3B82F6";
+      ctx.fillText(
+        `Neutral     ${responseBreakdown.neutral.count} (${responseBreakdown.neutral.percentage}%)`,
+        legendX + 20,
+        legendY + legendSpacing + 10
+      );
+
+      // Negative legend
+      ctx.fillStyle = "#93C5FD";
+      ctx.fillRect(legendX, legendY + legendSpacing * 2, 12, 12);
+      ctx.fillStyle = "#93C5FD";
+      ctx.fillText(
+        `Negative    ${responseBreakdown.negative.count} (${responseBreakdown.negative.percentage}%)`,
+        legendX + 20,
+        legendY + legendSpacing * 2 + 10
+      );
+
+      // Response Breakdown title above donut
+      ctx.fillStyle = "#1E3A8A";
+      ctx.font = "bold 14px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("Response Breakdown", donutX, chartsY + 20);
+
+      // Bottom title
+      ctx.fillStyle = "#3B82F6";
+      ctx.font = "bold 24px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("View Event Analytics", this.width / 2, this.height - 40);
+
+      // Save thumbnail
+      const buffer = canvas.toBuffer("image/png");
+      await fs.writeFile(thumbnailPath, buffer);
+
+      // Verify file size
+      const stats = await fs.stat(thumbnailPath);
+      if (stats.size === 0) {
+        await fs.unlink(thumbnailPath);
+        throw new Error("Generated analytics thumbnail is 0 bytes");
+      }
+
+      console.log(`✅ Generated analytics thumbnail for form ${formId}`);
+      return `/api/thumbnails/analytics-${formId}.png`;
+    } catch (error) {
+      console.error(
+        `❌ Error generating analytics thumbnail for form ${formId}:`,
+        error.message
+      );
+      console.error(`Stack trace:`, error.stack);
+      // Return a placeholder
+      return `https://placehold.co/800x450/3B82F6/ffffff?text=Analytics`;
+    }
+  }
+
   async generateCertificateThumbnail(
     certificateId,
     userName,

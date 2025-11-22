@@ -350,7 +350,7 @@ class FileParser {
     }
 
     // Default to short answer for specific questions
-    return 'short_answer';
+    return 'numeric_ratings';
   }
 
   // Check if question type needs choices
