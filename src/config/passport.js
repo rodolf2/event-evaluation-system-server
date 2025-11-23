@@ -27,6 +27,7 @@ passport.use(
           // Update profile picture if available
           if (profile.photos && profile.photos[0]) {
             user.profilePicture = profile.photos[0].value;
+            user.avatar = profile.photos[0].value; // Save as backup
             await user.save();
           }
           return done(null, user);
@@ -46,6 +47,7 @@ passport.use(
           user.googleId = profile.id;
           if (profile.photos && profile.photos[0]) {
             user.profilePicture = profile.photos[0].value;
+            user.avatar = profile.photos[0].value; // Save as backup
           }
           await user.save();
           return done(null, user);
@@ -68,6 +70,7 @@ passport.use(
           googleId: profile.id,
           role: userRole,
           profilePicture: profile.photos ? profile.photos[0].value : null,
+          avatar: profile.photos ? profile.photos[0].value : null, // Save as backup
           // Extract country from Google profile locale if available
           country: profile._json?.locale?.includes("PH")
             ? "Philippines"

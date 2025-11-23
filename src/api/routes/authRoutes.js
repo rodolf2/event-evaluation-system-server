@@ -7,7 +7,10 @@ const User = require("../../models/User");
 // Google OAuth routes
 router.get(
   "/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    prompt: "select_account",
+  })
 );
 
 router.get(
@@ -260,6 +263,57 @@ router.post("/profile/picture", async (req, res) => {
       success: false,
       message: "Error uploading profile picture",
     });
+  }
+});
+
+// Remove profile picture
+router.delete("/profile/picture", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res
+        .status(401)
+        .json({ success: false, message: "No token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    // Revert to Google picture (avatar) if available, otherwise null
+    user.profilePicture = user.avatar || null;
+    await user.save();
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+          profilePicture: user.profilePicture,
+          department: user.department,
+          position: user.position,
+          country: user.country,
+          timezone: user.timezone,
+          muteNotifications: user.muteNotifications,
+          muteReminders: user.muteReminders,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error removing profile picture:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Error removing profile picture" });
   }
 });
 
