@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const UserSchema = new mongoose.Schema({
   name: {
@@ -20,9 +20,9 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['participant', 'psas', 'club-officer', 'school-admin', 'mis'],
-    default: 'participant',
-    required: true
+    enum: ["participant", "psas", "club-officer", "school-admin", "mis"],
+    default: "participant",
+    required: true,
   },
   isActive: {
     type: Boolean,
@@ -41,35 +41,59 @@ const UserSchema = new mongoose.Schema({
   },
   profilePicture: {
     type: String,
-    default: null
-  }
+    default: null,
+  },
+  department: {
+    type: String,
+    default: null,
+  },
+  position: {
+    type: String,
+    default: null,
+  },
+  country: {
+    type: String,
+    default: "Philippines",
+  },
+  timezone: {
+    type: String,
+    default: "Asia/Manila",
+  },
+  muteNotifications: {
+    type: Boolean,
+    default: false,
+  },
+  muteReminders: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 // Update the updatedAt field before saving
-UserSchema.pre('save', function(next) {
+UserSchema.pre("save", function (next) {
   this.updatedAt = Date.now();
   next();
 });
 
 // Method to update last login
-UserSchema.methods.updateLastLogin = function() {
+UserSchema.methods.updateLastLogin = function () {
   this.lastLogin = Date.now();
   return this.save();
 };
 
 // Static method to get user type from email
-UserSchema.statics.getUserTypeFromEmail = function(email) {
-  const emailPrefix = email.split('@')[0];
-  if (emailPrefix.includes('psas')) {
-    return 'psas';
-  } else if (emailPrefix.includes('club-officer')) {
-    return 'club-officer';
-  } else if (emailPrefix.includes('school-admin')) {
-    return 'school-admin';
-  } else if (emailPrefix.includes('mis')) {
-    return 'mis';
+UserSchema.statics.getUserTypeFromEmail = function (email) {
+  const emailPrefix = email.split("@")[0];
+  if (emailPrefix.includes("psas")) {
+    return "psas";
+  } else if (emailPrefix.includes("club-officer")) {
+    return "club-officer";
+  } else if (emailPrefix.includes("school-admin")) {
+    return "school-admin";
+  } else if (emailPrefix.includes("mis")) {
+    return "mis";
   }
-  return 'participant';
+  return "participant";
 };
 
-module.exports = mongoose.model('User', UserSchema);
+module.exports = mongoose.model("User", UserSchema);

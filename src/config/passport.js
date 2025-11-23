@@ -68,6 +68,10 @@ passport.use(
           googleId: profile.id,
           role: userRole,
           profilePicture: profile.photos ? profile.photos[0].value : null,
+          // Extract country from Google profile locale if available
+          country: profile._json?.locale?.includes("PH")
+            ? "Philippines"
+            : "Philippines", // Default to Philippines
         });
 
         user = await newUser.save();
@@ -92,6 +96,5 @@ passport.deserializeUser(async (id, done) => {
     done(error, null);
   }
 });
-
 
 module.exports = passport;
