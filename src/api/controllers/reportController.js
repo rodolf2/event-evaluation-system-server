@@ -10,7 +10,8 @@ const mongoose = require("mongoose");
 const getDynamicQuantitativeData = async (req, res) => {
   try {
     const { reportId } = req.params;
-    const { startDate, endDate, ratingFilter, responseLimit } = req.query;
+    const { startDate, endDate, ratingFilter, responseLimit, useSnapshot } =
+      req.query;
 
     const userId = req.user._id;
 
@@ -26,6 +27,73 @@ const getDynamicQuantitativeData = async (req, res) => {
       });
     }
 
+    // Check if we should use snapshot data (for generated reports)
+    if (useSnapshot === "true") {
+      const report = await Report.findOne({ formId: reportId, userId });
+      if (report && report.dataSnapshot) {
+        // Return frozen snapshot data
+        const snapshot = report.dataSnapshot;
+
+        // Apply filters to snapshot data if needed
+        let responses = snapshot.responses || [];
+        let scaleResponses = snapshot.scaleResponses || [];
+
+        // Date range filter
+        if (startDate || endDate) {
+          responses = responses.filter((response) => {
+            const submittedAt = new Date(response.submittedAt);
+            if (startDate && submittedAt < new Date(startDate)) return false;
+            if (endDate && submittedAt > new Date(endDate)) return false;
+            return true;
+          });
+          scaleResponses = scaleResponses.filter((response) => {
+            const submittedAt = new Date(response.submittedAt);
+            if (startDate && submittedAt < new Date(startDate)) return false;
+            if (endDate && submittedAt > new Date(endDate)) return false;
+            return true;
+          });
+        }
+
+        // Apply rating filter
+        let filteredScaleResponses = scaleResponses;
+        if (ratingFilter) {
+          const [min, max] = ratingFilter.split("-").map(Number);
+          if (!isNaN(min) && !isNaN(max)) {
+            filteredScaleResponses = scaleResponses.filter(
+              (r) => r.value >= min && r.value <= max
+            );
+          }
+        }
+
+        return res.status(200).json({
+          success: true,
+          data: {
+            metrics: snapshot.analytics.quantitativeData,
+            charts: snapshot.analytics.charts,
+            rawData: filteredScaleResponses,
+            formInfo: {
+              title: form.title,
+              description: form.description,
+              status: form.status,
+              eventStartDate: form.eventStartDate,
+              eventEndDate: form.eventEndDate,
+              publishedAt: form.publishedAt,
+            },
+            filters: {
+              startDate,
+              endDate,
+              ratingFilter,
+              responseLimit,
+            },
+            isSnapshot: true,
+            snapshotDate: snapshot.snapshotDate,
+            lastUpdated: snapshot.snapshotDate,
+          },
+        });
+      }
+    }
+
+    // No snapshot or useSnapshot=false - return live data
     // Build dynamic filter for responses
     let responses = form.responses || [];
 
@@ -104,6 +172,8 @@ const getDynamicQuantitativeData = async (req, res) => {
           ratingFilter,
           responseLimit,
         },
+        isSnapshot: false,
+        snapshotDate: null,
       },
     });
   } catch (error) {
@@ -144,6 +214,38 @@ const getDynamicQualitativeData = async (req, res) => {
       });
     }
 
+    // Check if we should use snapshot data (for generated reports)
+    if (req.query.useSnapshot === "true") {
+      const report = await Report.findOne({ formId: reportId, userId });
+      if (report && report.dataSnapshot) {
+        const snapshot = report.dataSnapshot;
+
+        // Use snapshot sentiment and text responses
+        return res.status(200).json({
+          success: true,
+          data: {
+            sentimentBreakdown: snapshot.analytics.sentimentBreakdown,
+            categorizedComments: {
+              positive: [],
+              neutral: [],
+              negative: [],
+            },
+            totalComments: (snapshot.textResponses || []).length,
+            formInfo: {
+              title: form.title,
+              description: form.description,
+              status: form.status,
+            },
+            filters: { sentiment, keyword, startDate, endDate, limit },
+            isSnapshot: true,
+            snapshotDate: snapshot.snapshotDate,
+            lastUpdated: snapshot.snapshotDate,
+          },
+        });
+      }
+    }
+
+    // No snapshot - continue with live data
     // Build filter for responses with text answers
     let responses = form.responses || [];
 
@@ -544,12 +646,12 @@ const getAllReportsWithLiveData = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-    // Update each report with live data
+    // Update each report with live data OR return snapshot
     const reportsWithLiveData = await Promise.all(
       reports.map(async (report) => {
         const form = report.formId;
 
-        // If form is deleted or missing, just return the stored report
+        // If form is deleted or missing, return the stored report
         if (!form)
           return {
             id: report._id,
@@ -562,8 +664,30 @@ const getAllReportsWithLiveData = async (req, res) => {
             lastUpdated: report.lastUpdated,
             metadata: report.metadata,
             analytics: report.analytics,
+            isSnapshot: !!report.dataSnapshot,
+            snapshotDate: report.dataSnapshot?.snapshotDate || null,
           };
 
+        // If report has a snapshot, return frozen data (no live updates)
+        if (report.dataSnapshot) {
+          return {
+            id: report._id,
+            formId: form._id,
+            title: report.title,
+            eventDate: report.eventDate,
+            status: report.status,
+            feedbackCount: report.feedbackCount,
+            averageRating: report.averageRating,
+            thumbnail: report.thumbnail,
+            lastUpdated: report.lastUpdated,
+            metadata: report.metadata,
+            analytics: report.analytics,
+            isSnapshot: true,
+            snapshotDate: report.dataSnapshot.snapshotDate,
+          };
+        }
+
+        // No snapshot - calculate live data (for backward compatibility)
         const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
         const totalResponses = form.responses ? form.responses.length : 0;
         const responseRate =
@@ -647,6 +771,8 @@ const getAllReportsWithLiveData = async (req, res) => {
           thumbnail: report.thumbnail,
           lastUpdated: report.lastUpdated,
           metadata: report.metadata,
+          isSnapshot: false,
+          snapshotDate: null,
         };
       })
     );
@@ -779,6 +905,35 @@ const generateReport = async (req, res) => {
           statusBreakdown,
           responseTrends,
         },
+      },
+      // Create frozen snapshot of all data at generation time
+      dataSnapshot: {
+        responses: form.responses || [],
+        scaleResponses: scaleResponses,
+        textResponses: extractTextResponses(form.responses || []),
+        analytics: {
+          sentimentBreakdown,
+          quantitativeData: {
+            totalResponses,
+            totalAttendees,
+            responseRate: Math.round(responseRate * 100) / 100,
+            averageRating: Math.round(averageRating * 100) / 100,
+          },
+          charts: {
+            yearData,
+            ratingDistribution,
+            statusBreakdown,
+            responseTrends,
+          },
+        },
+        metadata: {
+          description: form.description,
+          attendeeCount: totalAttendees,
+          responseRate: Math.round(responseRate * 100) / 100,
+          eventStartDate: form.eventStartDate,
+          eventEndDate: form.eventEndDate,
+        },
+        snapshotDate: new Date(),
       },
     };
 

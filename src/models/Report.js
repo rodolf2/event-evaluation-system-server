@@ -73,6 +73,18 @@ const reportSchema = new mongoose.Schema(
         responseTrends: [{ date: String, count: Number }],
       },
     },
+    dataSnapshot: {
+      type: Object,
+      default: null,
+      // Contains frozen snapshot of report data when isGenerated becomes true
+      // Structure: {
+      //   responses: [...],
+      //   analytics: {...},
+      //   metadata: {...},
+      //   snapshotDate: Date
+      // }
+      // Once set, this data should not be modified by live updates
+    },
     generatedAt: {
       type: Date,
       default: Date.now,

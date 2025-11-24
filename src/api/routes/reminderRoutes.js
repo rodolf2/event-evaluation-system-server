@@ -24,6 +24,38 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/reminders/:id - Get a single reminder by ID
+// All authenticated users (any role) can view their own reminders
+router.get("/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const reminder = await Reminder.findOne({
+      _id: id,
+      userId: req.user._id,
+    });
+
+    if (!reminder) {
+      return res.status(404).json({
+        success: false,
+        message: "Reminder not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: reminder,
+    });
+  } catch (error) {
+    console.error("Error fetching reminder:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch reminder",
+      error: error.message,
+    });
+  }
+});
+
 // POST /api/reminders - Create a new reminder
 // All authenticated users (any role) can create their own reminders
 router.post("/", requireAuth, async (req, res) => {

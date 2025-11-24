@@ -1,4 +1,5 @@
 const SharedReport = require("../../models/SharedReport");
+const puppeteer = require("puppeteer");
 
 // Share report with school administrators
 exports.shareReport = async (req, res) => {
@@ -45,6 +46,68 @@ exports.shareReport = async (req, res) => {
     console.error("Error sharing report:", error);
     res.status(500).json({
       message: "Failed to share report",
+      error: error.message,
+    });
+  }
+};
+
+// Generate PDF report
+exports.generatePDFReport = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const { html, title } = req.body;
+
+    if (!html) {
+      return res.status(400).json({
+        message: "HTML content is required",
+      });
+    }
+
+    // Launch puppeteer browser
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+
+    // Use the complete HTML sent from client (already includes styles)
+    const fullHTML = html;
+
+    await page.setContent(fullHTML, {
+      waitUntil: 'networkidle0',
+      timeout: 30000
+    });
+
+    // Generate PDF
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '20mm',
+        right: '20mm',
+        bottom: '20mm',
+        left: '20mm'
+      },
+      preferCSSPageSize: false,
+      displayHeaderFooter: false,
+    });
+
+    await browser.close();
+
+    // Set response headers for file download
+    const filename = `evaluation-report-${new Date().toISOString().split('T')[0]}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    // Send the PDF buffer
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error("Error generating PDF report:", error);
+    res.status(500).json({
+      message: "Failed to generate PDF report",
       error: error.message,
     });
   }

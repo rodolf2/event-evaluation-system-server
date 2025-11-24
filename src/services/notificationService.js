@@ -83,18 +83,21 @@ class NotificationService {
       });
     }
 
-    // Notify PSAS and Club Officers
-    await this.createRoleBasedNotification(
-      `Form Published: ${form.title}`,
-      `You have successfully published the evaluation form "${form.title}".`,
-      ["psas", "club-officer"],
-      {
-        type: "success",
-        priority: "medium",
-        relatedEntity: { type: "form", id: form._id },
-        createdBy,
-      }
-    );
+    // Notify only the creator's role
+    const creator = await User.findById(createdBy);
+    if (creator) {
+      await this.createRoleBasedNotification(
+        `Form Published: ${form.title}`,
+        `You have successfully published the evaluation form "${form.title}".`,
+        [creator.role], // Only send to creator's role
+        {
+          type: "success",
+          priority: "medium",
+          relatedEntity: { type: "form", id: form._id },
+          createdBy,
+        }
+      );
+    }
   }
 
   async notifyFormClosingSoon(form) {
@@ -109,36 +112,47 @@ class NotificationService {
     });
   }
 
-  async notifyFormClosed(form) {
+  async notifyFormClosed(form, createdBy) {
     const title = `Evaluation Form Closed: ${form.title}`;
     const message = `The evaluation form "${form.title}" has been closed and is no longer accepting responses.`;
 
-    await this.createRoleBasedNotification(
-      title,
-      message,
-      ["participant", "psas", "club-officer"],
-      {
-        type: "info",
-        priority: "medium",
-        relatedEntity: { type: "form", id: form._id },
+    // Notify participants
+    await this.createRoleBasedNotification(title, message, ["participant"], {
+      type: "info",
+      priority: "medium",
+      relatedEntity: { type: "form", id: form._id },
+    });
+
+    // Notify only the creator's role
+    if (createdBy) {
+      const creator = await User.findById(createdBy);
+      if (creator) {
+        await this.createRoleBasedNotification(title, message, [creator.role], {
+          type: "info",
+          priority: "medium",
+          relatedEntity: { type: "form", id: form._id },
+          createdBy,
+        });
       }
-    );
+    }
   }
 
-  async notifyResponseThresholdReached(form, threshold) {
+  async notifyResponseThresholdReached(form, threshold, createdBy) {
     const title = `Response Threshold Reached: ${form.title}`;
     const message = `${threshold}% of expected responses have been received for "${form.title}". Current progress: ${form.responseCount} responses.`;
 
-    await this.createRoleBasedNotification(
-      title,
-      message,
-      ["psas", "club-officer", "school-admin"],
-      {
-        type: "info",
-        priority: "medium",
-        relatedEntity: { type: "form", id: form._id },
+    // Notify only the creator's role
+    if (createdBy) {
+      const creator = await User.findById(createdBy);
+      if (creator) {
+        await this.createRoleBasedNotification(title, message, [creator.role], {
+          type: "info",
+          priority: "medium",
+          relatedEntity: { type: "form", id: form._id },
+          createdBy,
+        });
       }
-    );
+    }
   }
 
   async notifyCertificateGenerated(certificate, recipient) {
@@ -169,9 +183,7 @@ class NotificationService {
 
     try {
       const title = `📅 Reminder Created: ${reminder.title}`;
-      const message = `${user.name} has created a reminder: "${
-        reminder.title
-      }"${
+      const message = `You have created a reminder: "${reminder.title}"${
         reminder.description ? " - " + reminder.description : ""
       }. Reminder date: ${new Date(
         reminder.date
@@ -180,23 +192,16 @@ class NotificationService {
       console.log("[notifyReminderCreated] Creating notification with data:", {
         title,
         message,
-        targetRoles: [
-          "participant",
-          "psas",
-          "club-officer",
-          "school-admin",
-          "mis",
-        ],
+        targetUsers: [user._id],
         type: "reminder",
         createdBy: user._id,
       });
 
-      // Notify ALL roles in the system about the reminder creation
-      // This ensures all system users (participants, psas, club-officers, school-admins, mis) are notified
+      // Notify only the user who created the reminder
       const notification = await this.createRoleBasedNotification(
         title,
         message,
-        ["participant", "psas", "club-officer", "school-admin", "mis"],
+        [], // No role targeting
         {
           type: "reminder",
           priority:
@@ -205,13 +210,14 @@ class NotificationService {
               : reminder.priority === "low"
               ? "low"
               : "medium",
+          targetUsers: [user._id], // Only notify the creator
           relatedEntity: { type: "reminder", id: reminder._id },
           createdBy: user._id,
         }
       );
 
       console.log(
-        `✅ Reminder notification created and sent to all roles for reminder: ${reminder.title}`,
+        `✅ Reminder notification created for user: ${user.name} for reminder: ${reminder.title}`,
         { notificationId: notification._id }
       );
       return notification;
@@ -225,7 +231,7 @@ class NotificationService {
   }
 
   async notifyReminderDueSoon(reminder, user) {
-    // Notify all roles that a reminder is due soon
+    // Notify only the user who created the reminder
     if (!reminder || !reminder._id || !user || !user._id) {
       console.warn(
         "notifyReminderDueSoon: missing reminder or user context, skipping notification"
@@ -241,13 +247,13 @@ class NotificationService {
     });
 
     const title = `⏰ Reminder Due Soon: ${reminder.title}`;
-    const message = `The reminder "${reminder.title}" created by ${user.name} is due on ${dueDate}. Priority: ${reminder.priority}. Take action now if needed.`;
+    const message = `Your reminder "${reminder.title}" is due on ${dueDate}. Priority: ${reminder.priority}. Take action now if needed.`;
 
-    // Notify all roles
+    // Notify only the creator
     const notification = await this.createRoleBasedNotification(
       title,
       message,
-      ["participant", "psas", "club-officer", "school-admin", "mis"],
+      [], // No role targeting
       {
         type: "warning",
         priority:
@@ -256,6 +262,7 @@ class NotificationService {
             : reminder.priority === "low"
             ? "low"
             : "medium",
+        targetUsers: [user._id], // Only notify the creator
         relatedEntity: { type: "reminder", id: reminder._id },
         createdBy: user._id,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Expires in 24 hours
@@ -263,13 +270,13 @@ class NotificationService {
     );
 
     console.log(
-      `⏰ Reminder due soon notification sent for: ${reminder.title}`
+      `⏰ Reminder due soon notification sent to user: ${user.name} for: ${reminder.title}`
     );
     return notification;
   }
 
   async notifyReminderCompleted(reminder, user) {
-    // Notify all roles that a reminder has been completed
+    // Notify only the user who completed the reminder
     if (!reminder || !reminder._id || !user || !user._id) {
       console.warn(
         "notifyReminderCompleted: missing reminder or user context, skipping notification"
@@ -278,16 +285,17 @@ class NotificationService {
     }
 
     const title = `✓ Reminder Completed: ${reminder.title}`;
-    const message = `The reminder "${reminder.title}" created by ${user.name} has been marked as completed.`;
+    const message = `Your reminder "${reminder.title}" has been marked as completed.`;
 
-    // Notify all roles
+    // Notify only the user who completed it
     const notification = await this.createRoleBasedNotification(
       title,
       message,
-      ["participant", "psas", "club-officer", "school-admin", "mis"],
+      [], // No role targeting
       {
         type: "success",
         priority: "low",
+        targetUsers: [user._id], // Only notify the user
         relatedEntity: { type: "reminder", id: reminder._id },
         createdBy: user._id,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Expires in 7 days
@@ -295,7 +303,7 @@ class NotificationService {
     );
 
     console.log(
-      `✓ Reminder completed notification sent for: ${reminder.title}`
+      `✓ Reminder completed notification sent to user: ${user.name} for: ${reminder.title}`
     );
     return notification;
   }
@@ -370,7 +378,9 @@ class NotificationService {
 
   async notifyCertificateEmailFailed(certificate, recipient) {
     const title = "Certificate Email Delivery Failed";
-    const message = `We couldn't send your certificate for "${certificate.eventId?.name || 'Event'}" to your email. You can still download it from your certificates dashboard.`;
+    const message = `We couldn't send your certificate for "${
+      certificate.eventId?.name || "Event"
+    }" to your email. You can still download it from your certificates dashboard.`;
 
     await this.createRoleBasedNotification(
       title,

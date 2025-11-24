@@ -4,6 +4,7 @@ const {
   shareReport,
   getSharedReports,
   getReportSharing,
+  generatePDFReport,
 } = require("../controllers/reportsController");
 const { requireAuth } = require("../../middlewares/auth");
 
@@ -15,5 +16,8 @@ router.get("/my-shared", requireAuth, getSharedReports);
 
 // Get sharing details for a specific report (requires authentication)
 router.get("/:reportId/sharing", requireAuth, getReportSharing);
+
+// Generate PDF report (requires authentication)
+router.post("/:reportId/generate-pdf", requireAuth, generatePDFReport);
 
 module.exports = router;
