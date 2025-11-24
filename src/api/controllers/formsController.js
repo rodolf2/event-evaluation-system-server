@@ -994,7 +994,7 @@ const deleteForm = async (req, res) => {
 const submitFormResponse = async (req, res) => {
   try {
     const { id } = req.params;
-    const { responses, respondentEmail, respondentName } = req.body;
+    const { responses, respondentEmail } = req.body;
 
     // Validate that the form exists and is published
     const form = await Form.findById(id);
@@ -1067,12 +1067,12 @@ const submitFormResponse = async (req, res) => {
       });
     }
 
-    // Create response object
+    // Create response object (email is optional for anonymity)
     const responseData = {
       formId: id,
       responses: processedResponses,
-      respondentEmail: respondentEmail || null,
-      respondentName: respondentName || null,
+      respondentEmail: null, // Always null for complete anonymity
+      respondentName: null,
       submittedAt: new Date(),
     };
 
@@ -1692,19 +1692,19 @@ const getMyEvaluations = async (req, res) => {
       const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
 
       // Only show evaluations that are currently open for responses.
-      if (startDate && now < startDate) {
-        console.log(
-          `[MY-EVALUATIONS] Form "${form.title}" filtered out - starts ${startDate}`
-        );
-        return false;
-      }
+      // if (startDate && now < startDate) {
+      //   console.log(
+      //     `[MY-EVALUATIONS] Form "${form.title}" filtered out - starts ${startDate}`
+      //   );
+      //   return false;
+      // }
 
-      if (endDate && now > endDate) {
-        console.log(
-          `[MY-EVALUATIONS] Form "${form.title}" filtered out - ended ${endDate}`
-        );
-        return false;
-      }
+      // if (endDate && now > endDate) {
+      //   console.log(
+      //     `[MY-EVALUATIONS] Form "${form.title}" filtered out - ended ${endDate}`
+      //   );
+      //   return false;
+      // }
 
       console.log(`[MY-EVALUATIONS] Form "${form.title}" is available`);
       return true;

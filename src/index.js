@@ -121,6 +121,7 @@ const eventRoutes = require("./api/routes/eventRoutes");
 const formsRoutes = require("./api/routes/formsRoutes");
 const uploadRoutes = require("./api/routes/uploadRoutes");
 const analyticsRoutes = require("./api/routes/analyticsRoutes");
+const reportsRoutes = require("./api/routes/reports");
 
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/certificates", certificateRoutes);
@@ -134,6 +135,7 @@ app.use("/api/events", eventRoutes);
 app.use("/api/forms", formsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/reports", reportsRoutes);
 app.use("/api/thumbnails", require("./api/routes/thumbnailRoutes"));
 
 // Test routes for development
