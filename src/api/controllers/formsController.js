@@ -994,7 +994,7 @@ const deleteForm = async (req, res) => {
 const submitFormResponse = async (req, res) => {
   try {
     const { id } = req.params;
-    const { responses, respondentEmail } = req.body;
+    const { responses, respondentEmail, respondentName } = req.body;
 
     // Validate that the form exists and is published
     const form = await Form.findById(id);
