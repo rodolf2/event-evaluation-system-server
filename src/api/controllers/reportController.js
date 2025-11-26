@@ -614,6 +614,31 @@ const getAllReportsWithLiveData = async (req, res) => {
       page = 1,
     } = req.query;
 
+    // School admins don't create reports, they view shared ones
+    // Since sharing is not implemented yet, return empty array
+    if (req.user.role === 'school-admin') {
+      return res.status(200).json({
+        success: true,
+        data: {
+          reports: [],
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: 0,
+            pages: 0,
+          },
+          filters: {
+            status,
+            dateRange,
+            search,
+            limit,
+            page,
+          },
+          lastUpdated: new Date().toISOString(),
+        },
+      });
+    }
+
     // Build filter for REPORTS
     let reportFilter = { userId: userId, isGenerated: true };
 

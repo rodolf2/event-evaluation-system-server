@@ -6,6 +6,15 @@ const activityService = require('../../services/activityService');
 const getUserActivities = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
+
+    // School admins don't create activities, so return empty array
+    if (req.user.role === 'school-admin') {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
     const activities = await activityService.getUserActivities(req.user._id, limit);
 
     res.json({
