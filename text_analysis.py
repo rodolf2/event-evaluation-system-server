@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Text Analysis Script for Event Evaluation System
 Implements multilingual sentiment analysis for English and Tagalog/Filipino text
@@ -51,28 +50,29 @@ class MultilingualSentimentAnalyzer:
             'masama': -1, 'pangit': -1, 'nakakaasar': -1, 'nakakainis': -1,
             'galit': -1, 'ayaw': -1, 'badtrip': -1, 'nakakagalit': -1,
             'boring': -1, 'nakakaantok': -1, 'walang kwenta': -2,
-            
+
             # Strong negative (weight: -2)
             'napakapangit': -2, 'sobrang pangit': -2, 'napakamasama': -2,
             'sobrang masama': -2, 'napakagalit': -2, 'waste of time': -2,
             'sayang': -1, 'hindi maganda': -1.5,
-            
+
             # Disappointment
             'disappointed': -1, 'disappointing': -1, 'nakakadismaya': -1,
             'dismayado': -1, 'nabigo': -1, 'failed': -1,
-            
+
             # Problems and issues
             'problem': -0.7, 'issue': -0.7, 'problema': -0.7, 'mali': -0.8,
             'kulang': -0.7, 'incomplete': -0.7, 'poor': -1, 'badly': -1,
-            
+            'crowded': -0.8, 'difficult': -0.8, 'hard': -0.7, 'challenging': -0.6,
+
             # Frustration and anger
             'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
             'bad': -1, 'terrible': -1.5, 'awful': -1.5, 'worst': -2,
             'horrible': -1.5, 'pathetic': -1.5, 'nakakaasar': -1,
-            
+
             # Organization issues
             'disorganized': -1, 'chaotic': -1, 'confusing': -0.8, 'unclear': -0.7,
-            'messy': -0.8
+            'messy': -0.8, 'noisy': -0.6, 'uncomfortable': -0.7
         }
 
         # Common Filipino phrases for context
@@ -80,13 +80,17 @@ class MultilingualSentimentAnalyzer:
             'very good', 'ang ganda', 'sobrang ganda', 'ang galing',
             'maraming salamat', 'thank you so much', 'napakaganda',
             'napakagaling', 'the best', 'well done', 'job well done',
-            'great job', 'excellent work', 'love it', 'loved it'
+            'great job', 'excellent work', 'love it', 'loved it',
+            'masaya', 'napakasaya', 'sobrang saya', 'ang saya',
+            'maayos', 'napakaayos', 'sobrang ayos'
         ]
-        
+
         self.negative_phrases = [
             'not good', 'not great', 'hindi maganda', 'walang kwenta',
             'waste of time', 'sayang lang', 'hindi ako satisfied',
-            'bad experience', 'poor quality', 'very bad', 'so bad'
+            'bad experience', 'poor quality', 'very bad', 'so bad',
+            'masama', 'napakamasama', 'sobrang masama', 'ang sama',
+            'pangit', 'napakapangit', 'sobrang pangit'
         ]
 
         # Neutral words that might indicate mixed sentiment
@@ -177,16 +181,57 @@ class MultilingualSentimentAnalyzer:
                 'method': 'fallback'
             }
 
+    def analyze_sentence_sentiment(self, sentence):
+        """Analyze sentiment of individual sentences for mixed content detection"""
+        sentence_lower = sentence.lower()
+        pos_score = 0
+        neg_score = 0
+
+        # Check for constructive criticism patterns (English and Tagalog)
+        constructive_patterns = [
+            'could be improved', 'could still be improved', 'room for improvement',
+            'with a few adjustments', 'next time', 'believe the next', 'can be even better',
+            'some areas', 'however', 'but', 'although',
+            'maaaring pagbutihin', 'maaaring mapabuti', 'may mga areas na maaaring',
+            'sa susunod', 'next time', 'pwede pang mapabuti', 'sana ay maayos',
+            'pero', 'ngunit', 'subalit', 'gayunpaman'
+        ]
+
+        is_constructive = any(pattern in sentence_lower for pattern in constructive_patterns)
+
+        # Word analysis for this sentence
+        words = sentence_lower.split()
+        for i, word in enumerate(words):
+            is_negated = i > 0 and words[i-1] in self.negations
+            multiplier = 1.5 if i > 0 and words[i-1] in self.intensifiers else 1.0
+
+            if word in self.tagalog_positive:
+                score = self.tagalog_positive[word] * multiplier
+                pos_score += score if not is_negated else 0
+                neg_score += score if is_negated else 0
+            elif word in self.tagalog_negative:
+                score = abs(self.tagalog_negative[word]) * multiplier
+                neg_score += score if not is_negated else 0
+                pos_score += score if is_negated else 0
+
+        return {
+            'positive': pos_score,
+            'negative': neg_score,
+            'is_constructive': is_constructive,
+            'balance': pos_score - neg_score
+        }
+
     def analyze_tagalog_sentiment(self, text):
-        """Analyze Tagalog/Filipino text using enhanced lexicon with context"""
+        """Analyze Tagalog/Filipino text using enhanced lexicon with context and sentence-level analysis"""
         try:
             text_lower = text.lower()
-            
+
             # Initialize scores
             positive_score = 0
             negative_score = 0
             neutral_count = 0
-            
+            constructive_criticism_count = 0
+
             # Check for emoticons first
             emoticon_score = 0
             for emoticon in self.positive_emoticons:
@@ -200,7 +245,7 @@ class MultilingualSentimentAnalyzer:
             for phrase in self.positive_phrases:
                 if phrase in text_lower:
                     positive_score += 2.5
-            
+
             for phrase in self.negative_phrases:
                 if phrase in text_lower:
                     negative_score += 2.5
@@ -210,6 +255,17 @@ class MultilingualSentimentAnalyzer:
                 if neutral in text_lower:
                     neutral_count += 1
 
+            # Sentence-level analysis for mixed sentiments
+            sentences = [s.strip() for s in text.replace('!', '.').replace('?', '.').split('.') if s.strip()]
+            sentence_sentiments = []
+
+            for sentence in sentences:
+                sent_analysis = self.analyze_sentence_sentiment(sentence)
+                sentence_sentiments.append(sent_analysis)
+
+                if sent_analysis['is_constructive']:
+                    constructive_criticism_count += 1
+
             # Word-by-word analysis with context
             words = text_lower.split()
             for i, word in enumerate(words):
@@ -217,14 +273,14 @@ class MultilingualSentimentAnalyzer:
                 is_negated = False
                 if i > 0 and words[i-1] in self.negations:
                     is_negated = True
-                
+
                 # Check for intensifiers before the word
                 multiplier = 1.0
                 if i > 0 and words[i-1] in self.intensifiers:
                     multiplier = 1.5
                 elif i > 0 and words[i-1] in self.diminishers:
                     multiplier = 0.5
-                
+
                 # Score the word
                 if word in self.tagalog_positive:
                     score = self.tagalog_positive[word] * multiplier
@@ -232,7 +288,7 @@ class MultilingualSentimentAnalyzer:
                         negative_score += score  # Flip to negative
                     else:
                         positive_score += score
-                        
+
                 elif word in self.tagalog_negative:
                     score = abs(self.tagalog_negative[word]) * multiplier
                     if is_negated:
@@ -246,25 +302,41 @@ class MultilingualSentimentAnalyzer:
             elif emoticon_score < 0:
                 negative_score += abs(emoticon_score)
 
-            # Calculate final sentiment with improved logic
+            # Analyze sentence balance for mixed sentiment detection
+            positive_sentences = sum(1 for s in sentence_sentiments if s['balance'] > 0.5)
+            negative_sentences = sum(1 for s in sentence_sentiments if s['balance'] < -0.5)
+            neutral_sentences = len(sentence_sentiments) - positive_sentences - negative_sentences
+
+            # Calculate final sentiment with improved mixed sentiment logic
             total_score = positive_score - negative_score
-            
-            # Determine sentiment with better thresholds
+
+            # Enhanced sentiment determination
+            has_mixed_sentiment = (positive_sentences > 0 and negative_sentences > 0) or constructive_criticism_count > 0
+            has_significant_negative = negative_score >= 1.0
+            score_ratio = abs(total_score) / max(positive_score + negative_score, 1)
+
             if neutral_count >= 2:
-                # Strong neutral indicator
+                # Strong neutral indicators
                 sentiment = "neutral"
                 confidence = 0.6
-            elif abs(total_score) < 0.8:
-                # Scores are very close
+            elif has_mixed_sentiment and (constructive_criticism_count >= 2 or has_significant_negative):
+                # Mixed sentiment with constructive criticism or significant negatives
                 sentiment = "neutral"
-                confidence = 0.5
-            elif total_score > 0:
+                confidence = 0.75
+            elif has_mixed_sentiment and score_ratio < 0.6:
+                # Close scores with mixed elements
+                sentiment = "neutral"
+                confidence = 0.7
+            elif total_score > 1.0:
                 sentiment = "positive"
-                # Confidence based on score magnitude and clarity
                 confidence = min(0.5 + (total_score / 5), 0.95)
-            else:
+            elif total_score < -1.0:
                 sentiment = "negative"
                 confidence = min(0.5 + (abs(total_score) / 5), 0.95)
+            else:
+                # Close scores
+                sentiment = "neutral"
+                confidence = 0.65
 
             return {
                 'sentiment': sentiment,
@@ -272,7 +344,14 @@ class MultilingualSentimentAnalyzer:
                 'negative_score': round(negative_score, 2),
                 'total_score': round(total_score, 2),
                 'confidence': round(confidence, 2),
-                'method': 'tagalog_lexicon_enhanced'
+                'method': 'tagalog_lexicon_enhanced',
+                'sentence_analysis': {
+                    'total_sentences': len(sentence_sentiments),
+                    'positive_sentences': positive_sentences,
+                    'negative_sentences': negative_sentences,
+                    'neutral_sentences': neutral_sentences,
+                    'constructive_criticism': constructive_criticism_count
+                }
             }
         except Exception as e:
             return {
@@ -328,8 +407,54 @@ class MultilingualSentimentAnalyzer:
         result['language'] = lang_info
         return result
 
+def split_comment_by_sentiment(text, analyzer):
+    """Split a comment into positive and negative sentence groups"""
+    try:
+        # Split into sentences
+        sentences = [s.strip() for s in text.replace('!', '.').replace('?', '.').split('.') if s.strip()]
+
+        positive_sentences = []
+        negative_sentences = []
+        neutral_sentences = []
+
+        for sentence in sentences:
+            sent_analysis = analyzer.analyze_sentence_sentiment(sentence)
+            balance = sent_analysis['balance']
+
+            if balance > 0.3:
+                positive_sentences.append(sentence)
+            elif balance < -0.3:
+                negative_sentences.append(sentence)
+            else:
+                neutral_sentences.append(sentence)
+
+        # Combine sentences back into text blocks
+        positive_text = '. '.join(positive_sentences) + ('.' if positive_sentences else '')
+        negative_text = '. '.join(negative_sentences) + ('.' if negative_sentences else '')
+        neutral_text = '. '.join(neutral_sentences) + ('.' if neutral_sentences else '')
+
+        return {
+            'positive_part': positive_text.strip(),
+            'negative_part': negative_text.strip(),
+            'neutral_part': neutral_text.strip(),
+            'sentence_counts': {
+                'positive': len(positive_sentences),
+                'negative': len(negative_sentences),
+                'neutral': len(neutral_sentences)
+            }
+        }
+
+    except Exception as e:
+        return {
+            'positive_part': text,
+            'negative_part': '',
+            'neutral_part': '',
+            'sentence_counts': {'positive': 0, 'negative': 0, 'neutral': 0},
+            'error': str(e)
+        }
+
 def generate_report(feedbacks):
-    """Generate qualitative report with sentiment analysis"""
+    """Generate qualitative report with sentiment analysis and comment splitting"""
     try:
         analyzer = MultilingualSentimentAnalyzer()
 
@@ -354,10 +479,14 @@ def generate_report(feedbacks):
             analysis = analyzer.analyze_sentiment(feedback)
             sentiment = analysis.get('sentiment', 'neutral')
 
+            # Split comment into positive/negative parts
+            comment_parts = split_comment_by_sentiment(feedback, analyzer)
+
             # Categorize the comment
             categorized_comments[sentiment].append({
                 'text': feedback,
-                'analysis': analysis
+                'analysis': analysis,
+                'parts': comment_parts
             })
 
             sentiment_counts[sentiment] += 1
@@ -365,7 +494,8 @@ def generate_report(feedbacks):
             analyzed_feedbacks.append({
                 'text': feedback,
                 'sentiment': sentiment,
-                'analysis': analysis
+                'analysis': analysis,
+                'parts': comment_parts
             })
 
         # Calculate percentages
