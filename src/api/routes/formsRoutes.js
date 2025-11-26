@@ -20,7 +20,7 @@ router.get(
 // GET /api/forms/completion-stats - Get participant evaluation completion stats for badge progression
 router.get(
   "/completion-stats",
-  requireRole(["participant"]),
+  requireRole(["participant", "club-officer"]),
   formsController.getCompletionStats
 );
 
@@ -90,10 +90,10 @@ router.patch(
 // DELETE /api/forms/:id - Delete a form (only psas can delete)
 router.delete("/:id", requireRole(["psas"]), formsController.deleteForm);
 
-// POST /api/forms/:id/submit - Submit responses to a form (only participants can submit)
+// POST /api/forms/:id/submit - Submit responses to a form (participants and club-officers can submit)
 router.post(
   "/:id/submit",
-  requireRole(["participant"]),
+  requireRole(["participant", "club-officer"]),
   formsController.submitFormResponse
 );
 

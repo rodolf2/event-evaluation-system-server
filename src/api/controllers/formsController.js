@@ -78,13 +78,67 @@ const attendeeUpload = multer({
 // GET /api/forms - Get all forms for the authenticated user
 const getAllForms = async (req, res) => {
   try {
-    const forms = await Form.find({ createdBy: req.user._id })
+    const { page = 1, limit = 20, search = "" } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+
+    if (
+      isNaN(pageNum) ||
+      pageNum < 1 ||
+      isNaN(limitNum) ||
+      limitNum < 1 ||
+      limitNum > 100
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid pagination parameters. Page must be >= 1, limit must be 1-100",
+      });
+    }
+
+    // Build search query
+    const searchQuery = search
+      ? {
+          createdBy: req.user._id,
+          title: { $regex: search, $options: "i" },
+        }
+      : { createdBy: req.user._id };
+
+    const forms = await Form.find(searchQuery)
       .populate("createdBy", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .skip((pageNum - 1) * limitNum);
+
+    const total = await Form.countDocuments(searchQuery);
+    const totalPages = Math.ceil(total / limitNum);
+
+    // Map forms to include isPublished field for frontend compatibility
+    const mappedForms = forms.map(form => ({
+      _id: form._id,
+      title: form.title,
+      description: form.description,
+      status: form.status,
+      isPublished: form.status === "published",
+      createdAt: form.createdAt,
+      updatedAt: form.updatedAt,
+      eventStartDate: form.eventStartDate,
+      eventEndDate: form.eventEndDate,
+      createdBy: form.createdBy,
+    }));
 
     res.status(200).json({
       success: true,
-      data: forms,
+      data: {
+        forms: mappedForms,
+        pagination: {
+          total,
+          pages: totalPages,
+          currentPage: pageNum,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching forms:", error);
