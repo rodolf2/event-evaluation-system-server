@@ -16,6 +16,21 @@ const eventSchema = new mongoose.Schema({
   description: {
     type: String,
     default: ''
+  },
+  attendees: [{
+    name: {
+      type: String,
+      required: true
+    },
+    email: {
+      type: String,
+      required: true
+    }
+  }],
+  verificationCode: {
+    type: String,
+    unique: true,
+    sparse: true
   }
 }, {
   timestamps: true

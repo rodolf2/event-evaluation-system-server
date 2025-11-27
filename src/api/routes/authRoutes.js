@@ -34,6 +34,9 @@ router.get(
         timezone: req.user.timezone,
         muteNotifications: req.user.muteNotifications,
         muteReminders: req.user.muteReminders,
+        hasCompletedOnboarding: req.user.hasCompletedOnboarding,
+        onboardingStep: req.user.onboardingStep,
+        onboardingCompletedAt: req.user.onboardingCompletedAt,
       },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
@@ -43,6 +46,138 @@ router.get(
     res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
   }
 );
+
+const Event = require("../../models/Event");
+
+// Guest login route
+router.post("/guest", async (req, res) => {
+  try {
+    const { name, email, role, verificationCode } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !role || !verificationCode) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, email, role, and verification code are required",
+      });
+    }
+
+    // Validate role is either evaluator or guest-speaker
+    if (role !== "evaluator" && role !== "guest-speaker") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role. Must be 'evaluator' or 'guest-speaker'",
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email format",
+      });
+    }
+
+    // Find event by verification code
+    const event = await Event.findOne({ verificationCode });
+    if (!event) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification code",
+      });
+    }
+
+    // Check if user is in attendees list
+    const normalizedEmail = email.toLowerCase().trim();
+    const attendee = event.attendees.find(att =>
+      att.email.toLowerCase() === normalizedEmail &&
+      att.name.toLowerCase() === name.toLowerCase().trim()
+    );
+
+    if (!attendee) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not registered as an attendee for this event",
+      });
+    }
+
+    // Find or create guest user
+    let user = await User.findOne({ email: normalizedEmail, role });
+
+    if (!user) {
+      // Create new guest user
+      user = new User({
+        name: attendee.name,
+        email: normalizedEmail,
+        role,
+        isActive: true,
+      });
+      await user.save();
+    } else {
+      // Update last login
+      user.lastLogin = Date.now();
+      await user.save();
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+        profilePicture: user.profilePicture,
+        department: user.department,
+        position: user.position,
+        country: user.country,
+        timezone: user.timezone,
+        muteNotifications: user.muteNotifications,
+        muteReminders: user.muteReminders,
+        hasCompletedOnboarding: user.hasCompletedOnboarding,
+        onboardingStep: user.onboardingStep,
+        onboardingCompletedAt: user.onboardingCompletedAt,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+          profilePicture: user.profilePicture,
+          department: user.department,
+          position: user.position,
+          country: user.country,
+          timezone: user.timezone,
+          muteNotifications: user.muteNotifications,
+          muteReminders: user.muteReminders,
+          hasCompletedOnboarding: user.hasCompletedOnboarding,
+          onboardingStep: user.onboardingStep,
+          onboardingCompletedAt: user.onboardingCompletedAt,
+        },
+        event: {
+          _id: event._id,
+          name: event.name,
+          date: event.date,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error in guest login:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error processing guest login",
+    });
+  }
+});
 
 // Get current user profile
 router.get("/profile", async (req, res) => {
@@ -88,6 +223,9 @@ router.get("/profile", async (req, res) => {
           timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
+          hasCompletedOnboarding: user.hasCompletedOnboarding,
+          onboardingStep: user.onboardingStep,
+          onboardingCompletedAt: user.onboardingCompletedAt,
         },
       },
     });
@@ -135,6 +273,9 @@ router.put("/profile", async (req, res) => {
       timezone,
       muteNotifications,
       muteReminders,
+      onboardingStep,
+      hasCompletedOnboarding,
+      onboardingCompletedAt,
     } = req.body;
 
     if (department !== undefined) user.department = department;
@@ -144,6 +285,9 @@ router.put("/profile", async (req, res) => {
     if (muteNotifications !== undefined)
       user.muteNotifications = muteNotifications;
     if (muteReminders !== undefined) user.muteReminders = muteReminders;
+    if (onboardingStep !== undefined) user.onboardingStep = onboardingStep;
+    if (hasCompletedOnboarding !== undefined) user.hasCompletedOnboarding = hasCompletedOnboarding;
+    if (onboardingCompletedAt !== undefined) user.onboardingCompletedAt = onboardingCompletedAt;
 
     await user.save();
 
@@ -164,6 +308,9 @@ router.put("/profile", async (req, res) => {
           timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
+          hasCompletedOnboarding: user.hasCompletedOnboarding,
+          onboardingStep: user.onboardingStep,
+          onboardingCompletedAt: user.onboardingCompletedAt,
         },
       },
     });
@@ -254,6 +401,9 @@ router.post("/profile/picture", async (req, res) => {
           timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
+          hasCompletedOnboarding: user.hasCompletedOnboarding,
+          onboardingStep: user.onboardingStep,
+          onboardingCompletedAt: user.onboardingCompletedAt,
         },
       },
     });
@@ -306,6 +456,9 @@ router.delete("/profile/picture", async (req, res) => {
           timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
+          hasCompletedOnboarding: user.hasCompletedOnboarding,
+          onboardingStep: user.onboardingStep,
+          onboardingCompletedAt: user.onboardingCompletedAt,
         },
       },
     });

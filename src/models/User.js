@@ -20,7 +20,15 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["participant", "psas", "club-officer", "school-admin", "mis"],
+    enum: [
+      "participant",
+      "psas",
+      "club-officer",
+      "school-admin",
+      "mis",
+      "evaluator",
+      "guest-speaker",
+    ],
     default: "participant",
     required: true,
   },
@@ -66,6 +74,18 @@ const UserSchema = new mongoose.Schema({
   muteReminders: {
     type: Boolean,
     default: false,
+  },
+  hasCompletedOnboarding: {
+    type: Boolean,
+    default: false,
+  },
+  onboardingStep: {
+    type: Number,
+    default: 0,
+  },
+  onboardingCompletedAt: {
+    type: Date,
+    default: null,
   },
 });
 

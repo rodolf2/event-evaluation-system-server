@@ -5,8 +5,9 @@ const router = express.Router();
 const Form = require("../../models/Form");
 const Certificate = require("../../models/Certificate");
 const thumbnailService = require("../../services/thumbnail/thumbnailService");
+const { requireAuth } = require("../../middlewares/auth");
 
-router.get("/:filename", async (req, res) => {
+router.get("/:filename", requireAuth, async (req, res) => {
   const filename = req.params.filename;
 
   // Security check to prevent directory traversal
@@ -39,22 +40,66 @@ router.get("/:filename", async (req, res) => {
 
     try {
       if (type === "form") {
-        // Try to generate form thumbnail
-        const form = await Form.findById(id).select("title");
+        // Check permissions: user must be the creator or have access to the form
+        const userId = req.user._id;
+        const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : "";
+        const userRole = req.user.role;
+
+        let form = await Form.findOne({
+          _id: id,
+          createdBy: userId,
+        }).select("title");
+
+        // If not creator, check if user is assigned to the form (for participants)
+        if (!form && userRole === "participant") {
+          form = await Form.findOne({
+            _id: id,
+            status: "published",
+            "attendeeList.email": userEmail,
+          }).select("title");
+        }
+
+        // For admin roles, allow access to all forms
+        if (!form && ["psas", "club-officer", "school-admin", "mis"].includes(userRole)) {
+          form = await Form.findById(id).select("title");
+        }
+
         if (form) {
-          console.log(`Generating thumbnail for form ${id}: ${form.title}`);
+          console.log(`Generating thumbnail for form ${id}: ${form.title} (accessed by ${userRole})`);
           await thumbnailService.generateReportThumbnail(id, form.title);
 
           // Check if it was generated successfully
           if (fs.existsSync(thumbnailPath)) {
             return res.sendFile(thumbnailPath);
           }
+        } else {
+          console.log(`Access denied: User ${userId} (${userRole}) cannot access form ${id}`);
+          return res.status(403).send("Access denied");
         }
       } else if (type === "analytics") {
-        // Get form data directly for accurate analytics
-        const form = await Form.findById(id).select(
-          "title attendeeList responses"
-        );
+        // Check permissions: user must have access to the form
+        const userId = req.user._id;
+        const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : "";
+        const userRole = req.user.role;
+
+        let form = await Form.findOne({
+          _id: id,
+          createdBy: userId,
+        }).select("title attendeeList responses");
+
+        // If not creator, check if user is assigned to the form (for participants)
+        if (!form && userRole === "participant") {
+          form = await Form.findOne({
+            _id: id,
+            status: "published",
+            "attendeeList.email": userEmail,
+          }).select("title attendeeList responses");
+        }
+
+        // For admin roles, allow access to all forms
+        if (!form && ["psas", "club-officer", "school-admin", "mis"].includes(userRole)) {
+          form = await Form.findById(id).select("title attendeeList responses");
+        }
 
         if (form) {
           console.log(
@@ -159,10 +204,26 @@ router.get("/:filename", async (req, res) => {
           }
         }
       } else if (type === "certificate") {
-        // Try to generate certificate thumbnail
-        const certificate = await Certificate.findById(id)
-          .populate("userId", "name")
-          .select("userId certificateType");
+        // Check permissions: user must own the certificate or be an admin
+        const userId = req.user._id;
+        const userRole = req.user.role;
+
+        let certificate;
+
+        if (["psas", "club-officer", "school-admin", "mis"].includes(userRole)) {
+          // Admins can view all certificates
+          certificate = await Certificate.findById(id)
+            .populate("userId", "name")
+            .select("userId certificateType");
+        } else {
+          // Regular users can only view their own certificates
+          certificate = await Certificate.findOne({
+            _id: id,
+            userId: userId,
+          })
+            .populate("userId", "name")
+            .select("userId certificateType");
+        }
 
         if (certificate) {
           const userName = certificate.userId?.name || "Participant";
@@ -180,6 +241,9 @@ router.get("/:filename", async (req, res) => {
           if (fs.existsSync(thumbnailPath)) {
             return res.sendFile(thumbnailPath);
           }
+        } else {
+          console.log(`Access denied: User ${userId} (${userRole}) cannot access certificate ${id}`);
+          return res.status(403).send("Access denied");
         }
       }
     } catch (error) {

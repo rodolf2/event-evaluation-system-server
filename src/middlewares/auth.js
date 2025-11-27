@@ -10,7 +10,12 @@ const generateToken = (userId) => {
 // Middleware to check if user is authenticated
 const requireAuth = async (req, res, next) => {
   try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
+    let token = req.header("Authorization")?.replace("Bearer ", "");
+
+    // Also check query parameter for token (useful for images/downloads)
+    if (!token && req.query.token) {
+      token = req.query.token;
+    }
 
     if (!token) {
       return res.status(401).json({
@@ -165,7 +170,7 @@ const requireRole = (allowedRoles) => {
         });
       }
 
-      console.log('User role:', user.role, 'Allowed roles:', allowedRoles);
+      console.log("User role:", user.role, "Allowed roles:", allowedRoles);
       if (!allowedRoles.includes(user.role)) {
         return res.status(403).json({
           success: false,

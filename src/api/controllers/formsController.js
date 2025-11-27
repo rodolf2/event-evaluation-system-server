@@ -775,6 +775,7 @@ const publishForm = async (req, res) => {
       sections,
       eventStartDate,
       eventEndDate,
+      verificationCode,
       uploadedFiles,
       uploadedLinks,
       selectedStudents,
@@ -978,6 +979,31 @@ const publishForm = async (req, res) => {
     form.shareableLink = shareableLink;
 
     const savedForm = await form.save();
+
+    // Create Event with verification code if provided
+    if (verificationCode) {
+      try {
+        const Event = require("../../models/Event");
+        const eventData = {
+          name: savedForm.title,
+          date: savedForm.eventStartDate || new Date(),
+          category: 'evaluation',
+          description: savedForm.description || `Evaluation form: ${savedForm.title}`,
+          attendees: savedForm.attendeeList.map(attendee => ({
+            name: attendee.name,
+            email: attendee.email
+          })),
+          verificationCode: verificationCode
+        };
+
+        const event = new Event(eventData);
+        await event.save();
+        console.log(`[FORM-PUB] Created event with verification code: ${verificationCode}`);
+      } catch (eventError) {
+        console.error("Failed to create event:", eventError);
+        // Don't fail form publication if event creation fails
+      }
+    }
 
     // Log activity
     try {

@@ -4,6 +4,10 @@ const { requireRole } = require('../../middlewares/auth');
 const Event = require('../../models/Event');
 const Feedback = require('../../models/Feedback');
 const analysisService = require('../../services/analysis/analysisService');
+const csv = require('csv-parser');
+const fs = require('fs');
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
 
 // @route   GET /api/events
 // @desc    Get all events
@@ -150,6 +154,89 @@ router.get('/reports/all', requireRole(['psas', 'school-admin', 'mis']), async (
     res.json(reports);
   } catch (error) {
     console.error('Error fetching reports:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// @route   POST /api/events/:id/attendees
+// @desc    Upload attendee CSV for an event
+// @access  Protected (psas, club-officer)
+router.post('/:id/attendees', requireRole(['psas', 'club-officer']), upload.single('attendees'), async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const attendees = [];
+    const filePath = req.file.path;
+
+    // Parse CSV
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on('data', (row) => {
+        if (row.name && row.email) {
+          attendees.push({
+            name: row.name.trim(),
+            email: row.email.trim().toLowerCase()
+          });
+        }
+      })
+      .on('end', async () => {
+        // Remove duplicates
+        const uniqueAttendees = attendees.filter((attendee, index, self) =>
+          index === self.findIndex(a => a.email === attendee.email)
+        );
+
+        event.attendees = uniqueAttendees;
+        await event.save();
+
+        // Clean up uploaded file
+        fs.unlinkSync(filePath);
+
+        res.json({
+          success: true,
+          message: `Uploaded ${uniqueAttendees.length} attendees`,
+          attendees: uniqueAttendees
+        });
+      })
+      .on('error', (error) => {
+        console.error('CSV parsing error:', error);
+        res.status(500).json({ error: 'Error parsing CSV file' });
+      });
+  } catch (error) {
+    console.error('Error uploading attendees:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// @route   POST /api/events
+// @desc    Create a new event
+// @access  Protected (psas, club-officer)
+router.post('/', requireRole(['psas', 'club-officer']), async (req, res) => {
+  try {
+    const { name, date, category, description, verificationCode } = req.body;
+
+    const event = new Event({
+      name,
+      date,
+      category,
+      description,
+      verificationCode
+    });
+
+    await event.save();
+    res.status(201).json(event);
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Verification code already exists' });
+    }
     res.status(500).json({ error: error.message });
   }
 });
