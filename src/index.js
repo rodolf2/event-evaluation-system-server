@@ -196,6 +196,13 @@ app.get("/health", (req, res) => {
   });
 });
 
+// In your server/src/index.js or wherever CORS is configured
+const corsOptions = {
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true
+};
+app.use(cors(corsOptions));
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
