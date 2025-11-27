@@ -187,7 +187,7 @@ class NotificationService {
         reminder.description ? " - " + reminder.description : ""
       }. Reminder date: ${new Date(
         reminder.date
-      ).toLocaleDateString()}. Priority: ${reminder.priority}.`;
+      ).toLocaleDateString()}.`;
 
       console.log("[notifyReminderCreated] Creating notification with data:", {
         title,
@@ -247,7 +247,7 @@ class NotificationService {
     });
 
     const title = `⏰ Reminder Due Soon: ${reminder.title}`;
-    const message = `Your reminder "${reminder.title}" is due on ${dueDate}. Priority: ${reminder.priority}. Take action now if needed.`;
+    const message = `Your reminder "${reminder.title}" is due on ${dueDate}. Take action now if needed.`;
 
     // Notify only the creator
     const notification = await this.createRoleBasedNotification(

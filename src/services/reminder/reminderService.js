@@ -22,11 +22,6 @@ class ReminderService {
       day: "numeric",
     });
 
-    const priorityColors = {
-      low: "#10B981", // green
-      medium: "#F59E0B", // yellow
-      high: "#EF4444", // red
-    };
 
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -39,9 +34,7 @@ class ReminderService {
             user.name
           },</h2>
 
-          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${
-            priorityColors[reminder.priority]
-          };">
+          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <h3 style="margin: 0 0 10px 0; color: #1f2937;">${
               reminder.title
             }</h3>
@@ -49,18 +42,9 @@ class ReminderService {
               reminder.description || "No description provided."
             }</p>
 
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <strong style="color: #374151;">📅 Date:</strong>
-                <span style="color: #6b7280; margin-left: 8px;">${reminderDate}</span>
-              </div>
-              <div>
-                <span style="background: ${
-                  priorityColors[reminder.priority]
-                }; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">
-                  ${reminder.priority.toUpperCase()} PRIORITY
-                </span>
-              </div>
+            <div style="margin-top: 15px;">
+              <strong style="color: #374151;">📅 Date:</strong>
+              <span style="color: #6b7280; margin-left: 8px;">${reminderDate}</span>
             </div>
           </div>
 

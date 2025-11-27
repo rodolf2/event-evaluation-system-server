@@ -29,8 +29,6 @@ const getUserNotifications = async (req, res) => {
     const {
       page = 1,
       limit = 20,
-      type,
-      priority,
       unreadOnly = "false",
     } = req.query;
 
@@ -39,21 +37,11 @@ const getUserNotifications = async (req, res) => {
       userRole,
       page,
       limit,
-      type,
-      priority,
       unreadOnly,
     });
 
     // Build base visibility filter
     const visibilityFilter = buildVisibilityFilter(userId, userRole);
-
-    // Add optional filters
-    if (type) {
-      visibilityFilter.$and.push({ type });
-    }
-    if (priority) {
-      visibilityFilter.$and.push({ priority });
-    }
 
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -91,7 +79,7 @@ const getUserNotifications = async (req, res) => {
       // Generate action URL based on related entity
       let actionUrl = null;
       if (notification.relatedEntity) {
-        const { type: entityType, id } = notification.relatedEntity;
+        const { entityType, id } = notification.relatedEntity;
         switch (entityType) {
           case "form":
             actionUrl =
@@ -155,8 +143,6 @@ const createNotification = async (req, res) => {
     const {
       title,
       message,
-      type,
-      priority,
       targetRoles,
       targetUsers,
       relatedEntity,
@@ -168,6 +154,29 @@ const createNotification = async (req, res) => {
         success: false,
         message: "Title and message are required",
       });
+    }
+
+    // Set default targetRoles based on creator's role if not provided
+    if (!targetRoles || targetRoles.length === 0) {
+      switch (req.user.role) {
+        case 'psas':
+          targetRoles = ['psas'];
+          break;
+        case 'club-officer':
+          targetRoles = ['club-officer'];
+          break;
+        case 'school-admin':
+          targetRoles = ['school-admin'];
+          break;
+        case 'mis':
+          targetRoles = ['mis'];
+          break;
+        case 'participant':
+          targetRoles = ['participant'];
+          break;
+        default:
+          targetRoles = [req.user.role]; // fallback to creator's role
+      }
     }
 
     if (
@@ -203,8 +212,6 @@ const createNotification = async (req, res) => {
     const notificationData = {
       title,
       message,
-      type: type || "info",
-      priority: priority || "medium",
       targetRoles: targetRoles || [],
       createdBy: req.user._id,
       isSystemGenerated: false,
