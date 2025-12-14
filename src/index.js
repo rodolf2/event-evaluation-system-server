@@ -122,6 +122,7 @@ const formsRoutes = require("./api/routes/formsRoutes");
 const uploadRoutes = require("./api/routes/uploadRoutes");
 const analyticsRoutes = require("./api/routes/analyticsRoutes");
 const reportsRoutes = require("./api/routes/reports");
+const misRoutes = require("./api/routes/misRoutes");
 
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/certificates", certificateRoutes);
@@ -136,6 +137,7 @@ app.use("/api/forms", formsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/reports", reportsRoutes);
+app.use("/api/mis", misRoutes);
 app.use("/api/thumbnails", require("./api/routes/thumbnailRoutes"));
 
 // Test routes for development
@@ -198,8 +200,8 @@ app.get("/health", (req, res) => {
 
 // In your server/src/index.js or wherever CORS is configured
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true,
 };
 app.use(cors(corsOptions));
 

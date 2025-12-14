@@ -637,10 +637,15 @@ async function enhancedQualitativeAnalysis(comments) {
       intensifierMultiplier;
 
     // Determine sentiment with confidence
+    // If both positive and negative scores are equal (including both > 0), treat as neutral (mixed sentiment)
     let sentiment = "neutral";
     let confidence = 0.5;
 
-    if (positiveScore > negativeScore && positiveScore > 0) {
+    if (positiveScore === negativeScore) {
+      // Equal scores = neutral/mixed sentiment (don't split the comment)
+      sentiment = "neutral";
+      confidence = positiveScore > 0 ? 0.6 : 0.5; // Slightly higher confidence if there are actual keywords
+    } else if (positiveScore > negativeScore && positiveScore > 0) {
       sentiment = "positive";
       confidence = Math.min(0.5 + positiveScore * 0.1, 0.9);
     } else if (negativeScore > positiveScore && negativeScore > 0) {
@@ -993,7 +998,11 @@ function fallbackAnalyzeResponses(responses) {
         ).length;
 
         // Determine sentiment
-        if (positiveMatches > negativeMatches && positiveMatches > 0) {
+        // Equal positive and negative = neutral (mixed sentiment, don't split)
+        if (positiveMatches === negativeMatches) {
+          // Equal scores = neutral/mixed sentiment
+          neutralCount++;
+        } else if (positiveMatches > negativeMatches && positiveMatches > 0) {
           positiveCount++;
         } else if (negativeMatches > positiveMatches && negativeMatches > 0) {
           negativeCount++;

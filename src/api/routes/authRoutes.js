@@ -20,6 +20,13 @@ router.get(
     session: false,
   }),
   (req, res) => {
+    // Check if user account is active
+    if (!req.user.isActive) {
+      return res.redirect(
+        `${process.env.CLIENT_URL}/login?error=account_inactive`
+      );
+    }
+
     // Generate JWT token with role information and profile picture
     const token = jwt.sign(
       {
@@ -90,9 +97,10 @@ router.post("/guest", async (req, res) => {
 
     // Check if user is in attendees list
     const normalizedEmail = email.toLowerCase().trim();
-    const attendee = event.attendees.find(att =>
-      att.email.toLowerCase() === normalizedEmail &&
-      att.name.toLowerCase() === name.toLowerCase().trim()
+    const attendee = event.attendees.find(
+      (att) =>
+        att.email.toLowerCase() === normalizedEmail &&
+        att.name.toLowerCase() === name.toLowerCase().trim()
     );
 
     if (!attendee) {
@@ -115,6 +123,14 @@ router.post("/guest", async (req, res) => {
       });
       await user.save();
     } else {
+      // Check if existing user is active
+      if (!user.isActive) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your account has been deactivated. Please contact an administrator.",
+        });
+      }
       // Update last login
       user.lastLogin = Date.now();
       await user.save();
@@ -286,8 +302,10 @@ router.put("/profile", async (req, res) => {
       user.muteNotifications = muteNotifications;
     if (muteReminders !== undefined) user.muteReminders = muteReminders;
     if (onboardingStep !== undefined) user.onboardingStep = onboardingStep;
-    if (hasCompletedOnboarding !== undefined) user.hasCompletedOnboarding = hasCompletedOnboarding;
-    if (onboardingCompletedAt !== undefined) user.onboardingCompletedAt = onboardingCompletedAt;
+    if (hasCompletedOnboarding !== undefined)
+      user.hasCompletedOnboarding = hasCompletedOnboarding;
+    if (onboardingCompletedAt !== undefined)
+      user.onboardingCompletedAt = onboardingCompletedAt;
 
     await user.save();
 

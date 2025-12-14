@@ -65,10 +65,10 @@ const requireSuperAdmin = async (req, res, next) => {
     const User = require("../models/User");
     const user = await User.findById(decoded.id);
 
-    if (!user) {
+    if (!user || !user.isActive) {
       return res.status(401).json({
         success: false,
-        message: "User not found.",
+        message: "User account is inactive or not found.",
       });
     }
 
@@ -110,11 +110,11 @@ const requireOwnerOrAdmin = (resourceUserIdField = "userId") => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const User = require("../models/User");
       const user = await User.findById(decoded.id);
-
-      if (!user) {
+  
+      if (!user || !user.isActive) {
         return res.status(401).json({
           success: false,
-          message: "User not found.",
+          message: "User account is inactive or not found.",
         });
       }
 
@@ -162,11 +162,11 @@ const requireRole = (allowedRoles) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const User = require("../models/User");
       const user = await User.findById(decoded.id);
-
-      if (!user) {
+  
+      if (!user || !user.isActive) {
         return res.status(401).json({
           success: false,
-          message: "User not found.",
+          message: "User account is inactive or not found.",
         });
       }
 
