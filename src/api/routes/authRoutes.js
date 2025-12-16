@@ -55,6 +55,7 @@ router.get(
 );
 
 const Event = require("../../models/Event");
+const SystemSettings = require("../../models/SystemSettings");
 
 // Guest login route
 router.post("/guest", async (req, res) => {
@@ -113,13 +114,25 @@ router.post("/guest", async (req, res) => {
     // Find or create guest user
     let user = await User.findOne({ email: normalizedEmail, role });
 
+    // Get expiration days: event setting > system default > 30 days
+    const systemSettings = await SystemSettings.getSettings();
+    const systemDefault =
+      systemSettings.guestSettings?.defaultExpirationDays || 30;
+    const daysUntilExpiry = event.guestExpirationDays || systemDefault;
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + daysUntilExpiry);
+
     if (!user) {
-      // Create new guest user
+      // Create new guest user with expiration
       user = new User({
         name: attendee.name,
         email: normalizedEmail,
         role,
         isActive: true,
+        isGuest: true,
+        expiresAt,
+        expirationDays: daysUntilExpiry,
       });
       await user.save();
     } else {
@@ -131,8 +144,10 @@ router.post("/guest", async (req, res) => {
             "Your account has been deactivated. Please contact an administrator.",
         });
       }
-      // Update last login
+      // Update last login and extend expiration
       user.lastLogin = Date.now();
+      user.expiresAt = expiresAt;
+      user.expirationDays = daysUntilExpiry;
       await user.save();
     }
 

@@ -1,16 +1,26 @@
-const nodemailer = require('nodemailer');
-const { generateRatingEmailHtml } = require('./ratingEmailTemplate.js');
+const nodemailer = require("nodemailer");
+const { generateRatingEmailHtml } = require("./ratingEmailTemplate.js");
 
 const sendEmail = async (options) => {
-  const transporter = nodemailer.createTransporter({
-    service: 'gmail',
+  // nodemailer v7+ uses default export
+  const createTransport =
+    nodemailer.createTransport || nodemailer.default?.createTransport;
+
+  if (!createTransport) {
+    throw new Error(
+      "nodemailer is not properly installed. Please run: npm install nodemailer"
+    );
+  }
+
+  const transporter = createTransport({
+    service: "gmail",
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
   });
 
-  let htmlContent = options.html || '';
+  let htmlContent = options.html || "";
   let subject = options.subject;
   let textContent = options.text;
 
@@ -21,9 +31,10 @@ const sendEmail = async (options) => {
       questionText: options.ratingData.questionText,
       ratingScore: options.ratingData.ratingScore,
       maxScore: options.ratingData.maxScore || 10,
-      adminName: options.ratingData.adminName || 'Admin/Team'
+      adminName: options.ratingData.adminName || "Admin/Team",
     });
-    subject = options.ratingData.subject || 
+    subject =
+      options.ratingData.subject ||
       `${options.ratingData.participantName} - Rating Response: ${options.ratingData.questionText} = ${options.ratingData.ratingScore}`;
   }
 
@@ -37,7 +48,7 @@ const sendEmail = async (options) => {
 
   const info = await transporter.sendMail(mailOptions);
 
-  console.log('Rating notification email sent: %s', info.messageId);
+  console.log("Rating notification email sent: %s", info.messageId);
   return info;
 };
 

@@ -420,83 +420,198 @@ async function enhancedQualitativeAnalysis(comments) {
     neutral: 0,
   };
 
-  // Enhanced multilingual keyword analysis
+  // Comprehensive multilingual sentiment lexicon
+  // This covers common event feedback vocabulary in both English and Tagalog
   const multilingualKeywords = {
     positive: {
       english: [
+        // General positive
         "good",
         "great",
         "excellent",
         "amazing",
         "wonderful",
         "fantastic",
-        "love",
-        "like",
-        "best",
         "awesome",
         "perfect",
-        "satisfied",
-        "happy",
-        "pleased",
         "outstanding",
         "brilliant",
         "superb",
         "marvelous",
-        "delightful",
-        "enjoyable",
-        "thrilling",
+        "magnificent",
         "incredible",
         "fabulous",
         "splendid",
-        "magnificent",
-        "super",
         "terrific",
         "phenomenal",
         "exceptional",
         "remarkable",
+        "impressive",
+        "stellar",
+        "top-notch",
+        "first-rate",
+        "world-class",
+        // Emotions
+        "love",
+        "loved",
+        "like",
+        "liked",
+        "enjoy",
+        "enjoyed",
+        "happy",
+        "pleased",
+        "satisfied",
+        "delighted",
+        "thrilled",
+        "excited",
+        "grateful",
+        "thankful",
+        "appreciate",
+        "appreciated",
+        "glad",
+        "joyful",
+        "enthusiastic",
+        // Event-specific positive
+        "informative",
+        "helpful",
+        "useful",
+        "valuable",
+        "insightful",
+        "enlightening",
+        "educational",
+        "inspiring",
+        "motivating",
+        "engaging",
+        "interesting",
+        "fun",
+        "entertaining",
+        "well-organized",
+        "well-prepared",
+        "well-managed",
+        "smooth",
+        "professional",
+        "efficient",
+        "effective",
+        "productive",
+        "beneficial",
+        "rewarding",
+        "worthwhile",
+        "memorable",
+        "unforgettable",
+        // Quality descriptors
+        "nice",
+        "fine",
+        "lovely",
+        "beautiful",
+        "elegant",
+        "polished",
+        "clean",
+        "clear",
+        "organized",
+        "structured",
+        "thorough",
+        "comprehensive",
+        "detailed",
+        // Recommendations
+        "recommend",
+        "recommended",
+        "worth it",
+        "must attend",
+        "highly recommend",
+        // Intensified positive
+        "very good",
+        "so good",
+        "really good",
+        "absolutely amazing",
+        "truly excellent",
       ],
       tagalog: [
+        // General positive
         "maganda",
         "mabuti",
-        "masaya",
-        "nakakatuwa",
+        "mahusay",
         "galing",
-        "bilib",
-        "ang ganda",
+        "astig",
+        "ayos",
+        "swabe",
+        "lupet",
+        "mabait",
+        "maayos",
+        "malinaw",
+        "malinis",
+        "magaling",
+        "kahanga-hanga",
+        // Intensified
         "napakaganda",
-        "sobrang ganda",
-        "napakagaling",
-        "sobrang galing",
-        "nakakaaliw",
-        "nakakatuwa",
-        "nakakatuwa talaga",
-        "napakasaya",
-        "masayang-masaya",
-        "tuwa na tuwa",
-        "labis na kasiyahan",
-        "lubos na kasiyahan",
-        "masarap",
-        "napakasarap",
         "napakahusay",
-        "husay na husay",
+        "napakagaling",
+        "napakaayos",
+        "sobrang ganda",
+        "sobrang galing",
+        "sobrang husay",
+        "ang ganda",
+        "ang galing",
+        "ang husay",
+        "grabe ang ganda",
+        "grabe ang galing",
+        "hindi ko inexpect na ganito kaganda",
+        // Emotions
+        "masaya",
+        "masayang-masaya",
+        "natutuwa",
+        "nakakatuwa",
+        "nakaka-aliw",
+        "satisfied",
+        "contento",
+        "may kasiyahan",
+        "may galak",
+        "nakakaproud",
+        "nakakatuwa talaga",
+        "tuwa na tuwa",
+        "napakasaya",
+        "lubos na kasiyahan",
+        // Event-specific
+        "nakakaengganyo",
+        "nakaka-inspire",
+        "nakakapag-isip",
+        "informative",
+        "maraming natutunan",
+        "madaming natutunan",
+        "may natutunan",
+        "natuto ako",
+        "nagustuhan ko",
+        "bet ko",
+        "love it",
+        "go go go",
+        "sulit",
+        "worth it",
+        "hindi sayang",
+        "sulit sa oras",
+        "sulit sa panahon",
+        // Appreciation
+        "salamat",
+        "maraming salamat",
+        "thank you",
+        "appreciate",
+        "nagpapasalamat",
+        // Recommendations
+        "irecommend ko",
+        "irerecommend ko",
+        "punta kayo",
+        "attend kayo",
       ],
     },
     negative: {
       english: [
+        // Strong negative
         "bad",
         "terrible",
         "awful",
         "horrible",
         "hate",
+        "hated",
         "dislike",
         "worst",
-        "disappointed",
-        "unsatisfied",
-        "sad",
-        "angry",
-        "frustrated",
-        "poor",
-        "fail",
         "disaster",
         "pathetic",
         "lousy",
@@ -504,40 +619,320 @@ async function enhancedQualitativeAnalysis(comments) {
         "abysmal",
         "atrocious",
         "appalling",
-        "dismal",
         "deplorable",
         "shocking",
         "unacceptable",
         "unbearable",
         "intolerable",
-        "excruciating",
-        "agonizing",
         "miserable",
+        "disgusting",
+        "repulsive",
+        "offensive",
+        // Emotions
+        "disappointed",
+        "disappointing",
+        "unsatisfied",
+        "sad",
+        "angry",
+        "frustrated",
+        "annoyed",
+        "irritated",
+        "upset",
+        "unhappy",
+        "dissatisfied",
+        "regret",
+        "waste",
+        "wasted",
+        "bored",
+        "boring",
+        "tired",
+        "exhausted",
+        "stressed",
+        // Event-specific negative
+        "disorganized",
+        "unprepared",
+        "unprofessional",
+        "chaotic",
+        "messy",
+        "confusing",
+        "unclear",
+        "vague",
+        "rushed",
+        "too fast",
+        "too slow",
+        "too long",
+        "too short",
+        "delayed",
+        "late",
+        "behind schedule",
+        "overcrowded",
+        "cramped",
+        "noisy",
+        "distracting",
+        "uncomfortable",
+        // Quality issues
+        "poor",
+        "weak",
+        "lacking",
+        "inadequate",
+        "insufficient",
+        "incomplete",
+        "shallow",
+        "superficial",
+        "generic",
+        "repetitive",
+        "redundant",
+        "outdated",
+        "irrelevant",
+        "useless",
+        "pointless",
+        "meaningless",
+        // Mild criticism / constructive
+        "mediocre",
+        "average",
+        "okay",
+        "meh",
+        "underwhelming",
+        "unimpressive",
+        "forgettable",
+        "nothing special",
+        "fair",
+        "passable",
+        "tolerable",
+        "could be better",
+        "needs improvement",
+        "room for improvement",
+        "not well",
+        "not good",
+        "not great",
+        "not enough",
+        "not clear",
+        // Issues
+        "issue",
+        "issues",
+        "problem",
+        "problems",
+        "concern",
+        "concerns",
+        "difficulty",
+        "difficulties",
+        "challenge",
+        "challenges",
+        "obstacle",
+        "flaw",
+        "flaws",
+        "mistake",
+        "mistakes",
+        "error",
+        "errors",
+        // Negation patterns
+        "didn't like",
+        "don't like",
+        "wasn't good",
+        "weren't good",
+        "couldn't understand",
+        "didn't enjoy",
+        "not satisfied",
+        "not happy",
       ],
       tagalog: [
+        // Strong negative
         "masama",
         "pangit",
-        "nakakaasar",
         "nakakainis",
-        "galit",
-        "ayaw",
-        "badtrip",
+        "nakakaasar",
         "nakakagalit",
+        "nakakabadtrip",
+        "badtrip",
         "nakakasuka",
         "nakakadiri",
-        "nakakainis talaga",
-        "nakakafrustrate",
-        "nakakabadtrip",
-        "nakakagalit na",
+        "nakakahiya",
+        "nakakadismaya",
         "napakapangit",
         "sobrang pangit",
         "napakamasama",
         "sobrang masama",
-        "napakagalit",
+        // Intensified negative
+        "ayaw",
+        "ayaw ko",
         "ayaw na ayaw",
+        "galit",
         "galit na galit",
         "inis na inis",
-        "badtrip na badtrip",
+        "napakagalit",
+        "sobrang galit",
+        "grabe ang pangit",
+        "walang kwenta",
+        // Emotions
+        "nalungkot",
+        "nainis",
+        "nagalit",
+        "nadisappoint",
+        "nadismaya",
+        "nafrustrate",
+        "na-stress",
+        "napagod",
+        "naumay",
+        "nagsawa",
+        "nabore",
+        "walang gana",
+        // Event-specific
+        "magulo",
+        "hindi maayos",
+        "hindi malinaw",
+        "mabagal",
+        "matagal",
+        "maikli",
+        "masikip",
+        "mainit",
+        "maingay",
+        "walang organisasyon",
+        "late",
+        "delayed",
+        "hindi prepared",
+        "kulang",
+        "kulang-kulang",
+        // Quality issues
+        "hindi maganda",
+        "hindi okay",
+        "hindi ayos",
+        "hindi sapat",
+        "hindi kumpleto",
+        "boring",
+        "nakakabore",
+        "nakakaumay",
+        "nakakasawa",
+        "paulit-ulit",
+        // Mild criticism
+        "pwede pa",
+        "pwede pang i-improve",
+        "may kulang",
+        "may pagkukulang",
+        "okay lang",
+        "so-so",
+        "meh",
+        "hindi masama pero hindi rin maganda",
+        // Issues
+        "problema",
+        "issue",
+        "concern",
+        "hirap",
+        "mahirap",
+        "nakakalito",
+      ],
+    },
+    neutral: {
+      english: [
+        // Neutral descriptors
+        "okay",
+        "ok",
+        "fine",
+        "alright",
+        "normal",
+        "standard",
+        "typical",
+        "regular",
+        "ordinary",
+        "common",
+        "usual",
+        "expected",
+        "predictable",
+        // Suggestions without negative tone
+        "suggest",
+        "suggestion",
+        "hope",
+        "hoping",
+        "maybe",
+        "perhaps",
+        "consider",
+        "considering",
+        "would be nice",
+        "it would help",
+        // Observations
+        "noticed",
+        "observed",
+        "saw",
+        "attended",
+        "participated",
+        "joined",
+        "learned",
+        "understood",
+        "heard",
+        "experienced",
+      ],
+      tagalog: [
+        // Neutral descriptors
+        "okay lang",
+        "ayos lang",
+        "pwede na",
+        "okey",
+        "normal",
+        "katamtaman",
+        "sakto lang",
+        "pasado",
+        "puwede",
+        // Suggestions
+        "sana",
+        "siguro",
+        "baka pwede",
+        "kung pwede",
+        // Observations
+        "napansin ko",
+        "nakita ko",
+        "natutunan ko",
+        "naintindihan ko",
+        "dumalo ako",
+        "sumali ako",
+      ],
+    },
+    // Contrast indicators - signal mixed sentiment
+    contrastIndicators: {
+      english: [
+        "but",
+        "however",
+        "although",
+        "though",
+        "yet",
+        "still",
+        "nevertheless",
+        "nonetheless",
+        "despite",
+        "in spite of",
+        "even though",
+        "while",
+        "whereas",
+        "on the other hand",
+        "unfortunately",
+        "sadly",
+        "except",
+        "other than",
+        "apart from",
+        "aside from",
+        "only issue",
+        "only problem",
+        "my only concern",
+        "the only thing",
+        "one thing",
+      ],
+      tagalog: [
+        "pero",
+        "ngunit",
+        "subalit",
+        "kahit",
+        "kahit na",
+        "bagamat",
+        "gayunpaman",
+        "sa kabila ng",
+        "maliban sa",
+        "kaya lang",
+        "ang problema lang",
+        "ang issue lang",
+        "yung lang",
+        "isa lang",
+        "sayang",
+        "sayang lang",
+        "kaso",
+        "kaso lang",
       ],
     },
     intensifiers: {
@@ -558,23 +953,36 @@ async function enhancedQualitativeAnalysis(comments) {
         "vastly",
         "hugely",
         "massively",
-        "colossally",
-        "monumentally",
+        "particularly",
+        "especially",
+        "definitely",
+        "certainly",
+        "surely",
+        "quite",
+        "rather",
+        "fairly",
+        "pretty",
+        "somewhat",
       ],
       tagalog: [
         "napaka",
         "sobra",
+        "sobrang",
         "labis",
         "lubos",
-        "napaka-",
-        "sobrang",
-        "labis na",
-        "lubos na",
+        "grabe",
         "talagang",
         "totoo",
         "tunay",
-        "dati",
-        "sadya",
+        "sadyang",
+        "lubha",
+        "labis na",
+        "lubos na",
+        "napaka-",
+        "super",
+        "ang",
+        "ang-",
+        "todo",
       ],
     },
   };
@@ -601,12 +1009,14 @@ async function enhancedQualitativeAnalysis(comments) {
     else if (hasEnglish && !hasTagalog) language = "english";
     else language = "mixed";
 
-    // Analyze sentiment based on language
+    // Analyze sentiment based on language - use ALL language keywords for mixed language
     let positiveScore = 0;
     let negativeScore = 0;
+    let neutralScore = 0;
     let intensifierMultiplier = 1;
+    let hasContrastIndicator = false;
 
-    // Check for intensifiers first
+    // Check for intensifiers first (both languages)
     const allIntensifiers = [
       ...multilingualKeywords.intensifiers.english,
       ...multilingualKeywords.intensifiers.tagalog,
@@ -615,47 +1025,80 @@ async function enhancedQualitativeAnalysis(comments) {
       text.includes(intensifier)
     ).length;
     if (intensifierCount > 0) {
-      intensifierMultiplier = 1 + intensifierCount * 0.5; // Increase weight for intensifiers
+      intensifierMultiplier = 1 + intensifierCount * 0.3; // Increase weight for intensifiers
     }
 
-    // Count positive keywords
-    const positiveKeywords =
-      language === "tagalog"
-        ? multilingualKeywords.positive.tagalog
-        : multilingualKeywords.positive.english;
+    // Check for contrast indicators (both languages) - signals mixed sentiment
+    const allContrastIndicators = [
+      ...multilingualKeywords.contrastIndicators.english,
+      ...multilingualKeywords.contrastIndicators.tagalog,
+    ];
+    hasContrastIndicator = allContrastIndicators.some((indicator) =>
+      text.includes(indicator)
+    );
+
+    // Count positive keywords (both languages for mixed)
+    const allPositiveKeywords = [
+      ...multilingualKeywords.positive.english,
+      ...multilingualKeywords.positive.tagalog,
+    ];
     positiveScore =
-      positiveKeywords.filter((keyword) => text.includes(keyword)).length *
+      allPositiveKeywords.filter((keyword) => text.includes(keyword)).length *
       intensifierMultiplier;
 
-    // Count negative keywords
-    const negativeKeywords =
-      language === "tagalog"
-        ? multilingualKeywords.negative.tagalog
-        : multilingualKeywords.negative.english;
+    // Count negative keywords (both languages for mixed)
+    const allNegativeKeywords = [
+      ...multilingualKeywords.negative.english,
+      ...multilingualKeywords.negative.tagalog,
+    ];
     negativeScore =
-      negativeKeywords.filter((keyword) => text.includes(keyword)).length *
+      allNegativeKeywords.filter((keyword) => text.includes(keyword)).length *
       intensifierMultiplier;
 
-    // Determine sentiment with confidence
-    // If both positive and negative scores are equal (including both > 0), treat as neutral (mixed sentiment)
+    // Count neutral keywords (both languages)
+    const allNeutralKeywords = [
+      ...multilingualKeywords.neutral.english,
+      ...multilingualKeywords.neutral.tagalog,
+    ];
+    neutralScore = allNeutralKeywords.filter((keyword) =>
+      text.includes(keyword)
+    ).length;
+
+    // Determine sentiment with improved mixed detection
     let sentiment = "neutral";
     let confidence = 0.5;
 
-    if (positiveScore === negativeScore) {
-      // Equal scores = neutral/mixed sentiment (don't split the comment)
+    // Check if this is truly mixed sentiment:
+    // 1. Has both positive AND negative keywords, OR
+    // 2. Has contrast indicator with any sentiment keywords
+    const hasBothSentiments = positiveScore > 0 && negativeScore > 0;
+    const hasContrastWithSentiment =
+      hasContrastIndicator && (positiveScore > 0 || negativeScore > 0);
+
+    if (hasBothSentiments || hasContrastWithSentiment) {
+      // Mixed sentiment - classify as neutral
       sentiment = "neutral";
-      confidence = positiveScore > 0 ? 0.6 : 0.5; // Slightly higher confidence if there are actual keywords
+      // Higher confidence if both scores are significant
+      confidence = Math.min(0.6 + (positiveScore + negativeScore) * 0.03, 0.85);
     } else if (positiveScore > negativeScore && positiveScore > 0) {
       sentiment = "positive";
-      confidence = Math.min(0.5 + positiveScore * 0.1, 0.9);
+      confidence = Math.min(0.5 + positiveScore * 0.08, 0.95);
     } else if (negativeScore > positiveScore && negativeScore > 0) {
       sentiment = "negative";
-      confidence = Math.min(0.5 + negativeScore * 0.1, 0.9);
+      confidence = Math.min(0.5 + negativeScore * 0.08, 0.95);
+    } else if (neutralScore > 0) {
+      // Only neutral keywords found
+      sentiment = "neutral";
+      confidence = Math.min(0.5 + neutralScore * 0.1, 0.7);
+    } else {
+      // No keywords found - default to neutral with low confidence
+      sentiment = "neutral";
+      confidence = 0.3;
     }
 
-    // Special handling for mixed language
+    // Adjust confidence for mixed language
     if (language === "mixed") {
-      confidence *= 0.8; // Reduce confidence for mixed language
+      confidence *= 0.9; // Slight reduction for mixed language
     }
 
     categorized_comments[sentiment].push({
@@ -815,25 +1258,31 @@ async function analyzeResponses(responses, usePython = true) {
   }
 
   try {
-    // Extract text content from responses
+    // Extract text content from responses (only text-based questions, not ratings)
     const textContents = [];
 
     responses.forEach((response) => {
       if (response.responses && Array.isArray(response.responses)) {
-        let textContent = "";
-
-        // Extract text from all responses
+        // Extract text from text-based questions only
         response.responses.forEach((q) => {
-          if (typeof q.answer === "string") {
-            textContent += " " + q.answer;
-          } else if (Array.isArray(q.answer)) {
-            textContent += " " + q.answer.join(" ");
-          }
-        });
+          // Skip if answer is a number (scale/rating)
+          if (typeof q.answer === "number") return;
 
-        if (textContent.trim()) {
-          textContents.push(textContent.trim());
-        }
+          // Skip if answer is a short numeric string (1-5 rating stored as string)
+          if (typeof q.answer === "string") {
+            const trimmed = q.answer.trim();
+            // Skip pure numbers or very short responses (likely ratings)
+            if (/^\d+$/.test(trimmed) && trimmed.length <= 2) return;
+            // Skip if too short to be meaningful text (less than 3 characters)
+            if (trimmed.length < 3) return;
+
+            // This is actual text content
+            textContents.push(trimmed);
+          }
+
+          // Handle array answers (multiple choice selections - skip for sentiment)
+          // We don't analyze multiple choice for sentiment
+        });
       }
     });
 
@@ -957,6 +1406,10 @@ function fallbackAnalyzeResponses(responses) {
     "satisfied",
     "happy",
     "pleased",
+    "informative",
+    "helpful",
+    "enjoyed",
+    "appreciated",
   ];
   const negativeKeywords = [
     "bad",
@@ -973,46 +1426,71 @@ function fallbackAnalyzeResponses(responses) {
     "frustrated",
     "poor",
     "fail",
+    // Nuanced/constructive criticism keywords
+    "rushed",
+    "confusing",
+    "boring",
+    "slow",
+    "lacking",
+    "needs improvement",
+    "could be better",
+    "not well",
+    "not good",
+    "disorganized",
+    "unclear",
+    "weak",
+    "mediocre",
+    "underwhelming",
+    "disappointing",
+    "however",
+    "but",
+    "although",
+    "unfortunately",
+    "issue",
+    "problem",
+    "concern",
   ];
 
   responses.forEach((response) => {
     if (response.responses && Array.isArray(response.responses)) {
-      let textContent = "";
-
-      // Extract text from all responses
+      // Extract text from text-based questions only (skip ratings/numbers)
       response.responses.forEach((q) => {
+        // Skip if answer is a number (scale/rating)
+        if (typeof q.answer === "number") return;
+
         if (typeof q.answer === "string") {
-          textContent += " " + q.answer.toLowerCase();
-        } else if (Array.isArray(q.answer)) {
-          textContent += " " + q.answer.join(" ").toLowerCase();
+          const trimmed = q.answer.trim();
+          // Skip pure numbers or very short responses (likely ratings)
+          if (/^\d+$/.test(trimmed) && trimmed.length <= 2) return;
+          // Skip if too short to be meaningful text (less than 3 characters)
+          if (trimmed.length < 3) return;
+
+          const textContent = trimmed.toLowerCase();
+
+          // Count keyword matches
+          const positiveMatches = positiveKeywords.filter((keyword) =>
+            textContent.includes(keyword)
+          ).length;
+          const negativeMatches = negativeKeywords.filter((keyword) =>
+            textContent.includes(keyword)
+          ).length;
+
+          // Check if this is truly mixed sentiment (has both positive AND negative keywords)
+          const hasBothSentiments = positiveMatches > 0 && negativeMatches > 0;
+
+          if (hasBothSentiments) {
+            // Mixed sentiment - classify as neutral
+            neutralCount++;
+          } else if (positiveMatches > negativeMatches && positiveMatches > 0) {
+            positiveCount++;
+          } else if (negativeMatches > positiveMatches && negativeMatches > 0) {
+            negativeCount++;
+          } else {
+            neutralCount++;
+          }
         }
+        // Skip array answers (multiple choice) for sentiment analysis
       });
-
-      if (textContent.trim()) {
-        // Count keyword matches
-        const positiveMatches = positiveKeywords.filter((keyword) =>
-          textContent.includes(keyword)
-        ).length;
-        const negativeMatches = negativeKeywords.filter((keyword) =>
-          textContent.includes(keyword)
-        ).length;
-
-        // Determine sentiment
-        // Equal positive and negative = neutral (mixed sentiment, don't split)
-        if (positiveMatches === negativeMatches) {
-          // Equal scores = neutral/mixed sentiment
-          neutralCount++;
-        } else if (positiveMatches > negativeMatches && positiveMatches > 0) {
-          positiveCount++;
-        } else if (negativeMatches > positiveMatches && negativeMatches > 0) {
-          negativeCount++;
-        } else {
-          neutralCount++;
-        }
-      } else {
-        // If no text content, treat as neutral
-        neutralCount++;
-      }
     }
   });
 

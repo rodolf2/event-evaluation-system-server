@@ -87,6 +87,20 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Guest account fields
+  isGuest: {
+    type: Boolean,
+    default: false,
+  },
+  expiresAt: {
+    type: Date,
+    default: null,
+    index: { expires: 0 }, // MongoDB TTL index - auto-deletes when expiresAt is reached
+  },
+  expirationDays: {
+    type: Number,
+    default: null, // Store the configured expiration period
+  },
 });
 
 // Update the updatedAt field before saving

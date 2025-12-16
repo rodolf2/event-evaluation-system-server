@@ -29,20 +29,31 @@ class MultilingualSentimentAnalyzer:
             
             # Gratitude and appreciation
             'thank you': 1, 'salamat': 1, 'maraming salamat': 2, 'thank you so much': 2,
-            'grateful': 1, 'appreciate': 1, 'appreciated': 1,
+            'grateful': 1, 'appreciate': 1, 'appreciated': 1, 'thankful': 1,
             
             # Effectiveness indicators
             'mahusay': 1, 'maayos': 1, 'effective': 1, 'efficient': 1,
             'successful': 1, 'tagumpay': 1, 'productive': 1, 'organized': 1,
             'well-planned': 1, 'excellent': 2, 'outstanding': 2, 'perfect': 2,
+            'well-organized': 1.5, 'well-prepared': 1.5, 'well-managed': 1.5,
+            'smooth': 1, 'professional': 1,
             
             # Learning and satisfaction
             'natuto': 1, 'natutunan': 1, 'nakatulong': 1, 'helpful': 1,
-            'informative': 1, 'enlightening': 1, 'satisfied': 1,
-            'enjoyed': 1, 'enjoyable': 1, 'fun': 1, 'interesting': 1,
+            'informative': 1.5, 'enlightening': 1, 'satisfied': 1,
+            'enjoyed': 1.5, 'enjoyable': 1, 'fun': 1, 'interesting': 1,
+            'educational': 1, 'insightful': 1.5, 'valuable': 1.5,
+            'useful': 1, 'inspiring': 1.5, 'motivating': 1,
+            'engaging': 1, 'memorable': 1.5, 'unforgettable': 2,
             
             # Filipino slang positive
-            'solid': 1, 'swabe': 1, 'oks': 0.5, 'goods': 1, 'nice': 1
+            'solid': 1, 'swabe': 1, 'oks': 0.5, 'goods': 1, 'nice': 1,
+            'lupet': 1.5, 'bet ko': 1, 'love it': 1.5, 'loved it': 1.5,
+            'worth it': 1.5, 'sulit sa oras': 1.5,
+            
+            # Recommendations
+            'recommend': 1.5, 'recommended': 1.5, 'highly recommend': 2,
+            'irecommend ko': 1.5, 'must attend': 2
         }
 
         self.tagalog_negative = {
@@ -72,7 +83,30 @@ class MultilingualSentimentAnalyzer:
 
             # Organization issues
             'disorganized': -1, 'chaotic': -1, 'confusing': -0.8, 'unclear': -0.7,
-            'messy': -0.8, 'noisy': -0.6, 'uncomfortable': -0.7
+            'messy': -0.8, 'noisy': -0.6, 'uncomfortable': -0.7,
+            
+            # Event-specific negative (NEW)
+            'rushed': -0.8, 'rushing': -0.8, 'nagmamadali': -0.7,
+            'overcrowded': -0.8, 'masikip': -0.7, 'mainit': -0.6,
+            'late': -0.7, 'delayed': -0.7, 'matagal': -0.6,
+            'long': -0.5, 'short': -0.5, 'maikli': -0.5,
+            'too fast': -0.7, 'too slow': -0.7, 'mabagal': -0.6,
+            'unprepared': -0.8, 'unprofessional': -1, 'hindi prepared': -0.8,
+            'lacking': -0.7, 'inadequate': -0.8, 'insufficient': -0.7,
+            'mediocre': -0.6, 'average': -0.4, 'meh': -0.5,
+            'underwhelming': -0.7, 'unimpressive': -0.6,
+            'forgettable': -0.6, 'nothing special': -0.5,
+            
+            # Mild criticism
+            'could be better': -0.5, 'needs improvement': -0.5,
+            'room for improvement': -0.5, 'pwede pa': -0.4,
+            'not well': -0.6, 'not good': -0.7, 'not great': -0.6,
+            'hindi okay': -0.6, 'hindi ayos': -0.6, 'hindi maayos': -0.7,
+            
+            # Boredom and tiredness
+            'bored': -0.7, 'tired': -0.6, 'exhausted': -0.7,
+            'napagod': -0.6, 'naumay': -0.7, 'nagsawa': -0.7,
+            'nakakabore': -0.8, 'nakakaumay': -0.8, 'nakakasawa': -0.7
         }
 
         # Common Filipino phrases for context

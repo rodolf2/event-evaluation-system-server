@@ -389,11 +389,219 @@ const getDynamicQualitativeData = async (req, res) => {
       });
     });
 
+    // NEW: Build per-question breakdown
+    const questionBreakdown = [];
+    const questions = form.questions || [];
+
+    questions.forEach((question) => {
+      const questionId = question._id.toString();
+      const questionTitle = question.title;
+      const questionType = question.type;
+
+      // Get all responses for this specific question
+      const questionResponses = [];
+      responses.forEach((response) => {
+        if (response.responses && Array.isArray(response.responses)) {
+          response.responses.forEach((ans) => {
+            if (
+              ans.questionId === questionId ||
+              ans.questionTitle === questionTitle
+            ) {
+              questionResponses.push({
+                answer: ans.answer,
+                respondentName: response.respondentName,
+                submittedAt: response.submittedAt,
+              });
+            }
+          });
+        }
+      });
+
+      const responseCount = questionResponses.length;
+
+      if (questionType === "scale") {
+        // For scale questions: show rating distribution
+        const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        questionResponses.forEach((r) => {
+          const rating = parseInt(r.answer) || 0;
+          if (rating >= 1 && rating <= 5) {
+            ratingCounts[rating]++;
+          }
+        });
+
+        const ratingDistribution = Object.entries(ratingCounts).map(
+          ([rating, count]) => ({
+            name: `${rating} Star`,
+            value:
+              responseCount > 0 ? Math.round((count / responseCount) * 100) : 0,
+            count: count,
+          })
+        );
+
+        const avgRating =
+          responseCount > 0
+            ? questionResponses.reduce(
+                (sum, r) => sum + (parseInt(r.answer) || 0),
+                0
+              ) / responseCount
+            : 0;
+
+        questionBreakdown.push({
+          questionId,
+          questionTitle,
+          questionType,
+          responseCount,
+          ratingDistribution,
+          averageRating: Math.round(avgRating * 100) / 100,
+        });
+      } else if (
+        questionType === "paragraph" ||
+        questionType === "short_answer"
+      ) {
+        // For text questions: show sentiment breakdown
+        let positiveCount = 0;
+        let neutralCount = 0;
+        let negativeCount = 0;
+        const sampleResponses = [];
+
+        questionResponses.forEach((r, idx) => {
+          const text = (r.answer || "").toLowerCase();
+          const positiveKeywords = [
+            "good",
+            "great",
+            "excellent",
+            "amazing",
+            "wonderful",
+            "fantastic",
+            "love",
+            "like",
+            "best",
+            "awesome",
+            "perfect",
+            "satisfied",
+            "happy",
+            "pleased",
+            "informative",
+            "helpful",
+          ];
+          const negativeKeywords = [
+            "bad",
+            "terrible",
+            "awful",
+            "horrible",
+            "hate",
+            "dislike",
+            "worst",
+            "disappointed",
+            "unsatisfied",
+            "frustrated",
+            "poor",
+            "boring",
+            "rushed",
+            "confusing",
+          ];
+
+          const posMatches = positiveKeywords.filter((k) =>
+            text.includes(k)
+          ).length;
+          const negMatches = negativeKeywords.filter((k) =>
+            text.includes(k)
+          ).length;
+
+          let sentiment = "neutral";
+          if (posMatches > 0 && negMatches > 0) {
+            sentiment = "neutral"; // Mixed
+            neutralCount++;
+          } else if (posMatches > negMatches && posMatches > 0) {
+            sentiment = "positive";
+            positiveCount++;
+          } else if (negMatches > posMatches && negMatches > 0) {
+            sentiment = "negative";
+            negativeCount++;
+          } else {
+            neutralCount++;
+          }
+
+          // Keep sample of responses (max 3 per sentiment)
+          if (idx < 9) {
+            sampleResponses.push({
+              text: r.answer,
+              sentiment,
+              respondentName: r.respondentName || "Anonymous",
+            });
+          }
+        });
+
+        const total = positiveCount + neutralCount + negativeCount;
+        const sentimentBreakdown = {
+          positive: {
+            count: positiveCount,
+            percentage:
+              total > 0 ? Math.round((positiveCount / total) * 100) : 0,
+          },
+          neutral: {
+            count: neutralCount,
+            percentage:
+              total > 0 ? Math.round((neutralCount / total) * 100) : 0,
+          },
+          negative: {
+            count: negativeCount,
+            percentage:
+              total > 0 ? Math.round((negativeCount / total) * 100) : 0,
+          },
+        };
+
+        questionBreakdown.push({
+          questionId,
+          questionTitle,
+          questionType,
+          responseCount,
+          sentimentBreakdown,
+          sampleResponses: sampleResponses.slice(0, 6),
+        });
+      } else if (questionType === "multiple_choice") {
+        // For multiple choice: show option distribution
+        const optionCounts = {};
+        question.options.forEach((opt) => {
+          optionCounts[opt] = 0;
+        });
+
+        questionResponses.forEach((r) => {
+          const answer = r.answer;
+          if (Array.isArray(answer)) {
+            answer.forEach((a) => {
+              if (optionCounts[a] !== undefined) optionCounts[a]++;
+            });
+          } else if (optionCounts[answer] !== undefined) {
+            optionCounts[answer]++;
+          }
+        });
+
+        const optionDistribution = Object.entries(optionCounts).map(
+          ([option, count]) => ({
+            name: option,
+            value:
+              responseCount > 0 ? Math.round((count / responseCount) * 100) : 0,
+            count: count,
+          })
+        );
+
+        questionBreakdown.push({
+          questionId,
+          questionTitle,
+          questionType,
+          responseCount,
+          optionDistribution,
+        });
+      }
+    });
+
     res.status(200).json({
       success: true,
       data: {
         sentimentBreakdown: analysis.sentimentBreakdown,
         categorizedComments,
+        questionBreakdown,
         totalComments: filteredTextResponses.length,
         formInfo: {
           title: form.title,
@@ -616,7 +824,7 @@ const getAllReportsWithLiveData = async (req, res) => {
 
     // School admins don't create reports, they view shared ones
     // Since sharing is not implemented yet, return empty array
-    if (req.user.role === 'school-admin') {
+    if (req.user.role === "school-admin") {
       return res.status(200).json({
         success: true,
         data: {

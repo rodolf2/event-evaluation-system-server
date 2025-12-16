@@ -139,6 +139,8 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/mis", misRoutes);
 app.use("/api/thumbnails", require("./api/routes/thumbnailRoutes"));
+app.use("/api/guest", require("./api/routes/guestRoutes"));
+app.use("/api/settings", require("./api/routes/settingsRoutes"));
 
 // Test routes for development
 if (process.env.NODE_ENV === "development") {
