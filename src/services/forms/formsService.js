@@ -1,4 +1,3 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Form = require("../../models/Form");
 const mongoose = require("mongoose");
 const axios = require("axios");
