@@ -99,6 +99,16 @@ router.post(
         });
       }
 
+      // Enforce guest token expiration range (48-168 hours = 2-7 days)
+      const parsedExpirationDays = parseInt(expirationDays);
+      if (parsedExpirationDays < 2 || parsedExpirationDays > 7) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Expiration days must be between 2 and 7 days (48-168 hours)",
+        });
+      }
+
       // Verify report exists
       const report = await Form.findById(reportId);
       if (!report) {
@@ -601,6 +611,16 @@ router.post(
         return res.status(400).json({
           success: false,
           message: "Email, name, and formId are required",
+        });
+      }
+
+      // Enforce evaluator token expiration range (48-168 hours = 2-7 days)
+      const parsedExpirationDays = parseInt(expirationDays);
+      if (parsedExpirationDays < 2 || parsedExpirationDays > 7) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Expiration days must be between 2 and 7 days (48-168 hours)",
         });
       }
 

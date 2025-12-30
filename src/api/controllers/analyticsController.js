@@ -1,11 +1,25 @@
 const Form = require("../../models/Form");
 const AnalysisService = require("../../services/analysis/analysisService");
+const { cache, invalidateCache } = require("../../utils/cache");
 
 // GET /api/analytics/form/:formId - Get analytics for a specific form
 const getFormAnalytics = async (req, res) => {
   try {
     const { formId } = req.params;
     const userId = req.user._id;
+
+    // Check cache first
+    const cacheKey = `analytics_form_${formId}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      console.log(`[ANALYTICS] Cache HIT for form ${formId}`);
+      return res.status(200).json({
+        success: true,
+        data: cachedData,
+        cached: true,
+      });
+    }
+    console.log(`[ANALYTICS] Cache MISS for form ${formId}`);
 
     // Find the form - only creator can view analytics
     const form = await Form.findOne({
@@ -138,6 +152,10 @@ const getFormAnalytics = async (req, res) => {
         eventEndDate: form.eventEndDate,
       },
     };
+
+    // Cache the analytics data for 5 minutes (300 seconds)
+    cache.set(cacheKey, analyticsData, 300);
+    console.log(`[ANALYTICS] Cached analytics for form ${formId}`);
 
     // Generate/update analytics thumbnail with current data
     try {

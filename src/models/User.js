@@ -14,6 +14,7 @@ const UserSchema = new mongoose.Schema({
     type: String,
     unique: true,
     sparse: true, // Only enforces uniqueness for non-null values
+    index: true,
   },
   avatar: {
     type: String, // URL to profile picture from Google

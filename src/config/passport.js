@@ -15,6 +15,20 @@ passport.use(
         // Get the email from Google profile
         const googleEmail = profile.emails[0].value;
 
+        // Validate email domain - only allow specific domains
+        const allowedDomains = ["@student.laverdad.edu.ph", "@laverdad.edu.ph"];
+
+        const isAllowedDomain = allowedDomains.some((domain) =>
+          googleEmail.toLowerCase().endsWith(domain.toLowerCase())
+        );
+
+        if (!isAllowedDomain) {
+          return done(null, false, {
+            message:
+              "Access denied. Use your school account.",
+          });
+        }
+
         // Check if user exists with the Google ID
         let user = await User.findOne({ googleId: profile.id });
 

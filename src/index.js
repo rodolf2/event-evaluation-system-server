@@ -2,11 +2,14 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const session = require("express-session");
+const MongoStore = require("connect-mongo");
 const jwt = require("jsonwebtoken");
 const passport = require("passport");
 const cookieParser = require("cookie-parser");
+const helmet = require("helmet");
 const path = require("path");
 const connectDB = require("./utils/db");
+const { requireAuth } = require("./middlewares/auth");
 const User = require("./models/User");
 
 // Configure Passport
@@ -15,15 +18,36 @@ require("./config/passport");
 const app = express();
 
 // Middleware
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    credentials: true,
-  })
-);
+const allowedOrigins = (
+  process.env.CLIENT_URLS ||
+  process.env.CLIENT_URL ||
+  "http://localhost:5173"
+)
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Security headers (keep CSP off to avoid breaking existing inline assets)
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
 
 // Session configuration
 app.use(
@@ -31,9 +55,15 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGODB_URI,
+      ttl: 24 * 60 * 60, // 1 day
+      autoRemove: "native",
+    }),
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
+      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
   })
@@ -43,15 +73,19 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Static file serving
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+// Static file serving (protect uploads with auth; keep public assets open)
+app.use(
+  "/uploads",
+  requireAuth,
+  express.static(path.join(__dirname, "../uploads"))
+);
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Connect to Database
 connectDB();
 
 // Environment variable validation
-const requiredEnvVars = ["JWT_SECRET", "SESSION_SECRET"];
+const requiredEnvVars = ["JWT_SECRET", "SESSION_SECRET", "MONGODB_URI"];
 const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
@@ -123,6 +157,7 @@ const uploadRoutes = require("./api/routes/uploadRoutes");
 const analyticsRoutes = require("./api/routes/analyticsRoutes");
 const reportsRoutes = require("./api/routes/reports");
 const misRoutes = require("./api/routes/misRoutes");
+const personnelRoutes = require("./api/routes/personnelRoutes");
 
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/certificates", certificateRoutes);
@@ -141,6 +176,7 @@ app.use("/api/mis", misRoutes);
 app.use("/api/thumbnails", require("./api/routes/thumbnailRoutes"));
 app.use("/api/guest", require("./api/routes/guestRoutes"));
 app.use("/api/settings", require("./api/routes/settingsRoutes"));
+app.use("/api/personnel", personnelRoutes);
 
 // Test routes for development
 if (process.env.NODE_ENV === "development") {
@@ -199,13 +235,6 @@ app.get("/health", (req, res) => {
     environment: process.env.NODE_ENV || "development",
   });
 });
-
-// In your server/src/index.js or wherever CORS is configured
-const corsOptions = {
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
-  credentials: true,
-};
-app.use(cors(corsOptions));
 
 const PORT = process.env.PORT || 5000;
 

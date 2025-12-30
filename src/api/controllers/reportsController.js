@@ -55,7 +55,7 @@ exports.shareReport = async (req, res) => {
 exports.generatePDFReport = async (req, res) => {
   try {
     const { reportId } = req.params;
-    const { html, title } = req.body;
+    const { html, title, headerTemplate, footerTemplate } = req.body;
 
     if (!html) {
       return res.status(400).json({
@@ -66,7 +66,7 @@ exports.generatePDFReport = async (req, res) => {
     // Launch puppeteer browser
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
     const page = await browser.newPage();
@@ -75,35 +75,38 @@ exports.generatePDFReport = async (req, res) => {
     const fullHTML = html;
 
     await page.setContent(fullHTML, {
-      waitUntil: 'networkidle0',
-      timeout: 30000
+      waitUntil: "networkidle0",
+      timeout: 30000,
     });
 
     // Generate PDF
     const pdfBuffer = await page.pdf({
-      format: 'A4',
+      format: "A4",
       printBackground: true,
       margin: {
-        top: '20mm',
-        right: '20mm',
-        bottom: '20mm',
-        left: '20mm'
+        top: "160px", // Increased to push content below full header
+        right: "0px",
+        bottom: "40px", // Space for scaled footer template
+        left: "0px",
       },
       preferCSSPageSize: false,
-      displayHeaderFooter: false,
+      displayHeaderFooter: !!(headerTemplate || footerTemplate),
+      headerTemplate: headerTemplate || "<div></div>",
+      footerTemplate: footerTemplate || "<div></div>",
     });
 
     await browser.close();
 
     // Set response headers for file download
-    const filename = `evaluation-report-${new Date().toISOString().split('T')[0]}.pdf`;
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', pdfBuffer.length);
+    const filename = `evaluation-report-${
+      new Date().toISOString().split("T")[0]
+    }.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", pdfBuffer.length);
 
     // Send the PDF buffer
     res.send(pdfBuffer);
-
   } catch (error) {
     console.error("Error generating PDF report:", error);
     res.status(500).json({

@@ -3,6 +3,7 @@ const Report = require("../../models/Report");
 const AnalysisService = require("../../services/analysis/analysisService");
 const ThumbnailService = require("../../services/thumbnail/thumbnailService");
 const mongoose = require("mongoose");
+const { cache, invalidateCache } = require("../../utils/cache");
 
 /**
  * Get dynamic quantitative data with filtering and date range
@@ -201,6 +202,23 @@ const getDynamicQualitativeData = async (req, res) => {
     } = req.query;
 
     const userId = req.user._id;
+
+    // Check cache for live data requests (not snapshot)
+    if (req.query.useSnapshot !== "true") {
+      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${
+        startDate || ""
+      }_${endDate || ""}_${limit}`;
+      const cachedData = cache.get(cacheKey);
+      if (cachedData) {
+        console.log(`[REPORT] Cache HIT for qualitative data: ${reportId}`);
+        return res.status(200).json({
+          success: true,
+          data: cachedData,
+          cached: true,
+        });
+      }
+      console.log(`[REPORT] Cache MISS for qualitative data: ${reportId}`);
+    }
 
     // Find the form
     const form = await Form.findById(reportId).populate(
@@ -596,27 +614,38 @@ const getDynamicQualitativeData = async (req, res) => {
       }
     });
 
+    const responseData = {
+      sentimentBreakdown: analysis.sentimentBreakdown,
+      categorizedComments,
+      questionBreakdown,
+      totalComments: filteredTextResponses.length,
+      formInfo: {
+        title: form.title,
+        description: form.description,
+        status: form.status,
+      },
+      filters: {
+        sentiment,
+        keyword,
+        startDate,
+        endDate,
+        limit,
+      },
+      lastUpdated: new Date().toISOString(),
+    };
+
+    // Cache the qualitative data for 10 minutes (600 seconds)
+    if (req.query.useSnapshot !== "true") {
+      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${
+        startDate || ""
+      }_${endDate || ""}_${limit}`;
+      cache.set(cacheKey, responseData, 600);
+      console.log(`[REPORT] Cached qualitative data for: ${reportId}`);
+    }
+
     res.status(200).json({
       success: true,
-      data: {
-        sentimentBreakdown: analysis.sentimentBreakdown,
-        categorizedComments,
-        questionBreakdown,
-        totalComments: filteredTextResponses.length,
-        formInfo: {
-          title: form.title,
-          description: form.description,
-          status: form.status,
-        },
-        filters: {
-          sentiment,
-          keyword,
-          startDate,
-          endDate,
-          limit,
-        },
-        lastUpdated: new Date().toISOString(),
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error("Error fetching dynamic qualitative data:", error);

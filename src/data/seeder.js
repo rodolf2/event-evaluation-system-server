@@ -160,8 +160,18 @@ const seedDB = async () => {
     // Clear existing feedback and events (but NOT users to preserve logged-in accounts)
     await Feedback.deleteMany({});
     await Event.deleteMany({});
-    // NOTE: We do NOT delete users to preserve existing accounts
-    // await User.deleteMany({}); // REMOVED - this was deleting logged-in users
+
+    // Drop googleId index if it exists to ensure it's recreated with sparse: true
+    try {
+      await User.collection.dropIndex("googleId_1");
+      console.log("Dropped googleId_1 index to ensure sparse recreation");
+    } catch (e) {
+      if (e.codeName === "IndexNotFound" || e.code === 27) {
+        console.log("googleId_1 index not found, skipping drop");
+      } else {
+        console.error("Error dropping googleId_1 index:", e.message);
+      }
+    }
 
     // Only add sample users if they don't already exist
     const existingUsers = await User.find({});

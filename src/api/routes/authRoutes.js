@@ -3,6 +3,7 @@ const router = express.Router();
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
 const User = require("../../models/User");
+const { requireAuth } = require("../../middlewares/auth");
 
 // Google OAuth routes
 router.get(
@@ -10,23 +11,45 @@ router.get(
   passport.authenticate("google", {
     scope: ["profile", "email"],
     prompt: "select_account",
+    hd: "laverdad.edu.ph", // Only show La Verdad accounts in the picker
   })
 );
 
 router.get(
   "/google/callback",
-  passport.authenticate("google", {
-    failureRedirect: "/login",
-    session: false,
-  }),
-  (req, res) => {
-    // Check if user account is active
-    if (!req.user.isActive) {
-      return res.redirect(
-        `${process.env.CLIENT_URL}/login?error=account_inactive`
-      );
-    }
+  (req, res, next) => {
+    passport.authenticate("google", { session: false }, (err, user, info) => {
+      // Handle error
+      if (err) {
+        console.error("Google OAuth error:", err);
+        return res.redirect(
+          `${process.env.CLIENT_URL}/login?error=oauth_error`
+        );
+      }
 
+      // Handle authentication failure (e.g., domain restriction)
+      if (!user) {
+        const errorMessage = info?.message || "Authentication failed";
+        // Encode the message for URL
+        const encodedError = encodeURIComponent(errorMessage);
+        return res.redirect(
+          `${process.env.CLIENT_URL}/login?error=access_denied&message=${encodedError}`
+        );
+      }
+
+      // Check if user account is active
+      if (!user.isActive) {
+        return res.redirect(
+          `${process.env.CLIENT_URL}/login?error=account_inactive`
+        );
+      }
+
+      // Attach user to request and continue
+      req.user = user;
+      next();
+    })(req, res, next);
+  },
+  (req, res) => {
     // Generate JWT token with role information and profile picture
     const token = jwt.sign(
       {
@@ -211,33 +234,10 @@ router.post("/guest", async (req, res) => {
 });
 
 // Get current user profile
-router.get("/profile", async (req, res) => {
+router.get("/profile", requireAuth, async (req, res) => {
   try {
-    // Extract token from Authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        success: false,
-        message: "No token provided",
-      });
-    }
+    const user = req.user;
 
-    const token = authHeader.split(" ")[1];
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Find user
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // Return user data with role information and profile picture
     res.json({
       success: true,
       data: {
@@ -270,31 +270,9 @@ router.get("/profile", async (req, res) => {
 });
 
 // Update user profile
-router.put("/profile", async (req, res) => {
+router.put("/profile", requireAuth, async (req, res) => {
   try {
-    // Extract token from Authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        success: false,
-        message: "No token provided",
-      });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Find user
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    const user = req.user;
 
     // Update allowed fields
     const {
@@ -357,31 +335,9 @@ router.put("/profile", async (req, res) => {
 });
 
 // Upload profile picture
-router.post("/profile/picture", async (req, res) => {
+router.post("/profile/picture", requireAuth, async (req, res) => {
   try {
-    // Extract token from Authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        success: false,
-        message: "No token provided",
-      });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Find user
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    const user = req.user;
 
     const { profilePicture } = req.body;
 

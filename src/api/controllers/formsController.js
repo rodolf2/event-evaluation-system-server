@@ -5,6 +5,7 @@ const enhancedFormsExtractor = require("../../services/forms/enhancedFormsExtrac
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const { invalidateCache } = require("../../utils/cache");
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -92,7 +93,8 @@ const getAllForms = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid pagination parameters. Page must be >= 1, limit must be 1-100",
+        message:
+          "Invalid pagination parameters. Page must be >= 1, limit must be 1-100",
       });
     }
 
@@ -114,7 +116,7 @@ const getAllForms = async (req, res) => {
     const totalPages = Math.ceil(total / limitNum);
 
     // Map forms to include isPublished field for frontend compatibility
-    const mappedForms = forms.map(form => ({
+    const mappedForms = forms.map((form) => ({
       _id: form._id,
       title: form.title,
       description: form.description,
@@ -987,18 +989,21 @@ const publishForm = async (req, res) => {
         const eventData = {
           name: savedForm.title,
           date: savedForm.eventStartDate || new Date(),
-          category: 'evaluation',
-          description: savedForm.description || `Evaluation form: ${savedForm.title}`,
-          attendees: savedForm.attendeeList.map(attendee => ({
+          category: "evaluation",
+          description:
+            savedForm.description || `Evaluation form: ${savedForm.title}`,
+          attendees: savedForm.attendeeList.map((attendee) => ({
             name: attendee.name,
-            email: attendee.email
+            email: attendee.email,
           })),
-          verificationCode: verificationCode
+          verificationCode: verificationCode,
         };
 
         const event = new Event(eventData);
         await event.save();
-        console.log(`[FORM-PUB] Created event with verification code: ${verificationCode}`);
+        console.log(
+          `[FORM-PUB] Created event with verification code: ${verificationCode}`
+        );
       } catch (eventError) {
         console.error("Failed to create event:", eventError);
         // Don't fail form publication if event creation fails
@@ -1323,6 +1328,18 @@ const submitFormResponse = async (req, res) => {
     }
 
     await form.save();
+
+    // Invalidate caches that depend on form responses
+    try {
+      invalidateCache(`analytics_form_${id}`);
+      invalidateCache(`qualitative_${id}`);
+      invalidateCache(`quantitative_${id}`);
+      console.log(
+        `[CACHE] Invalidated caches for form ${id} after response submission`
+      );
+    } catch (cacheError) {
+      console.warn("[CACHE] Failed to invalidate caches:", cacheError.message);
+    }
 
     // Log activity for form submission
     try {

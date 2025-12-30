@@ -7,6 +7,7 @@ Uses TextBlob for advanced sentiment analysis with custom Tagalog lexicon
 import sys
 import json
 import traceback
+import re
 from textblob import TextBlob
 import langid
 
@@ -416,6 +417,26 @@ class MultilingualSentimentAnalyzer:
                 'method': 'fallback'
             }
 
+    def remove_emojis(self, text):
+        """Remove emojis from text to strengthen evaluation integrity"""
+        # Remove emoticons and emoji patterns
+        for emoticon in self.positive_emoticons + self.negative_emoticons:
+            text = text.replace(emoticon, '')
+        
+        # Remove Unicode emojis (basic pattern)
+        emoji_pattern = re.compile(
+            "["
+            "\U0001F600-\U0001F64F"  # emoticons
+            "\U0001F300-\U0001F5FF"  # symbols & pictographs
+            "\U0001F680-\U0001F6FF"  # transport & map symbols
+            "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+            "\U00002702-\U000027B0"  # dingbats
+            "\U000024C2-\U0001F251"
+            "]+",
+            flags=re.UNICODE
+        )
+        return emoji_pattern.sub('', text).strip()
+
     def analyze_sentiment(self, text):
         """Main sentiment analysis method with language detection"""
         if not text or not text.strip():
@@ -425,20 +446,37 @@ class MultilingualSentimentAnalyzer:
                 'method': 'empty_text'
             }
 
+        # Remove emojis to strengthen evaluation integrity (FR5 requirement)
+        cleaned_text = self.remove_emojis(text)
+        
+        if not cleaned_text:
+            return {
+                'sentiment': 'neutral',
+                'confidence': 0.0,
+                'method': 'empty_after_emoji_removal',
+                'original_text': text,
+                'cleaned_text': cleaned_text
+            }
+
         # Detect language
-        lang_info = self.detect_language(text)
+        lang_info = self.detect_language(cleaned_text)
 
         # Choose analysis method based on language
         if lang_info['language'] == 'en' and lang_info['is_reliable']:
-            result = self.analyze_english_sentiment(text)
+            result = self.analyze_english_sentiment(cleaned_text)
         elif lang_info['language'] == 'tl' and lang_info['is_reliable']:
-            result = self.analyze_tagalog_sentiment(text)
+            result = self.analyze_tagalog_sentiment(cleaned_text)
         else:
             # Mixed or uncertain language
-            result = self.analyze_mixed_sentiment(text)
+            result = self.analyze_mixed_sentiment(cleaned_text)
 
-        # Add language info to result
+        # Add language info and emoji removal info to result
         result['language'] = lang_info
+        result['emoji_removal'] = {
+            'original_text': text,
+            'cleaned_text': cleaned_text,
+            'emojis_removed': text != cleaned_text
+        }
         return result
 
 def split_comment_by_sentiment(text, analyzer):
