@@ -84,10 +84,10 @@ exports.generatePDFReport = async (req, res) => {
       format: "A4",
       printBackground: true,
       margin: {
-        top: "160px", // Increased to push content below full header
-        right: "0px",
-        bottom: "40px", // Space for scaled footer template
-        left: "0px",
+        top: "220px", // Space for header - increased to prevent overlap
+        right: "20px",
+        bottom: "60px", // Space for footer template
+        left: "20px",
       },
       preferCSSPageSize: false,
       displayHeaderFooter: !!(headerTemplate || footerTemplate),
@@ -120,18 +120,47 @@ exports.generatePDFReport = async (req, res) => {
 exports.getSharedReports = async (req, res) => {
   try {
     const userEmail = req.user.email;
+    const Form = require("../../models/Form");
 
     // Find all reports shared with this user's email
     const sharedReports = await SharedReport.find({
       "sharedWith.email": userEmail,
     }).populate("sharedBy", "name email");
 
+    // Fetch the actual form/report data for each shared report
+    const reportsWithDetails = await Promise.all(
+      sharedReports.map(async (sharedReport) => {
+        const form = await Form.findById(sharedReport.reportId).select(
+          "title description eventName thumbnail status createdAt updatedAt"
+        );
+
+        return {
+          id: sharedReport.reportId,
+          formId: sharedReport.reportId,
+          title: form?.title || form?.eventName || "Shared Report",
+          description: form?.description || "",
+          thumbnail: form?.thumbnail || null,
+          status: form?.status || "shared",
+          sharedBy: sharedReport.sharedBy,
+          sharedAt: sharedReport.sharedAt,
+          eventDate: form?.createdAt,
+          lastUpdated: form?.updatedAt,
+          isShared: true,
+        };
+      })
+    );
+
+    // Filter out any reports where the form was not found
+    const validReports = reportsWithDetails.filter((r) => r.title);
+
     res.status(200).json({
-      reports: sharedReports,
+      success: true,
+      reports: validReports,
     });
   } catch (error) {
     console.error("Error fetching shared reports:", error);
     res.status(500).json({
+      success: false,
       message: "Failed to fetch shared reports",
       error: error.message,
     });

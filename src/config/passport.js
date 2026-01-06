@@ -1,6 +1,7 @@
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const User = require("../models/User");
+const SystemSettings = require("../models/SystemSettings");
 
 passport.use(
   new GoogleStrategy(
@@ -16,7 +17,20 @@ passport.use(
         const googleEmail = profile.emails[0].value;
 
         // Validate email domain - only allow specific domains
-        const allowedDomains = ["@student.laverdad.edu.ph", "@laverdad.edu.ph"];
+        // Fetch dynamic allowed domains from System Settings
+        const settings = await SystemSettings.getSettings();
+        const dynamicWhitelist =
+          settings.securitySettings?.domainWhitelist || [];
+
+        // Combine defaults with dynamic whitelist
+        const defaultDomains = ["@student.laverdad.edu.ph", "@laverdad.edu.ph"];
+
+        const allowedDomains = [
+          ...defaultDomains,
+          ...dynamicWhitelist.map((d) =>
+            d.domain.startsWith("@") ? d.domain : `@${d.domain}`
+          ),
+        ];
 
         const isAllowedDomain = allowedDomains.some((domain) =>
           googleEmail.toLowerCase().endsWith(domain.toLowerCase())
@@ -24,8 +38,7 @@ passport.use(
 
         if (!isAllowedDomain) {
           return done(null, false, {
-            message:
-              "Access denied. Use your school account.",
+            message: "Access denied. Use your school account.",
           });
         }
 

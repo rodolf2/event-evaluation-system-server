@@ -684,6 +684,103 @@ class ThumbnailService {
       return `https://placehold.co/800x450/d4a855/5a4a1f?text=${encodedName}`;
     }
   }
+
+  async generateMisThumbnail(type, data = {}) {
+    try {
+      const thumbnailPath = path.join(this.thumbnailDir, `${type}.png`);
+
+      await this.ensureThumbnailDirectory();
+
+      const canvas = createCanvas(this.width, this.height);
+      const ctx = canvas.getContext("2d");
+
+      // Create gradient background based on type
+      let gradient;
+      if (type === "user-stats") {
+        gradient = ctx.createLinearGradient(0, 0, this.width, this.height);
+        gradient.addColorStop(0, "#1E40AF");
+        gradient.addColorStop(1, "#3B82F6");
+      } else if (type === "system-health") {
+        gradient = ctx.createLinearGradient(0, 0, this.width, this.height);
+        gradient.addColorStop(0, "#059669");
+        gradient.addColorStop(1, "#10B981");
+      } else {
+        gradient = ctx.createLinearGradient(0, 0, this.width, this.height);
+        gradient.addColorStop(0, "#4B5563");
+        gradient.addColorStop(1, "#6B7280");
+      }
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, this.width, this.height);
+
+      // Add subtle pattern overlay
+      ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+      for (let i = 0; i < 20; i++) {
+        const x = Math.random() * this.width;
+        const y = Math.random() * this.height;
+        const radius = Math.random() * 50 + 20;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+
+      // Large icon
+      ctx.font = "120px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(data.icon || "📊", this.width / 2, 180);
+
+      // Title
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 48px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(data.title || "Dashboard", this.width / 2, 280);
+
+      // Subtitle
+      ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.font = "24px Arial";
+      ctx.fillText(
+        data.subtitle || "Click to view details",
+        this.width / 2,
+        330
+      );
+
+      // Decorative bottom bar
+      ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+      ctx.fillRect(0, this.height - 60, this.width, 60);
+
+      // Call to action text
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 20px Arial";
+      if (type === "user-stats") {
+        ctx.fillText("View User Analytics →", this.width / 2, this.height - 22);
+      } else if (type === "system-health") {
+        ctx.fillText("View System Reports →", this.width / 2, this.height - 22);
+      } else {
+        ctx.fillText("View Details →", this.width / 2, this.height - 22);
+      }
+
+      // Save thumbnail
+      const buffer = canvas.toBuffer("image/png");
+      await fs.writeFile(thumbnailPath, buffer);
+
+      // Verify file size
+      const stats = await fs.stat(thumbnailPath);
+      if (stats.size === 0) {
+        await fs.unlink(thumbnailPath);
+        throw new Error(`Generated ${type} thumbnail is 0 bytes`);
+      }
+
+      console.log(`✅ Generated MIS thumbnail: ${type}`);
+      return `/api/thumbnails/${type}.png`;
+    } catch (error) {
+      console.error(
+        `❌ Error generating MIS thumbnail ${type}:`,
+        error.message
+      );
+      console.error(`Stack trace:`, error.stack);
+      return null;
+    }
+  }
 }
 
 module.exports = new ThumbnailService();

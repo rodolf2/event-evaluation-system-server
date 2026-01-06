@@ -18,7 +18,7 @@ const googleAuthCallback = async (req, res) => {
     await user.updateLastLogin();
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = generateToken(user);
 
     // Redirect to frontend with token
     res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);

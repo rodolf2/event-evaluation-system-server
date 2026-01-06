@@ -1,33 +1,34 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const User = require('../../models/User');
-const { requireRole } = require('../../middlewares/auth');
+const User = require("../../models/User");
+const { requireRole } = require("../../middlewares/auth");
+const AuditLog = require("../../models/AuditLog");
 
 // All user management routes require mis role only
-router.use(requireRole(['mis']));
+router.use(requireRole(["mis"]));
 
 // Get all users - restricted to mis role
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const users = await User.find().select('-__v');
+    const users = await User.find().select("-__v");
 
     res.json({
       success: true,
       data: {
-        users
-      }
+        users,
+      },
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error("Error fetching users:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: "Server error",
     });
   }
 });
 
 // Create new user - restricted to mis role
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { name, email, role } = req.body;
 
@@ -36,16 +37,22 @@ router.post('/', async (req, res) => {
     if (userExists) {
       return res.status(400).json({
         success: false,
-        message: 'User with this email already exists'
+        message: "User with this email already exists",
       });
     }
 
     // Validate role against allowed values
-    const allowedRoles = ['participant', 'psas', 'club-officer', 'school-admin', 'mis'];
+    const allowedRoles = [
+      "participant",
+      "psas",
+      "club-officer",
+      "school-admin",
+      "mis",
+    ];
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid role specified'
+        message: "Invalid role specified",
       });
     }
 
@@ -54,26 +61,89 @@ router.post('/', async (req, res) => {
       name,
       email,
       role,
-      isActive: true
+      isActive: true,
     });
 
     res.status(201).json({
       success: true,
       data: {
-        user
-      }
+        user,
+      },
     });
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error("Error creating user:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: "Server error",
+    });
+  }
+});
+
+// Provision user with permissions - restricted to mis role
+router.post("/provision", async (req, res) => {
+  try {
+    const { email, role, permissions } = req.body;
+
+    if (!email || !role) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and role are required",
+      });
+    }
+
+    // Check if user already exists
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({
+        success: false,
+        message: "User with this email already exists",
+      });
+    }
+
+    // Validate role against allowed values
+    const allowedRoles = [
+      "participant",
+      "psas",
+      "club-officer",
+      "school-admin",
+      "mis",
+    ];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role specified",
+      });
+    }
+
+    // Create user with parsed name from email
+    const name = email.split("@")[0].replace(/[._]/g, " ");
+    const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+
+    const user = await User.create({
+      name: formattedName,
+      email,
+      role,
+      permissions: permissions || {},
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        user,
+      },
+    });
+  } catch (error) {
+    console.error("Error provisioning user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
     });
   }
 });
 
 // Update user - restricted to mis role
-router.put('/:id', async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
     const { name, email, role, isActive } = req.body;
 
@@ -82,40 +152,97 @@ router.put('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     // Validate role if being updated
     if (role) {
-      const allowedRoles = ['participant', 'psas', 'club-officer', 'school-admin', 'mis'];
+      const allowedRoles = [
+        "participant",
+        "psas",
+        "club-officer",
+        "school-admin",
+        "mis",
+      ];
       if (!allowedRoles.includes(role)) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid role specified'
+          message: "Invalid role specified",
         });
       }
     }
 
-    // Update user
+    // Capture old values for logging
+    const oldRole = user.role;
+    const oldStatus = user.isActive;
+
+    // Update user fields
     user.name = name || user.name;
     user.email = email || user.email;
     user.role = role || user.role;
-    user.isActive = isActive !== undefined ? isActive : user.isActive;
+    // Handle boolean explicitly
+    if (isActive !== undefined) user.isActive = isActive;
+
+    // PSCO Elevation fields
+    if (req.body.program !== undefined) user.program = req.body.program;
+    if (req.body.elevationDate !== undefined)
+      user.elevationDate = req.body.elevationDate;
 
     await user.save();
+
+    // AUDIT LOGGING
+    // Log Role Change
+    if (role && role !== oldRole) {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "ROLE_CHANGE",
+        category: "user",
+        description: `Changed role of ${user.email} from ${oldRole} to ${role}`,
+        severity: "warning",
+        metadata: {
+          targetId: user._id,
+          targetType: "User",
+          oldValue: oldRole,
+          newValue: role,
+        },
+      });
+    }
+
+    // Log Status Change (Suspend/Activate)
+    if (isActive !== undefined && isActive !== oldStatus) {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: isActive ? "USER_ACTIVATED" : "USER_SUSPENDED",
+        category: "user",
+        description: `${isActive ? "Activated" : "Suspended"} user ${
+          user.email
+        }`,
+        severity: "warning",
+        metadata: {
+          targetId: user._id,
+          targetType: "User",
+          oldValue: oldStatus,
+          newValue: isActive,
+        },
+      });
+    }
 
     res.json({
       success: true,
       data: {
-        user
-      }
+        user,
+      },
     });
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error("Error updating user:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: "Server error",
     });
   }
 });

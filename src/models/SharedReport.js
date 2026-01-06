@@ -14,7 +14,7 @@ const sharedReportSchema = new mongoose.Schema(
     sharedWith: [
       {
         personnelId: {
-          type: Number,
+          type: String,
           required: true,
         },
         name: {
@@ -27,11 +27,9 @@ const sharedReportSchema = new mongoose.Schema(
         },
         department: {
           type: String,
-          required: true,
         },
         position: {
           type: String,
-          required: true,
         },
       },
     ],

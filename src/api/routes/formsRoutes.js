@@ -87,6 +87,13 @@ router.patch(
   formsController.publishForm
 );
 
+// PATCH /api/forms/:id/reopen - Reopen a closed form (psas, club-officer can reopen)
+router.patch(
+  "/:id/reopen",
+  requireRole(["psas", "club-officer"]),
+  formsController.reopenForm
+);
+
 // DELETE /api/forms/:id - Delete a form (only psas can delete)
 router.delete("/:id", requireRole(["psas"]), formsController.deleteForm);
 

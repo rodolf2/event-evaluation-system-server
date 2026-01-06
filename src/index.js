@@ -8,9 +8,20 @@ const passport = require("passport");
 const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
 const path = require("path");
+const rateLimit = require("express-rate-limit");
+const mongoSanitize = require("express-mongo-sanitize");
+const hpp = require("hpp");
+const compression = require("compression");
+const { v4: uuidv4 } = require("uuid");
 const connectDB = require("./utils/db");
+const mongoose = require("mongoose");
 const { requireAuth } = require("./middlewares/auth");
 const User = require("./models/User");
+const {
+  logSecurityEvent,
+  SecurityEventType,
+  createSecurityLoggerMiddleware,
+} = require("./utils/securityLogger");
 
 // Configure Passport
 require("./config/passport");
@@ -39,15 +50,116 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(cookieParser());
+app.use(compression()); // Gzip compression for responses
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Security headers (keep CSP off to avoid breaking existing inline assets)
+// Request ID tracking middleware
+app.use((req, res, next) => {
+  req.requestId = uuidv4();
+  res.setHeader("X-Request-Id", req.requestId);
+  next();
+});
+
+// ============================================
+// SECURITY MIDDLEWARE
+// ============================================
+
+// 1. Security headers with Helmet
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://fonts.googleapis.com",
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", ...allowedOrigins],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // Allow loading external resources
   })
 );
+
+// 2. NoSQL Injection Sanitization (sanitize req.body only to avoid read-only query issue)
+app.use((req, res, next) => {
+  if (req.body) {
+    const hasSanitized = mongoSanitize.has(req.body);
+    if (hasSanitized) {
+      logSecurityEvent(SecurityEventType.NOSQL_INJECTION_ATTEMPT, {
+        ip: req.ip || req.connection.remoteAddress,
+        path: req.path,
+        method: req.method,
+        userAgent: req.get("User-Agent"),
+        message: "Sanitized malicious content from request body",
+      });
+      req.body = mongoSanitize.sanitize(req.body, { replaceWith: "_" });
+    }
+  }
+  next();
+});
+
+// 3. HTTP Parameter Pollution Protection
+app.use(hpp());
+
+// 4. Security Event Logger Middleware
+app.use(createSecurityLoggerMiddleware());
+
+// 5. Rate Limiting - General API (100 requests per 15 minutes)
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10000000, // Limit each IP to 100 requests per windowMs
+  message: {
+    success: false,
+    message: "Too many requests, please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res, next, options) => {
+    logSecurityEvent(SecurityEventType.RATE_LIMIT_HIT, {
+      ip: req.ip || req.connection.remoteAddress,
+      path: req.path,
+      method: req.method,
+      userAgent: req.get("User-Agent"),
+      message: "General rate limit exceeded",
+    });
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+// 6. Rate Limiting - Authentication (stricter: 10 requests per 15 minutes)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10000000, // Limit each IP to 100 login attempts per windowMs
+  message: {
+    success: false,
+    message: "Too many login attempts, please try again after 15 minutes.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res, next, options) => {
+    logSecurityEvent(SecurityEventType.RATE_LIMIT_HIT, {
+      ip: req.ip || req.connection.remoteAddress,
+      path: req.path,
+      method: req.method,
+      userAgent: req.get("User-Agent"),
+      message: "Auth rate limit exceeded - possible brute force attempt",
+    });
+    res.status(options.statusCode).json(options.message);
+  },
+});
+
+// Apply rate limiters
+app.use("/api/", generalLimiter);
+app.use("/api/auth/", authLimiter);
 
 // Session configuration
 app.use(
@@ -227,18 +339,55 @@ app.use((req, res) => {
   });
 });
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.json({
+// Enhanced Health check endpoint
+app.get("/health", async (req, res) => {
+  const healthData = {
     status: "OK",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || "development",
-  });
+    uptime: process.uptime(),
+    memoryUsage: process.memoryUsage(),
+    database: "disconnected",
+  };
+
+  try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState === 1) {
+      healthData.database = "connected";
+    }
+  } catch (err) {
+    healthData.database = "error";
+  }
+
+  res.json(healthData);
 });
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
 });
+
+// Graceful shutdown handling
+const gracefulShutdown = (signal) => {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  server.close(() => {
+    console.log("✅ HTTP server closed");
+    mongoose.connection.close(false, () => {
+      console.log("✅ MongoDB connection closed");
+      process.exit(0);
+    });
+  });
+
+  // Force close after 10 seconds
+  setTimeout(() => {
+    console.error(
+      "⚠️ Could not close connections in time, forcefully shutting down"
+    );
+    process.exit(1);
+  }, 10000);
+};
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

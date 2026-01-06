@@ -14,6 +14,40 @@ class NotificationService {
         createdBy = null,
       } = options;
 
+      // Determine if this is a reminder-type notification
+      const isReminderNotification =
+        type === "reminder" ||
+        (relatedEntity && relatedEntity.type === "reminder");
+
+      // Filter target users based on their mute preferences
+      let filteredTargetUsers = targetUsers;
+      if (targetUsers.length > 0) {
+        const users = await User.find({
+          _id: { $in: targetUsers },
+        }).select("_id muteNotifications muteReminders");
+
+        filteredTargetUsers = users
+          .filter((user) => {
+            // For reminder notifications, check muteReminders
+            if (isReminderNotification) {
+              return !user.muteReminders;
+            }
+            // For regular notifications, check muteNotifications
+            return !user.muteNotifications;
+          })
+          .map((user) => user._id);
+
+        // If all target users have muted, don't create the notification
+        if (filteredTargetUsers.length === 0 && targetRoles.length === 0) {
+          console.log(
+            `[createRoleBasedNotification] Skipping notification "${title}" - all target users have muted ${
+              isReminderNotification ? "reminders" : "notifications"
+            }`
+          );
+          return null;
+        }
+      }
+
       const notificationData = {
         title,
         message,
@@ -23,8 +57,8 @@ class NotificationService {
         isSystemGenerated: !createdBy,
       };
 
-      if (targetUsers.length > 0) {
-        notificationData.targetUsers = targetUsers;
+      if (filteredTargetUsers.length > 0) {
+        notificationData.targetUsers = filteredTargetUsers;
       }
 
       if (relatedEntity) {
@@ -185,9 +219,7 @@ class NotificationService {
       const title = `📅 Reminder Created: ${reminder.title}`;
       const message = `You have created a reminder: "${reminder.title}"${
         reminder.description ? " - " + reminder.description : ""
-      }. Reminder date: ${new Date(
-        reminder.date
-      ).toLocaleDateString()}.`;
+      }. Reminder date: ${new Date(reminder.date).toLocaleDateString()}.`;
 
       console.log("[notifyReminderCreated] Creating notification with data:", {
         title,

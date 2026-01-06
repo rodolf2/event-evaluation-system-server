@@ -843,8 +843,8 @@ router.post("/evaluator/submit/:token", async (req, res) => {
     // Create the response object
     const newResponse = {
       responses: responses,
-      respondentEmail: evaluatorToken.email,
-      respondentName: evaluatorToken.name,
+      respondentEmail: null, // Always null for complete anonymity, even for guest evaluators
+      respondentName: null,
       submittedAt: new Date(),
     };
 

@@ -1,9 +1,9 @@
-const User = require('../../models/User');
-const { generateToken } = require('../../middlewares/auth');
+const User = require("../../models/User");
+const { generateToken } = require("../../middlewares/auth");
 
 // Create new user
 const createUser = async (req, res) => {
-  console.log('👤 Creating user with data:', req.body);
+  console.log("👤 Creating user with data:", req.body);
 
   const { name, email, role, isActive } = req.body;
   let newUser;
@@ -11,20 +11,20 @@ const createUser = async (req, res) => {
   try {
     // Validate required fields
     if (!name || !email) {
-      console.log('❌ Missing required fields');
+      console.log("❌ Missing required fields");
       return res.status(400).json({
         success: false,
-        message: 'Name and email are required'
+        message: "Name and email are required",
       });
     }
 
     // Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      console.log('❌ Email already exists:', email);
+      console.log("❌ Email already exists:", email);
       return res.status(400).json({
         success: false,
-        message: 'Email already exists'
+        message: "Email already exists",
       });
     }
 
@@ -32,25 +32,27 @@ const createUser = async (req, res) => {
     newUser = new User({
       name,
       email,
-      role: role || 'user',
-      isActive: isActive !== undefined ? isActive : true
+      role: role || "user",
+      isActive: isActive !== undefined ? isActive : true,
     });
 
-    console.log('💾 Saving user to database...');
+    console.log("💾 Saving user to database...");
     const savedUser = await newUser.save();
-    console.log('✅ User saved successfully:', savedUser._id);
+    console.log("✅ User saved successfully:", savedUser._id);
 
     res.status(201).json({
       success: true,
-      message: 'User created successfully',
-      data: { user: savedUser.toObject({ virtuals: false, versionKey: false }) }
+      message: "User created successfully",
+      data: {
+        user: savedUser.toObject({ virtuals: false, versionKey: false }),
+      },
     });
   } catch (error) {
-    console.error('❌ Error creating user:', error);
+    console.error("❌ Error creating user:", error);
 
     // Handle duplicate key error (multiple null googleIds)
     if (error.code === 11000 && error.keyPattern?.googleId && newUser) {
-      console.log('🔄 Duplicate googleId error - trying with unique ID...');
+      console.log("🔄 Duplicate googleId error - trying with unique ID...");
 
       try {
         // Generate a unique googleId for manual users
@@ -59,33 +61,35 @@ const createUser = async (req, res) => {
         newUser.googleId = `manual_${timestamp}_${randomSuffix}`;
 
         const savedUser = await newUser.save();
-        console.log('✅ User saved with generated googleId');
+        console.log("✅ User saved with generated googleId");
 
-        console.log('✅ Sending response:', {
+        console.log("✅ Sending response:", {
           success: true,
-          message: 'User created successfully',
+          message: "User created successfully",
           userId: savedUser._id,
-          email: savedUser.email
+          email: savedUser.email,
         });
-    
+
         res.status(201).json({
           success: true,
-          message: 'User created successfully',
-          data: { user: savedUser.toObject({ virtuals: false, versionKey: false }) }
+          message: "User created successfully",
+          data: {
+            user: savedUser.toObject({ virtuals: false, versionKey: false }),
+          },
         });
       } catch (retryError) {
-        console.error('❌ Retry also failed:', retryError);
+        console.error("❌ Retry also failed:", retryError);
         res.status(500).json({
           success: false,
-          message: 'Error creating user (duplicate email or googleId)',
-          error: retryError.message
+          message: "Error creating user (duplicate email or googleId)",
+          error: retryError.message,
         });
       }
     } else {
       res.status(500).json({
         success: false,
-        message: 'Error creating user',
-        error: error.message
+        message: "Error creating user",
+        error: error.message,
       });
     }
   }
@@ -97,11 +101,11 @@ const getAllUsers = async (req, res) => {
     const {
       page = 1,
       limit = 10,
-      search = '',
+      search = "",
       role,
       isActive,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = req.query;
 
     // Build filter object
@@ -109,8 +113,8 @@ const getAllUsers = async (req, res) => {
 
     if (search) {
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -119,19 +123,19 @@ const getAllUsers = async (req, res) => {
     }
 
     if (isActive !== undefined) {
-      filter.isActive = isActive === 'true';
+      filter.isActive = isActive === "true";
     }
 
     // Build sort object
     const sort = {};
-    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    sort[sortBy] = sortOrder === "desc" ? -1 : 1;
 
     // Get users with pagination
     const users = await User.find(filter)
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .select('-googleId'); // Exclude googleId from response
+      .select("-googleId"); // Exclude googleId from response
 
     const total = await User.countDocuments(filter);
 
@@ -144,15 +148,15 @@ const getAllUsers = async (req, res) => {
           totalPages: Math.ceil(total / limit),
           totalUsers: total,
           hasNextPage: page < Math.ceil(total / limit),
-          hasPrevPage: page > 1
-        }
-      }
+          hasPrevPage: page > 1,
+        },
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching users',
-      error: error.message
+      message: "Error fetching users",
+      error: error.message,
     });
   }
 };
@@ -162,24 +166,24 @@ const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = await User.findById(id).select('-googleId');
+    const user = await User.findById(id).select("-googleId");
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     res.json({
       success: true,
-      data: { user }
+      data: { user },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching user',
-      error: error.message
+      message: "Error fetching user",
+      error: error.message,
     });
   }
 };
@@ -195,7 +199,7 @@ const updateUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
@@ -205,13 +209,13 @@ const updateUser = async (req, res) => {
       if (existingUser && existingUser._id.toString() !== id) {
         return res.status(400).json({
           success: false,
-          message: 'Email already exists'
+          message: "Email already exists",
         });
       }
     }
 
     // Update user fields
-    Object.keys(updates).forEach(key => {
+    Object.keys(updates).forEach((key) => {
       user[key] = updates[key];
     });
 
@@ -219,14 +223,16 @@ const updateUser = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'User updated successfully',
-      data: { user: savedUser.toObject({ virtuals: false, versionKey: false }) }
+      message: "User updated successfully",
+      data: {
+        user: savedUser.toObject({ virtuals: false, versionKey: false }),
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error updating user',
-      error: error.message
+      message: "Error updating user",
+      error: error.message,
     });
   }
 };
@@ -241,7 +247,7 @@ const deleteUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
@@ -249,14 +255,13 @@ const deleteUser = async (req, res) => {
     await User.findByIdAndDelete(id);
     res.json({
       success: true,
-      message: 'User permanently deleted'
+      message: "User permanently deleted",
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error deleting user',
-      error: error.message
+      message: "Error deleting user",
+      error: error.message,
     });
   }
 };
@@ -270,34 +275,34 @@ const getUserStats = async (req, res) => {
           _id: null,
           totalUsers: { $sum: 1 },
           activeUsers: {
-            $sum: { $cond: [{ $eq: ['$isActive', true] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$isActive", true] }, 1, 0] },
           },
           inactiveUsers: {
-            $sum: { $cond: [{ $eq: ['$isActive', false] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$isActive", false] }, 1, 0] },
           },
           adminUsers: {
-            $sum: { $cond: [{ $eq: ['$role', 'admin'] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$role", "admin"] }, 1, 0] },
           },
           regularUsers: {
-            $sum: { $cond: [{ $eq: ['$role', 'user'] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$role", "user"] }, 1, 0] },
           },
           usersWithGoogle: {
-            $sum: { $cond: [{ $ne: ['$googleId', null] }, 1, 0] }
-          }
-        }
-      }
+            $sum: { $cond: [{ $ne: ["$googleId", null] }, 1, 0] },
+          },
+        },
+      },
     ]);
 
     // Get recent users (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recentUsers = await User.countDocuments({
-      createdAt: { $gte: thirtyDaysAgo }
+      createdAt: { $gte: thirtyDaysAgo },
     });
 
     // Get users who logged in recently (last 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const activeRecentUsers = await User.countDocuments({
-      lastLogin: { $gte: sevenDaysAgo }
+      lastLogin: { $gte: sevenDaysAgo },
     });
 
     const result = stats[0] || {
@@ -306,7 +311,7 @@ const getUserStats = async (req, res) => {
       inactiveUsers: 0,
       adminUsers: 0,
       regularUsers: 0,
-      usersWithGoogle: 0
+      usersWithGoogle: 0,
     };
 
     res.json({
@@ -314,14 +319,14 @@ const getUserStats = async (req, res) => {
       data: {
         ...result,
         recentUsers,
-        activeRecentUsers
-      }
+        activeRecentUsers,
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching user statistics',
-      error: error.message
+      message: "Error fetching user statistics",
+      error: error.message,
     });
   }
 };
@@ -334,7 +339,7 @@ const bulkUpdateUsers = async (req, res) => {
     if (!Array.isArray(userIds) || userIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'User IDs array is required'
+        message: "User IDs array is required",
       });
     }
 
@@ -349,14 +354,64 @@ const bulkUpdateUsers = async (req, res) => {
       message: `${result.modifiedCount} users updated successfully`,
       data: {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
+        modifiedCount: result.modifiedCount,
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Error bulk updating users',
-      error: error.message
+      message: "Error bulk updating users",
+      error: error.message,
+    });
+  }
+};
+
+// Provision a new user with specific permissions
+const provisionUser = async (req, res) => {
+  try {
+    const { email, role, permissions } = req.body;
+
+    if (!email || !role) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and role are required",
+      });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "User with this email already exists",
+      });
+    }
+
+    // Create user with parsed name from email
+    const name = email.split("@")[0].replace(/[._]/g, " ");
+
+    const newUser = new User({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      email,
+      role,
+      permissions: permissions || {},
+      isActive: true,
+    });
+
+    const savedUser = await newUser.save();
+
+    res.status(201).json({
+      success: true,
+      message: "User provisioned successfully",
+      data: {
+        user: savedUser.toObject({ virtuals: false, versionKey: false }),
+      },
+    });
+  } catch (error) {
+    console.error("Error provisioning user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error provisioning user",
+      error: error.message,
     });
   }
 };
@@ -368,5 +423,6 @@ module.exports = {
   updateUser,
   deleteUser,
   getUserStats,
-  bulkUpdateUsers
+  bulkUpdateUsers,
+  provisionUser,
 };

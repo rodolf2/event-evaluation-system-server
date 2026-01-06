@@ -4,7 +4,7 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const fileParser = require("../../utils/fileParser");
 const csv = require("csv-parser");
-const xlsx = require("xlsx");
+const ExcelJS = require("exceljs");
 const fs = require("fs");
 
 class FormsService {
@@ -1214,11 +1214,31 @@ class FormsService {
             });
         });
       } else if (fileExtension === "xlsx" || fileExtension === "xls") {
-        // Parse Excel file
-        const workbook = xlsx.readFile(filePath);
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = xlsx.utils.sheet_to_json(worksheet);
+        // Parse Excel file using ExcelJS
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(filePath);
+        const worksheet = workbook.worksheets[0];
+
+        // Convert worksheet to JSON-like array
+        const jsonData = [];
+        const headers = [];
+
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber === 1) {
+            // First row is headers
+            row.eachCell((cell, colNumber) => {
+              headers[colNumber - 1] = String(cell.value || "").trim();
+            });
+          } else {
+            // Data rows
+            const rowObj = {};
+            row.eachCell((cell, colNumber) => {
+              const header = headers[colNumber - 1] || `col${colNumber}`;
+              rowObj[header] = cell.value;
+            });
+            jsonData.push(rowObj);
+          }
+        });
 
         const results = [];
         jsonData.forEach((row) => {

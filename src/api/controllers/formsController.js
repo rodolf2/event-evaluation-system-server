@@ -185,6 +185,25 @@ const getFormById = async (req, res) => {
       }).populate("createdBy", "name email");
     }
 
+    // If still not found and user is school-admin, check if report has been shared with them
+    if (!form && req.user.role === "school-admin") {
+      const SharedReport = require("../../models/SharedReport");
+      const sharedReport = await SharedReport.findOne({
+        reportId: id,
+        "sharedWith.email": userEmail,
+      });
+
+      if (sharedReport) {
+        // User has access via sharing, fetch the form directly
+        form = await Form.findById(id).populate("createdBy", "name email");
+      }
+    }
+
+    // If still not found and user is MIS, allow access to any form
+    if (!form && req.user.role === "mis") {
+      form = await Form.findById(id).populate("createdBy", "name email");
+    }
+
     if (!form) {
       return res.status(404).json({
         success: false,
@@ -1976,6 +1995,76 @@ const getLatestFormId = async (req, res) => {
   }
 };
 
+/**
+ * PATCH /api/forms/:id/reopen
+ * Reopen a closed form.
+ * - Only creator can reopen.
+ * - Changes status to 'published'.
+ * - Extends end date by 7 days if expired.
+ */
+const reopenForm = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+    }
+
+    const form = await Form.findOne({
+      _id: id,
+      createdBy: req.user._id,
+    });
+
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: "Form not found or you don't have permission to modify it",
+      });
+    }
+
+    if (form.status !== "closed") {
+      return res.status(400).json({
+        success: false,
+        message: "Only closed forms can be reopened",
+      });
+    }
+
+    // Update status and extend date/time
+    form.status = "published";
+
+    // Set end date to 7 days from now
+    const newEndDate = new Date();
+    newEndDate.setDate(newEndDate.getDate() + 7);
+    form.eventEndDate = newEndDate;
+
+    const savedForm = await form.save();
+
+    // Log activity
+    try {
+      const activityService = require("../../services/activityService");
+      await activityService.logFormUpdated(req.user._id, savedForm.title, req);
+    } catch (activityError) {
+      console.error("Failed to log form reopening activity:", activityError);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Form reopened successfully",
+      data: { form: savedForm },
+    });
+  } catch (error) {
+    console.error("Error reopening form:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reopen form",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getAllForms,
   getFormById,
@@ -1995,6 +2084,7 @@ module.exports = {
   updateAttendeeListJson,
   getAttendeeList,
   getLatestFormId,
+  reopenForm,
 };
 
 // Test endpoint to verify server is running updated code

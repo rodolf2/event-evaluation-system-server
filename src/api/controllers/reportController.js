@@ -1,5 +1,7 @@
 const Form = require("../../models/Form");
 const Report = require("../../models/Report");
+const SystemSettings = require("../../models/SystemSettings");
+
 const AnalysisService = require("../../services/analysis/analysisService");
 const ThumbnailService = require("../../services/thumbnail/thumbnailService");
 const mongoose = require("mongoose");
@@ -203,6 +205,19 @@ const getDynamicQualitativeData = async (req, res) => {
 
     const userId = req.user._id;
 
+    // Check system settings for anonymity
+    const settings = await SystemSettings.getSettings();
+    const isAnonymousMode =
+      settings.generalSettings?.anonymousEvaluation ?? true;
+
+    // Helper to process anonymity
+    const processRespondentIdentity = (name, email) => {
+      if (isAnonymousMode) {
+        return { name: "Anonymous", email: null };
+      }
+      return { name: name || "Anonymous", email };
+    };
+
     // Check cache for live data requests (not snapshot)
     if (req.query.useSnapshot !== "true") {
       const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${
@@ -397,11 +412,16 @@ const getDynamicQualitativeData = async (req, res) => {
         category = "negative";
       }
 
+      const identity = processRespondentIdentity(
+        response.respondentName,
+        response.respondentEmail
+      );
+
       categorizedComments[category].push({
         id: response.id,
         comment: answer,
-        user: response.respondentName || "Anonymous",
-        email: response.respondentEmail,
+        user: identity.name,
+        email: identity.email,
         questionTitle: response.questionTitle,
         createdAt: response.submittedAt,
       });
@@ -542,10 +562,14 @@ const getDynamicQualitativeData = async (req, res) => {
 
           // Keep sample of responses (max 3 per sentiment)
           if (idx < 9) {
+            const identity = processRespondentIdentity(
+              r.respondentName,
+              r.respondentEmail
+            );
             sampleResponses.push({
               text: r.answer,
               sentiment,
-              respondentName: r.respondentName || "Anonymous",
+              respondentName: identity.name,
             });
           }
         });
@@ -663,6 +687,11 @@ const getDynamicQualitativeData = async (req, res) => {
 const getDynamicCommentsData = async (req, res) => {
   try {
     const { reportId } = req.params;
+
+    // Check system settings for anonymity
+    const settings = await SystemSettings.getSettings();
+    const isAnonymousMode =
+      settings.generalSettings?.anonymousEvaluation ?? true;
     const {
       type = "all", // all, positive, neutral, negative
       searchTerm,
@@ -791,14 +820,24 @@ const getDynamicCommentsData = async (req, res) => {
       });
     }
 
-    const comments = processedComments.map((response) => ({
-      id: response.id,
-      comment: response.answer,
-      user: response.respondentName || "Anonymous",
-      email: response.respondentEmail,
-      questionTitle: response.questionTitle,
-      submittedAt: response.submittedAt,
-    }));
+    const comments = processedComments.map((response) => {
+      let name = response.respondentName || "Anonymous";
+      let email = response.respondentEmail;
+
+      if (isAnonymousMode) {
+        name = "Anonymous";
+        email = null;
+      }
+
+      return {
+        id: response.id,
+        comment: response.answer,
+        user: name,
+        email: email,
+        questionTitle: response.questionTitle,
+        submittedAt: response.submittedAt,
+      };
+    });
 
     res.status(200).json({
       success: true,

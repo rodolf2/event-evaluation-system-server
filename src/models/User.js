@@ -102,6 +102,25 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: null, // Store the configured expiration period
   },
+  tokenVersion: {
+    type: Number,
+    default: 0,
+  },
+  // PSCO Elevation fields
+  program: {
+    type: String,
+    default: null,
+  },
+  elevationDate: {
+    type: Date,
+    default: null,
+  },
+  // Detailed Permissions (for User Management toggles)
+  permissions: {
+    type: Map,
+    of: Boolean,
+    default: {},
+  },
 });
 
 // Update the updatedAt field before saving

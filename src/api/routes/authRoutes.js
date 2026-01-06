@@ -11,7 +11,6 @@ router.get(
   passport.authenticate("google", {
     scope: ["profile", "email"],
     prompt: "select_account",
-    hd: "laverdad.edu.ph", // Only show La Verdad accounts in the picker
   })
 );
 

@@ -23,6 +23,56 @@ router.get("/:filename", requireAuth, async (req, res) => {
     filename
   );
 
+  // Handle MIS-specific static thumbnails
+  if (filename === "user-stats.png" || filename === "system-health.png") {
+    // Only MIS users can access these
+    if (req.user.role !== "mis") {
+      return res.status(403).send("Access denied");
+    }
+
+    // Check if a recent cached version exists (less than 5 minutes old)
+    if (fs.existsSync(thumbnailPath)) {
+      const stats = fs.statSync(thumbnailPath);
+      const ageMinutes = (Date.now() - stats.mtimeMs) / 60000;
+      if (ageMinutes < 5) {
+        return res.sendFile(thumbnailPath);
+      }
+    }
+
+    try {
+      // Generate MIS thumbnails dynamically
+      if (filename === "user-stats.png") {
+        await thumbnailService.generateMisThumbnail("user-stats", {
+          title: "User Statistics",
+          icon: "📊",
+          subtitle: "View user analytics and trends",
+        });
+      } else if (filename === "system-health.png") {
+        await thumbnailService.generateMisThumbnail("system-health", {
+          title: "System Health",
+          icon: "🖥️",
+          subtitle: "Monitor system performance",
+        });
+      }
+
+      if (fs.existsSync(thumbnailPath)) {
+        return res.sendFile(thumbnailPath);
+      }
+    } catch (error) {
+      console.error(`Error generating MIS thumbnail ${filename}:`, error);
+    }
+
+    // Return a placeholder if generation fails
+    const placeholderPath = path.join(
+      __dirname,
+      "../../../public/thumbnails/default.png"
+    );
+    if (fs.existsSync(placeholderPath)) {
+      return res.sendFile(placeholderPath);
+    }
+    return res.status(404).send("Thumbnail not found");
+  }
+
   // If thumbnail exists, serve it
   if (fs.existsSync(thumbnailPath)) {
     const stats = fs.statSync(thumbnailPath);
@@ -42,7 +92,9 @@ router.get("/:filename", requireAuth, async (req, res) => {
       if (type === "form") {
         // Check permissions: user must be the creator or have access to the form
         const userId = req.user._id;
-        const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : "";
+        const userEmail = req.user.email
+          ? req.user.email.toLowerCase().trim()
+          : "";
         const userRole = req.user.role;
 
         let form = await Form.findOne({
@@ -60,12 +112,17 @@ router.get("/:filename", requireAuth, async (req, res) => {
         }
 
         // For admin roles, allow access to all forms
-        if (!form && ["psas", "club-officer", "school-admin", "mis"].includes(userRole)) {
+        if (
+          !form &&
+          ["psas", "club-officer", "school-admin", "mis"].includes(userRole)
+        ) {
           form = await Form.findById(id).select("title");
         }
 
         if (form) {
-          console.log(`Generating thumbnail for form ${id}: ${form.title} (accessed by ${userRole})`);
+          console.log(
+            `Generating thumbnail for form ${id}: ${form.title} (accessed by ${userRole})`
+          );
           await thumbnailService.generateReportThumbnail(id, form.title);
 
           // Check if it was generated successfully
@@ -73,13 +130,17 @@ router.get("/:filename", requireAuth, async (req, res) => {
             return res.sendFile(thumbnailPath);
           }
         } else {
-          console.log(`Access denied: User ${userId} (${userRole}) cannot access form ${id}`);
+          console.log(
+            `Access denied: User ${userId} (${userRole}) cannot access form ${id}`
+          );
           return res.status(403).send("Access denied");
         }
       } else if (type === "analytics") {
         // Check permissions: user must have access to the form
         const userId = req.user._id;
-        const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : "";
+        const userEmail = req.user.email
+          ? req.user.email.toLowerCase().trim()
+          : "";
         const userRole = req.user.role;
 
         let form = await Form.findOne({
@@ -97,7 +158,10 @@ router.get("/:filename", requireAuth, async (req, res) => {
         }
 
         // For admin roles, allow access to all forms
-        if (!form && ["psas", "club-officer", "school-admin", "mis"].includes(userRole)) {
+        if (
+          !form &&
+          ["psas", "club-officer", "school-admin", "mis"].includes(userRole)
+        ) {
           form = await Form.findById(id).select("title attendeeList responses");
         }
 
@@ -210,7 +274,9 @@ router.get("/:filename", requireAuth, async (req, res) => {
 
         let certificate;
 
-        if (["psas", "club-officer", "school-admin", "mis"].includes(userRole)) {
+        if (
+          ["psas", "club-officer", "school-admin", "mis"].includes(userRole)
+        ) {
           // Admins can view all certificates
           certificate = await Certificate.findById(id)
             .populate("userId", "name")
@@ -242,7 +308,9 @@ router.get("/:filename", requireAuth, async (req, res) => {
             return res.sendFile(thumbnailPath);
           }
         } else {
-          console.log(`Access denied: User ${userId} (${userRole}) cannot access certificate ${id}`);
+          console.log(
+            `Access denied: User ${userId} (${userRole}) cannot access certificate ${id}`
+          );
           return res.status(403).send("Access denied");
         }
       }

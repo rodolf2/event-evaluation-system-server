@@ -26,11 +26,9 @@ const getUserNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
     const userRole = req.user.role;
-    const {
-      page = 1,
-      limit = 20,
-      unreadOnly = "false",
-    } = req.query;
+    const muteNotifications = req.user.muteNotifications || false;
+    const muteReminders = req.user.muteReminders || false;
+    const { page = 1, limit = 20, unreadOnly = "false" } = req.query;
 
     console.log("[getUserNotifications] Fetching notifications for user:", {
       userId,
@@ -38,23 +36,60 @@ const getUserNotifications = async (req, res) => {
       page,
       limit,
       unreadOnly,
+      muteNotifications,
+      muteReminders,
     });
 
     // Build base visibility filter
     const visibilityFilter = buildVisibilityFilter(userId, userRole);
 
+    // Add mute preference filters
+    const muteFilters = [];
+
+    // If user has muted notifications, exclude non-reminder notifications
+    if (muteNotifications) {
+      // Only show reminder-type notifications (exclude regular ones)
+      muteFilters.push({
+        $or: [{ type: "reminder" }, { "relatedEntity.type": "reminder" }],
+      });
+    }
+
+    // If user has muted reminders, exclude reminder-type notifications
+    if (muteReminders) {
+      // Exclude reminder-type notifications
+      muteFilters.push({
+        $and: [
+          { type: { $ne: "reminder" } },
+          {
+            $or: [
+              { "relatedEntity.type": { $exists: false } },
+              { "relatedEntity.type": { $ne: "reminder" } },
+            ],
+          },
+        ],
+      });
+    }
+
+    // Combine filters
+    let finalFilter = visibilityFilter;
+    if (muteFilters.length > 0) {
+      finalFilter = {
+        $and: [visibilityFilter, ...muteFilters],
+      };
+    }
+
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // Get notifications
-    const notifications = await Notification.find(visibilityFilter)
+    const notifications = await Notification.find(finalFilter)
       .populate("createdBy", "name role")
       .sort({ priority: -1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     // Get total count for pagination
-    const totalCount = await Notification.countDocuments(visibilityFilter);
+    const totalCount = await Notification.countDocuments(finalFilter);
 
     console.log(
       `[getUserNotifications] Found ${notifications.length} notifications (${totalCount} total) for user ${userId}`
@@ -159,20 +194,20 @@ const createNotification = async (req, res) => {
     // Set default targetRoles based on creator's role if not provided
     if (!targetRoles || targetRoles.length === 0) {
       switch (req.user.role) {
-        case 'psas':
-          targetRoles = ['psas'];
+        case "psas":
+          targetRoles = ["psas"];
           break;
-        case 'club-officer':
-          targetRoles = ['club-officer'];
+        case "club-officer":
+          targetRoles = ["club-officer"];
           break;
-        case 'school-admin':
-          targetRoles = ['school-admin'];
+        case "school-admin":
+          targetRoles = ["school-admin"];
           break;
-        case 'mis':
-          targetRoles = ['mis'];
+        case "mis":
+          targetRoles = ["mis"];
           break;
-        case 'participant':
-          targetRoles = ['participant'];
+        case "participant":
+          targetRoles = ["participant"];
           break;
         default:
           targetRoles = [req.user.role]; // fallback to creator's role

@@ -1,10 +1,16 @@
 const jwt = require("jsonwebtoken");
+const SystemSettings = require("../models/SystemSettings");
 
 // Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
-  });
+const generateToken = (user) => {
+  return jwt.sign(
+    {
+      id: user._id,
+      tokenVersion: user.tokenVersion || 0,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 };
 
 // Middleware to check if user is authenticated
@@ -37,7 +43,39 @@ const requireAuth = async (req, res, next) => {
       });
     }
 
+    // Check token version for revocation
+    if (
+      decoded.tokenVersion !== undefined &&
+      user.tokenVersion !== decoded.tokenVersion
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Session expired or revoked. Please login again.",
+      });
+    }
+
     req.user = user;
+
+    // Check for Emergency Lockdown
+    const settings = await SystemSettings.getSettings();
+    const isPrivileged = ["mis", "superadmin", "admin"].includes(user.role);
+
+    if (settings.securitySettings.emergencyLockdown && !isPrivileged) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "System is under emergency lockdown. Access restricted to administrators.",
+      });
+    }
+
+    if (settings.generalSettings.maintenanceMode && !isPrivileged) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "System is under scheduled maintenance. Please try again later.",
+      });
+    }
+
     next();
   } catch (error) {
     res.status(401).json({
@@ -110,7 +148,7 @@ const requireOwnerOrAdmin = (resourceUserIdField = "userId") => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const User = require("../models/User");
       const user = await User.findById(decoded.id);
-  
+
       if (!user || !user.isActive) {
         return res.status(401).json({
           success: false,
@@ -162,7 +200,7 @@ const requireRole = (allowedRoles) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const User = require("../models/User");
       const user = await User.findById(decoded.id);
-  
+
       if (!user || !user.isActive) {
         return res.status(401).json({
           success: false,

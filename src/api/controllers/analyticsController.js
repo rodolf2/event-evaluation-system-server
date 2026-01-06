@@ -35,23 +35,34 @@ const getFormAnalytics = async (req, res) => {
       });
     }
 
-    // Calculate total attendees from attendeeList
-    const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
+    // Calculate recorded responses from the official attendee list
+    const respondedAttendees = form.attendeeList
+      ? form.attendeeList.filter((attendee) => attendee.hasResponded).length
+      : 0;
 
-    // Calculate total responses
+    // Calculate total responses received
     const totalResponses = form.responses ? form.responses.length : 0;
 
-    // Calculate response rate based on actual attendee list
+    // Guest responses are those that don't match anyone in the attendee list
+    // (This works because only people in the attendee list can have hasResponded = true)
+    const guestResponses = Math.max(0, totalResponses - respondedAttendees);
+
+    // Initial attendees from CSV/selection
+    const initialAttendeesCount = form.attendeeList
+      ? form.attendeeList.length
+      : 0;
+
+    // Total participants includes both initial attendees and any guests who responded
+    const totalAttendees = initialAttendeesCount + guestResponses;
+
+    // Calculate response rate based on the expanded participant pool
     const responseRate =
       totalAttendees > 0
         ? Math.round((totalResponses / totalAttendees) * 100 * 100) / 100
         : 0;
 
-    // Calculate remaining non-responses - those who haven't responded from the attendee list
-    const respondedAttendees = form.attendeeList
-      ? form.attendeeList.filter((attendee) => attendee.hasResponded).length
-      : 0;
-    const remainingNonResponses = totalAttendees - respondedAttendees;
+    // Calculate remaining non-responses
+    const remainingNonResponses = totalAttendees - totalResponses;
 
     // Analyze responses for sentiment and breakdown
     let responseAnalysis;
@@ -207,8 +218,29 @@ const getMyFormsAnalytics = async (req, res) => {
     );
 
     const analyticsSummary = forms.map((form) => {
-      const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
-      const totalResponses = form.responses ? form.responses.length : 0;
+      // Calculate recorded responses from the official attendee list
+      const respondedAttendeesCount = form.attendeeList
+        ? form.attendeeList.filter((attendee) => attendee.hasResponded).length
+        : 0;
+
+      // Calculate total responses received
+      const totalResponsesCount = form.responses ? form.responses.length : 0;
+
+      // Guest responses are those that don't match anyone in the attendee list
+      const guestResponsesCount = Math.max(
+        0,
+        totalResponsesCount - respondedAttendeesCount
+      );
+
+      // Initial attendees from CSV/selection
+      const initialAttendeesCount = form.attendeeList
+        ? form.attendeeList.length
+        : 0;
+
+      // Total participants includes both initial attendees and any guests who responded
+      const totalAttendees = initialAttendeesCount + guestResponsesCount;
+      const totalResponses = totalResponsesCount;
+
       const responseRate =
         totalAttendees > 0
           ? Math.round((totalResponses / totalAttendees) * 100 * 100) / 100

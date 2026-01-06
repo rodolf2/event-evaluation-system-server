@@ -5,10 +5,33 @@ const Event = require("../../models/Event");
 const Activity = require("../../models/Activity");
 const { requireRole } = require("../../middlewares/auth");
 
-// All MIS routes require mis role
-router.use(requireRole(["mis"]));
+// Import controllers
+const {
+  getAuditLogs,
+  getAuditLogStats,
+  exportAuditLogs,
+  getFilterOptions,
+} = require("../controllers/auditLogController");
+const {
+  getUserStatistics,
+  getTopActiveUsers,
+} = require("../controllers/userStatsController");
+const {
+  getSystemHealth,
+  getQuickHealthCheck,
+} = require("../controllers/systemHealthController");
+const {
+  getActiveSessions,
+  revokeSession,
+} = require("../controllers/securityController");
 
-// Get MIS dashboard statistics
+// All MIS routes require mis role
+// All MIS routes require mis, superadmin, or admin role
+router.use(requireRole(["mis", "superadmin", "admin"]));
+
+// ============================================
+// DASHBOARD STATS
+// ============================================
 router.get("/stats", async (req, res) => {
   try {
     // Get user statistics
@@ -64,5 +87,32 @@ router.get("/stats", async (req, res) => {
     });
   }
 });
+
+// ============================================
+// AUDIT LOGS
+// ============================================
+router.get("/audit-logs", getAuditLogs);
+router.get("/audit-logs/stats", getAuditLogStats);
+router.get("/audit-logs/export", exportAuditLogs);
+router.get("/audit-logs/filter-options", getFilterOptions);
+
+// ============================================
+// USER STATISTICS
+// ============================================
+router.get("/user-statistics", getUserStatistics);
+router.get("/user-statistics/top-active", getTopActiveUsers);
+
+// ============================================
+// SYSTEM HEALTH
+// ============================================
+router.get("/system-health", getSystemHealth);
+router.get("/system-health", getSystemHealth);
+router.get("/system-health/quick", getQuickHealthCheck);
+
+// ============================================
+// SECURITY OVERSIGHT
+// ============================================
+router.get("/security/sessions", getActiveSessions);
+router.post("/security/sessions/:userId/revoke", revokeSession);
 
 module.exports = router;
