@@ -48,7 +48,11 @@ router.get(
       next();
     })(req, res, next);
   },
-  (req, res) => {
+  async (req, res) => {
+    // Update lastLogin timestamp
+    req.user.lastLogin = Date.now();
+    await req.user.save();
+
     // Generate JWT token with role information and profile picture
     const token = jwt.sign(
       {

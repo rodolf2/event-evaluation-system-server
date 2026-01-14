@@ -8,9 +8,12 @@ const getFormAnalytics = async (req, res) => {
     const { formId } = req.params;
     const userId = req.user._id;
 
-    // Check cache first
+    // Check if force refresh is requested
+    const forceRefresh = req.query.refresh === "true";
+
+    // Check cache first (skip if force refresh)
     const cacheKey = `analytics_form_${formId}`;
-    const cachedData = cache.get(cacheKey);
+    const cachedData = !forceRefresh ? cache.get(cacheKey) : null;
     if (cachedData) {
       console.log(`[ANALYTICS] Cache HIT for form ${formId}`);
       return res.status(200).json({
@@ -19,7 +22,11 @@ const getFormAnalytics = async (req, res) => {
         cached: true,
       });
     }
-    console.log(`[ANALYTICS] Cache MISS for form ${formId}`);
+    console.log(
+      `[ANALYTICS] Cache ${
+        forceRefresh ? "SKIPPED (force refresh)" : "MISS"
+      } for form ${formId}`
+    );
 
     // Find the form - only creator can view analytics
     const form = await Form.findOne({

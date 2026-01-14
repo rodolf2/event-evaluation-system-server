@@ -99,8 +99,9 @@ class NotificationService {
 
   // System notifications for different events
   async notifyFormPublished(form, createdBy) {
-    const title = `New Evaluation Form Published: ${form.title}`;
-    const message = `A new evaluation form "${form.title}" has been published and is now available for responses.`;
+    // Notification for participants - generic message without creator info
+    const participantTitle = `Evaluation Form Shared With You`;
+    const participantMessage = `An evaluation form "${form.title}" has been shared with you and is now available for your response.`;
 
     // Notify participants who are in the form's attendee list
     const participantUsers = (form.attendeeList || [])
@@ -108,13 +109,18 @@ class NotificationService {
       .map((attendee) => attendee.userId);
 
     if (participantUsers.length > 0) {
-      await this.createRoleBasedNotification(title, message, [], {
-        type: "success",
-        priority: "high",
-        targetUsers: participantUsers,
-        relatedEntity: { type: "form", id: form._id },
-        createdBy,
-      });
+      await this.createRoleBasedNotification(
+        participantTitle,
+        participantMessage,
+        [],
+        {
+          type: "success",
+          priority: "high",
+          targetUsers: participantUsers,
+          relatedEntity: { type: "form", id: form._id },
+          createdBy,
+        }
+      );
     }
 
     // Notify only the creator's role

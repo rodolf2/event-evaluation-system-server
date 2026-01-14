@@ -90,7 +90,7 @@ router.post(
   requireRole(["psas", "superadmin"]),
   async (req, res) => {
     try {
-      const { email, name, reportId, expirationDays = 7 } = req.body;
+      const { email, name, reportId, expirationDays = 48 } = req.body;
 
       if (!email || !name || !reportId) {
         return res.status(400).json({
@@ -99,13 +99,12 @@ router.post(
         });
       }
 
-      // Enforce guest token expiration range (48-168 hours = 2-7 days)
-      const parsedExpirationDays = parseInt(expirationDays);
-      if (parsedExpirationDays < 2 || parsedExpirationDays > 7) {
+      // expirationDays is now hours (48-168 hours range)
+      const expirationHours = parseInt(expirationDays);
+      if (expirationHours < 48 || expirationHours > 168) {
         return res.status(400).json({
           success: false,
-          message:
-            "Expiration days must be between 2 and 7 days (48-168 hours)",
+          message: "Access duration must be between 48 and 168 hours",
         });
       }
 
@@ -121,7 +120,7 @@ router.post(
       // Generate token
       const token = GuestToken.generateToken();
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + parseInt(expirationDays));
+      expiresAt.setTime(expiresAt.getTime() + expirationHours * 60 * 60 * 1000);
 
       const guestToken = new GuestToken({
         token,
@@ -130,7 +129,7 @@ router.post(
         reportId,
         eventId: report.eventId,
         expiresAt,
-        expirationDays: parseInt(expirationDays),
+        expirationDays: Math.ceil(expirationHours / 24), // Store as days for display
         createdBy: req.user._id,
       });
 
@@ -605,22 +604,12 @@ router.post(
   requireRole(["psas", "superadmin", "club-officer"]),
   async (req, res) => {
     try {
-      const { email, name, formId, expirationDays = 7 } = req.body;
+      const { email, name, formId } = req.body;
 
       if (!email || !name || !formId) {
         return res.status(400).json({
           success: false,
           message: "Email, name, and formId are required",
-        });
-      }
-
-      // Enforce evaluator token expiration range (48-168 hours = 2-7 days)
-      const parsedExpirationDays = parseInt(expirationDays);
-      if (parsedExpirationDays < 2 || parsedExpirationDays > 7) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Expiration days must be between 2 and 7 days (48-168 hours)",
         });
       }
 
@@ -633,10 +622,21 @@ router.post(
         });
       }
 
+      // Calculate expiration based on form's event end date
+      // If no end date, default to 7 days from now
+      let expiresAt;
+      if (form.eventEndDate) {
+        // Add 24 hours after event end date to allow for late evaluations
+        expiresAt = new Date(form.eventEndDate);
+        expiresAt.setHours(expiresAt.getHours() + 24);
+      } else {
+        // Fallback: 7 days from now
+        expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+      }
+
       // Generate token
       const token = EvaluatorToken.generateToken();
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + parseInt(expirationDays));
 
       const evaluatorToken = new EvaluatorToken({
         token,
@@ -645,7 +645,9 @@ router.post(
         formId,
         eventId: form.eventId,
         expiresAt,
-        expirationDays: parseInt(expirationDays),
+        expirationDays: Math.ceil(
+          (expiresAt - new Date()) / (1000 * 60 * 60 * 24)
+        ),
         createdBy: req.user._id,
       });
 

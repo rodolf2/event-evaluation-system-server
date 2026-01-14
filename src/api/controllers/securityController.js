@@ -1,29 +1,34 @@
 const User = require("../../models/User");
+const GuestToken = require("../../models/GuestToken");
 const AuditLog = require("../../models/AuditLog");
 
 /**
- * Get active sessions (users active in the last 24 hours)
+ * Get active guest sessions (guests who accessed in the last 24 hours)
  */
 const getActiveSessions = async (req, res) => {
   try {
-    // Define "Active" as logged in within the last 24 hours
+    // Define "Active" as accessed within the last 24 hours
     const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const now = new Date();
 
-    const activeUsers = await User.find({
-      lastLogin: { $gte: last24Hours },
-      isActive: true, // Only show enabled accounts
+    const activeGuests = await GuestToken.find({
+      accessedAt: { $gte: last24Hours },
+      revoked: false,
+      expiresAt: { $gt: now }, // Token must not be expired
     })
-      .select("name role lastLogin email")
-      .sort({ lastLogin: -1 })
+      .select("name email accessedAt expiresAt reportId")
+      .populate("reportId", "title")
+      .sort({ accessedAt: -1 })
       .limit(50); // Limit to 50 for performance
 
-    const sessions = activeUsers.map((user) => ({
-      id: user._id,
-      userName: user.name,
-      role: user.role,
-      email: user.email,
-      lastAccess: user.lastLogin,
-      status: "Active", // Since we filtered by last 24h
+    const sessions = activeGuests.map((guest) => ({
+      id: guest._id,
+      userName: guest.name,
+      role: "Guest Evaluator",
+      email: guest.email,
+      lastAccess: guest.accessedAt,
+      formTitle: guest.reportId?.title || "Unknown Form",
+      status: "Active",
     }));
 
     res.json({
@@ -40,42 +45,43 @@ const getActiveSessions = async (req, res) => {
 };
 
 /**
- * Revoke a user's session
+ * Revoke a guest's session
  */
 const revokeSession = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { userId } = req.params; // This is now the GuestToken ID
 
-    const user = await User.findById(userId);
-    if (!user) {
+    const guestToken = await GuestToken.findById(userId);
+    if (!guestToken) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "Guest session not found",
       });
     }
 
-    // Increment token version to invalidate existing tokens
-    user.tokenVersion = (user.tokenVersion || 0) + 1;
-    await user.save();
+    // Revoke the guest token
+    await guestToken.revokeToken(req.user._id);
 
     // Log the action
     await AuditLog.logEvent({
       userId: req.user._id,
       userEmail: req.user.email,
       userName: req.user.name,
-      action: "SESSION_REVOKED",
+      action: "GUEST_SESSION_REVOKED",
       category: "security",
-      description: `Revoked session for user ${user.email}`,
+      description: `Revoked guest session for ${guestToken.email}`,
       severity: "warning",
       metadata: {
-        targetId: user._id,
-        targetType: "User",
+        targetId: guestToken._id,
+        targetType: "GuestToken",
+        guestEmail: guestToken.email,
+        guestName: guestToken.name,
       },
     });
 
     res.json({
       success: true,
-      message: "Session revoked successfully",
+      message: "Guest session revoked successfully",
     });
   } catch (error) {
     console.error("Error revoking session:", error);

@@ -1,6 +1,37 @@
 const SharedReport = require("../../models/SharedReport");
+const User = require("../../models/User");
 const puppeteer = require("puppeteer");
 
+// Get school admins and senior management for report sharing (accessible by PSAS/Club Officers)
+exports.getSchoolAdmins = async (req, res) => {
+  try {
+    // Only return users with school-admin or senior-management roles
+    const users = await User.find({
+      role: { $in: ["school-admin", "senior-management"] },
+      isActive: true,
+    }).select("name email department position role");
+
+    res.status(200).json({
+      success: true,
+      users: users.map((u) => ({
+        id: u._id,
+        _id: u._id,
+        name: u.name || u.email,
+        email: u.email,
+        department: u.department || "",
+        position: u.position || u.role,
+        role: u.role,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching school admins:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch school administrators",
+      error: error.message,
+    });
+  }
+};
 // Share report with school administrators
 exports.shareReport = async (req, res) => {
   try {
@@ -84,10 +115,10 @@ exports.generatePDFReport = async (req, res) => {
       format: "A4",
       printBackground: true,
       margin: {
-        top: "220px", // Space for header - increased to prevent overlap
-        right: "20px",
-        bottom: "60px", // Space for footer template
-        left: "20px",
+        top: "220px", // Increased space for header + form title + description (header ~120px + form title ~40px + description ~40px + padding)
+        right: "30px", // Small right margin for better content fit
+        bottom: "60px", // Space for footer template (footer height ~40px + padding)
+        left: "30px", // Small left margin for better content fit
       },
       preferCSSPageSize: false,
       displayHeaderFooter: !!(headerTemplate || footerTemplate),

@@ -143,15 +143,25 @@ const generateQualitativeReport = async (eventId) => {
       throw new Error(pythonResult.error || "Python analysis failed");
     }
   } catch (error) {
+    // Enhanced fallback logging - make it very visible
+    console.warn("⚠️ ============================================== ⚠️");
+    console.warn("⚠️  PYTHON SENTIMENT ANALYSIS FAILED - USING FALLBACK");
+    console.warn("⚠️ ============================================== ⚠️");
     console.error(
       "Error calling Python script for qualitative analysis:",
       error
     );
     console.error("Error details:", error.message);
-
-    // Fallback to enhanced JavaScript-based analysis if Python fails
+    console.warn("Fallback reason:", error.message || "Unknown error");
+    console.warn("Timestamp:", new Date().toISOString());
+    console.warn("Comments to analyze:", comments.length);
     console.log("🔄 Falling back to enhanced JavaScript sentiment analysis...");
-    return await enhancedQualitativeAnalysis(comments);
+
+    // Pass the fallback reason to include in the response
+    return await enhancedQualitativeAnalysis(
+      comments,
+      error.message || "Python script execution failed"
+    );
   }
 };
 
@@ -402,11 +412,17 @@ function generateRecommendations(analysisResult) {
 
 /**
  * Enhanced JavaScript qualitative analysis with multilingual support
+ * @param {string[]} comments - Array of comments to analyze
+ * @param {string} fallbackReason - Optional reason why Python fallback was triggered
  */
-async function enhancedQualitativeAnalysis(comments) {
+async function enhancedQualitativeAnalysis(comments, fallbackReason = null) {
+  console.warn("⚠️ Using JavaScript fallback for sentiment analysis");
   console.log(
     "🔄 Using enhanced JavaScript sentiment analysis with multilingual support"
   );
+  if (fallbackReason) {
+    console.warn("Fallback triggered because:", fallbackReason);
+  }
 
   const categorized_comments = {
     positive: [],
@@ -1138,6 +1154,12 @@ async function enhancedQualitativeAnalysis(comments) {
     comments: categorized_comments,
     analysis_method: "enhanced_javascript_multilingual",
     language_support: "English and Tagalog with mixed language detection",
+    // Fallback metadata - useful for monitoring and debugging
+    fallback_used: true,
+    fallback_reason: fallbackReason,
+    fallback_timestamp: new Date().toISOString(),
+    fallback_warning:
+      "⚠️ Python sentiment analysis was unavailable. JavaScript fallback was used. Check server logs for details.",
   };
 }
 
@@ -1234,6 +1256,7 @@ module.exports = {
   generateQuantitativeReport,
   analyzeResponses,
   generateResponseOverview,
+  analyzeCommentSentiment,
 };
 
 /**
@@ -1390,8 +1413,61 @@ function fallbackAnalyzeResponses(responses) {
   let neutralCount = 0;
   let negativeCount = 0;
 
-  // Simple keyword-based sentiment analysis
+  // Negation patterns that flip sentiment
+  const negationPatterns = [
+    "hindi naging maayos",
+    "hindi maayos",
+    "hindi maganda",
+    "hindi malinaw",
+    "hindi organized",
+    "hindi okay",
+    "hindi ayos",
+    "di maayos",
+    "di maganda",
+    "not good",
+    "not great",
+    "not well",
+    "not organized",
+    "wasn't good",
+    "wasn't great",
+    "did not",
+    "didn't",
+    "couldn't",
+  ];
+
+  // Neutral/mixed indicators
+  const neutralIndicators = [
+    "average",
+    "okay lang",
+    "pwede na",
+    "katamtaman",
+    "sige lang",
+    "could be improved",
+    "could be better",
+    "room for improvement",
+    "some parts were",
+    "while others",
+    "pero may",
+    "ngunit may",
+    "pwede pang",
+    "may improvement",
+    "need improvement",
+    "not bad",
+    "so-so",
+    "fair",
+    "decent",
+    "acceptable",
+  ];
+
   const positiveKeywords = [
+    "well-organized",
+    "well organized",
+    "enjoyable",
+    "valuable",
+    "knowledgeable",
+    "engaging",
+    "interested",
+    "interesting",
     "good",
     "great",
     "excellent",
@@ -1399,7 +1475,6 @@ function fallbackAnalyzeResponses(responses) {
     "wonderful",
     "fantastic",
     "love",
-    "like",
     "best",
     "awesome",
     "perfect",
@@ -1409,9 +1484,42 @@ function fallbackAnalyzeResponses(responses) {
     "informative",
     "helpful",
     "enjoyed",
-    "appreciated",
+    "recommend",
+    "thank",
+    "thanks",
+    "successful",
+    "smooth",
+    "professional",
+    "maganda",
+    "mabuti",
+    "mahusay",
+    "galing",
+    "napakaganda",
+    "napakagaling",
+    "sobrang ganda",
+    "sobrang galing",
+    "masaya",
+    "natutunan",
+    "salamat",
+    "sulit",
+    "organisado",
+    "maayos",
+    "malinaw",
+    "kapaki-pakinabang",
+    "naging masaya",
   ];
+
   const negativeKeywords = [
+    "lacked",
+    "lacking",
+    "late",
+    "unclear",
+    "difficult",
+    "hard",
+    "confusing",
+    "confused",
+    "poorly",
+    "poor",
     "bad",
     "terrible",
     "awful",
@@ -1420,54 +1528,63 @@ function fallbackAnalyzeResponses(responses) {
     "dislike",
     "worst",
     "disappointed",
-    "unsatisfied",
-    "sad",
-    "angry",
-    "frustrated",
-    "poor",
-    "fail",
-    // Nuanced/constructive criticism keywords
-    "rushed",
-    "confusing",
-    "boring",
-    "slow",
-    "lacking",
-    "needs improvement",
-    "could be better",
-    "not well",
-    "not good",
-    "disorganized",
-    "unclear",
-    "weak",
-    "mediocre",
-    "underwhelming",
     "disappointing",
-    "however",
-    "but",
-    "although",
-    "unfortunately",
-    "issue",
+    "unsatisfied",
+    "frustrated",
+    "boring",
+    "waste",
+    "disorganized",
+    "unprepared",
+    "crowded",
+    "chaotic",
+    "messy",
     "problem",
+    "issue",
     "concern",
+    "failed",
+    "failure",
+    "hindi naging maayos",
+    "kakulangan",
+    "nahirapan",
+    "magulo",
+    "hindi malinaw",
+    "masama",
+    "pangit",
+    "nakakadismaya",
+    "dismayado",
+    "nakakainis",
+    "nakakaasar",
+    "badtrip",
+    "sayang",
+    "walang kwenta",
+    "hindi maganda",
+    "hindi okay",
+    "kulang",
+    "mali",
   ];
 
   responses.forEach((response) => {
     if (response.responses && Array.isArray(response.responses)) {
-      // Extract text from text-based questions only (skip ratings/numbers)
       response.responses.forEach((q) => {
-        // Skip if answer is a number (scale/rating)
         if (typeof q.answer === "number") return;
 
         if (typeof q.answer === "string") {
           const trimmed = q.answer.trim();
-          // Skip pure numbers or very short responses (likely ratings)
           if (/^\d+$/.test(trimmed) && trimmed.length <= 2) return;
-          // Skip if too short to be meaningful text (less than 3 characters)
           if (trimmed.length < 3) return;
 
           const textContent = trimmed.toLowerCase();
 
-          // Count keyword matches
+          // Check for negation patterns
+          const hasNegationPattern = negationPatterns.some((pattern) =>
+            textContent.includes(pattern)
+          );
+
+          // Check for neutral/mixed indicators
+          const hasNeutralIndicator = neutralIndicators.some((indicator) =>
+            textContent.includes(indicator)
+          );
+
           const positiveMatches = positiveKeywords.filter((keyword) =>
             textContent.includes(keyword)
           ).length;
@@ -1475,26 +1592,36 @@ function fallbackAnalyzeResponses(responses) {
             textContent.includes(keyword)
           ).length;
 
-          // Check if this is truly mixed sentiment (has both positive AND negative keywords)
-          const hasBothSentiments = positiveMatches > 0 && negativeMatches > 0;
-
-          if (hasBothSentiments) {
-            // Mixed sentiment - classify as neutral
+          // Determine sentiment with improved logic
+          if (hasNegationPattern) {
+            negativeCount++;
+          } else if (
+            hasNeutralIndicator &&
+            positiveMatches > 0 &&
+            positiveMatches <= 2
+          ) {
             neutralCount++;
-          } else if (positiveMatches > negativeMatches && positiveMatches > 0) {
-            positiveCount++;
           } else if (negativeMatches > positiveMatches && negativeMatches > 0) {
             negativeCount++;
+          } else if (
+            positiveMatches > negativeMatches &&
+            positiveMatches > 0 &&
+            !hasNeutralIndicator
+          ) {
+            positiveCount++;
+          } else if (hasNeutralIndicator) {
+            neutralCount++;
+          } else if (positiveMatches > 0 && negativeMatches === 0) {
+            positiveCount++;
           } else {
             neutralCount++;
           }
         }
-        // Skip array answers (multiple choice) for sentiment analysis
       });
     }
   });
 
-  const total = responses.length;
+  const total = positiveCount + neutralCount + negativeCount;
   return {
     sentimentBreakdown: {
       positive: {
@@ -1603,4 +1730,338 @@ function generateResponseOverview(responses, startDate = null, endDate = null) {
     data: weekData,
     dateRange: `${formatDate(minDate)} - ${formatDate(maxDate)}`,
   };
+}
+
+// ============================================================
+// UNIFIED SENTIMENT ANALYSIS - Single Source of Truth
+// ============================================================
+
+// In-memory cache for sentiment analysis results (LRU-style)
+const sentimentCache = new Map();
+const CACHE_MAX_SIZE = 1000;
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Get Python path for sentiment analysis
+ */
+function getPythonPath() {
+  const fs = require("fs");
+  const venvPathWin = path.resolve(
+    __dirname,
+    "../../../venv",
+    "Scripts",
+    "python.exe"
+  );
+  const venvPathUnix = path.resolve(
+    __dirname,
+    "../../../venv",
+    "bin",
+    "python"
+  );
+
+  if (process.platform === "win32" && fs.existsSync(venvPathWin)) {
+    return venvPathWin;
+  } else if (process.platform !== "win32" && fs.existsSync(venvPathUnix)) {
+    return venvPathUnix;
+  }
+  return "python";
+}
+
+/**
+ * Analyze a single comment using Python (primary) with JavaScript fallback
+ * This is the SINGLE SOURCE OF TRUTH for sentiment analysis
+ * @param {string} text - The comment text to analyze
+ * @returns {Promise<{sentiment: string, confidence: number, method: string}>}
+ */
+async function analyzeCommentSentiment(text) {
+  if (!text || !text.trim()) {
+    return { sentiment: "neutral", confidence: 0, method: "empty_text" };
+  }
+
+  const cleanText = text.trim();
+  const cacheKey = cleanText.toLowerCase();
+
+  // Check cache first
+  if (sentimentCache.has(cacheKey)) {
+    const cached = sentimentCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return cached.result;
+    }
+    sentimentCache.delete(cacheKey); // Expired
+  }
+
+  let result;
+
+  try {
+    // Try Python analysis first (most accurate)
+    result = await analyzeSingleWithPython(cleanText);
+  } catch (error) {
+    console.log(
+      `[SENTIMENT] Python failed for "${cleanText.substring(0, 30)}...": ${
+        error.message
+      }`
+    );
+    // Fallback to JavaScript
+    result = analyzeWithJavaScript(cleanText);
+  }
+
+  // Cache the result
+  if (sentimentCache.size >= CACHE_MAX_SIZE) {
+    // Remove oldest entry (FIFO)
+    const firstKey = sentimentCache.keys().next().value;
+    sentimentCache.delete(firstKey);
+  }
+  sentimentCache.set(cacheKey, { result, timestamp: Date.now() });
+
+  return result;
+}
+
+/**
+ * Analyze single comment with Python
+ */
+async function analyzeSingleWithPython(text) {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
+    const pythonPath = getPythonPath();
+
+    const pyshell = new PythonShell(scriptPath, {
+      pythonPath,
+      pythonOptions: ["-u"],
+    });
+
+    pyshell.send(JSON.stringify({ action: "analyze_single", comment: text }));
+
+    let result = "";
+    pyshell.on("message", (message) => {
+      result += message;
+    });
+
+    pyshell.on("stderr", (stderr) => {
+      // Ignore debug output
+    });
+
+    pyshell.end((err) => {
+      if (err) {
+        reject(err);
+      } else {
+        try {
+          const parsed = JSON.parse(result);
+          if (parsed.success) {
+            resolve({
+              sentiment: parsed.sentiment || "neutral",
+              confidence: parsed.confidence || 0.5,
+              method: parsed.method || "python",
+            });
+          } else {
+            reject(new Error(parsed.error || "Python analysis failed"));
+          }
+        } catch (parseErr) {
+          reject(parseErr);
+        }
+      }
+    });
+  });
+}
+
+/**
+ * JavaScript fallback sentiment analysis for a single comment
+ */
+function analyzeWithJavaScript(text) {
+  const textLower = text.toLowerCase();
+
+  // Negation patterns
+  const negationPatterns = [
+    "hindi naging maayos",
+    "hindi maayos",
+    "hindi maganda",
+    "hindi malinaw",
+    "hindi organized",
+    "hindi okay",
+    "hindi ayos",
+    "di maayos",
+    "di maganda",
+    "not good",
+    "not great",
+    "not well",
+    "not organized",
+    "wasn't good",
+    "wasn't great",
+    "did not",
+    "didn't",
+    "couldn't",
+  ];
+
+  // Neutral indicators
+  const neutralIndicators = [
+    "average",
+    "okay lang",
+    "pwede na",
+    "katamtaman",
+    "sige lang",
+    "could be improved",
+    "could be better",
+    "room for improvement",
+    "some parts were",
+    "while others",
+    "pero may",
+    "ngunit may",
+    "pwede pang",
+    "may improvement",
+    "need improvement",
+    "not bad",
+    "so-so",
+    "fair",
+    "decent",
+    "acceptable",
+  ];
+
+  const positiveKeywords = [
+    "well-organized",
+    "well organized",
+    "enjoyable",
+    "valuable",
+    "knowledgeable",
+    "engaging",
+    "interested",
+    "interesting",
+    "good",
+    "great",
+    "excellent",
+    "amazing",
+    "wonderful",
+    "fantastic",
+    "love",
+    "best",
+    "awesome",
+    "perfect",
+    "satisfied",
+    "happy",
+    "pleased",
+    "informative",
+    "helpful",
+    "enjoyed",
+    "recommend",
+    "thank",
+    "thanks",
+    "successful",
+    "smooth",
+    "professional",
+    "maganda",
+    "mabuti",
+    "mahusay",
+    "galing",
+    "napakaganda",
+    "napakagaling",
+    "sobrang ganda",
+    "sobrang galing",
+    "masaya",
+    "natutunan",
+    "salamat",
+    "sulit",
+    "organisado",
+    "maayos",
+    "malinaw",
+    "kapaki-pakinabang",
+    "naging masaya",
+  ];
+
+  const negativeKeywords = [
+    "lacked",
+    "lacking",
+    "late",
+    "unclear",
+    "difficult",
+    "hard",
+    "confusing",
+    "confused",
+    "poorly",
+    "poor",
+    "bad",
+    "terrible",
+    "awful",
+    "horrible",
+    "hate",
+    "dislike",
+    "worst",
+    "disappointed",
+    "disappointing",
+    "unsatisfied",
+    "frustrated",
+    "boring",
+    "waste",
+    "disorganized",
+    "unprepared",
+    "crowded",
+    "chaotic",
+    "messy",
+    "problem",
+    "issue",
+    "concern",
+    "failed",
+    "failure",
+    "hindi naging maayos",
+    "kakulangan",
+    "nahirapan",
+    "magulo",
+    "hindi malinaw",
+    "masama",
+    "pangit",
+    "nakakadismaya",
+    "dismayado",
+    "nakakainis",
+    "nakakaasar",
+    "badtrip",
+    "sayang",
+    "walang kwenta",
+    "hindi maganda",
+    "hindi okay",
+    "kulang",
+    "mali",
+  ];
+
+  const hasNegationPattern = negationPatterns.some((p) =>
+    textLower.includes(p)
+  );
+  const hasNeutralIndicator = neutralIndicators.some((n) =>
+    textLower.includes(n)
+  );
+  const positiveMatches = positiveKeywords.filter((k) =>
+    textLower.includes(k)
+  ).length;
+  const negativeMatches = negativeKeywords.filter((k) =>
+    textLower.includes(k)
+  ).length;
+
+  let sentiment = "neutral";
+  let confidence = 0.5;
+
+  if (hasNegationPattern) {
+    sentiment = "negative";
+    confidence = 0.8;
+  } else if (
+    hasNeutralIndicator &&
+    positiveMatches > 0 &&
+    positiveMatches <= 2
+  ) {
+    sentiment = "neutral";
+    confidence = 0.7;
+  } else if (negativeMatches > positiveMatches && negativeMatches > 0) {
+    sentiment = "negative";
+    confidence = Math.min(0.5 + negativeMatches * 0.1, 0.9);
+  } else if (
+    positiveMatches > negativeMatches &&
+    positiveMatches > 0 &&
+    !hasNeutralIndicator
+  ) {
+    sentiment = "positive";
+    confidence = Math.min(0.5 + positiveMatches * 0.1, 0.9);
+  } else if (hasNeutralIndicator) {
+    sentiment = "neutral";
+    confidence = 0.7;
+  } else if (positiveMatches > 0 && negativeMatches === 0) {
+    sentiment = "positive";
+    confidence = Math.min(0.5 + positiveMatches * 0.1, 0.9);
+  }
+
+  return { sentiment, confidence, method: "javascript_fallback" };
 }

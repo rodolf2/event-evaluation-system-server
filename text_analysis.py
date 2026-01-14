@@ -74,8 +74,8 @@ class MultilingualSentimentAnalyzer:
 
             # Problems and issues
             'problem': -0.7, 'issue': -0.7, 'problema': -0.7, 'mali': -0.8,
-            'kulang': -0.7, 'incomplete': -0.7, 'poor': -1, 'badly': -1,
-            'crowded': -0.8, 'difficult': -0.8, 'hard': -0.7, 'challenging': -0.6,
+            'kulang': -0.7, 'kakulangan': -0.8, 'incomplete': -0.7, 'poor': -1,
+            'crowded': -0.8, 'difficult': -0.8, 'nahirapan': -0.8, 'hard': -0.7, 'challenging': -0.6,
 
             # Frustration and anger
             'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
@@ -84,7 +84,7 @@ class MultilingualSentimentAnalyzer:
 
             # Organization issues
             'disorganized': -1, 'chaotic': -1, 'confusing': -0.8, 'unclear': -0.7,
-            'messy': -0.8, 'noisy': -0.6, 'uncomfortable': -0.7,
+            'messy': -0.8, 'magulo': -0.8, 'noisy': -0.6, 'uncomfortable': -0.7,
             
             # Event-specific negative (NEW)
             'rushed': -0.8, 'rushing': -0.8, 'nagmamadali': -0.7,
@@ -125,14 +125,24 @@ class MultilingualSentimentAnalyzer:
             'waste of time', 'sayang lang', 'hindi ako satisfied',
             'bad experience', 'poor quality', 'very bad', 'so bad',
             'masama', 'napakamasama', 'sobrang masama', 'ang sama',
-            'pangit', 'napakapangit', 'sobrang pangit'
+            'pangit', 'napakapangit', 'sobrang pangit',
+            'hindi naging maayos', 'hindi maayos', 'hindi okay',
+            'hindi ayos', 'di maayos', 'di maganda'
         ]
 
         # Neutral words that might indicate mixed sentiment
         self.neutral_indicators = [
-            'okay', 'okay lang', 'sige', 'pwede', 'maaari', 'maybe', 'perhaps',
-            'average', 'normal', 'ordinary', 'so-so', 'mediocre', 'oks lang',
-            'pwede na', 'ganon lang', 'typical'
+            # English neutral
+            'okay', 'ok', 'alright', 'fine', 'so-so', 'average', 'normal', 
+            'ordinary', 'mediocre', 'fair', 'decent', 'not bad', 'moderate',
+            'acceptable', 'passable', 'adequate', 'sufficient',
+            # Tagalog neutral - common expressions
+            'okay lang', 'ok lang', 'oks lang', 'ayos lang', 'pwede na', 
+            'pwede naman', 'ganon lang', 'ganun lang', 'sige lang', 
+            'lang naman', 'naman', 'typical', 'karaniwan', 'normal lang',
+            'sige', 'pwede', 'maaari', 'maybe', 'perhaps', 'siguro',
+            # Mixed/hesitant expressions
+            'may improvement', 'pwede pang', 'pero okay', 'pero ayos'
         ]
         
         # Negation words
@@ -306,8 +316,11 @@ class MultilingualSentimentAnalyzer:
             for i, word in enumerate(words):
                 # Check for negation before the word
                 is_negated = False
-                if i > 0 and words[i-1] in self.negations:
-                    is_negated = True
+                # Check for negation within previous 2 words
+                for j in range(max(0, i-2), i):
+                    if words[j] in self.negations:
+                        is_negated = True
+                        break
 
                 # Check for intensifiers before the word
                 multiplier = 1.0
@@ -350,10 +363,10 @@ class MultilingualSentimentAnalyzer:
             has_significant_negative = negative_score >= 1.0
             score_ratio = abs(total_score) / max(positive_score + negative_score, 1)
 
-            if neutral_count >= 2:
-                # Strong neutral indicators
+            if neutral_count >= 1 and positive_score < 1.5 and negative_score < 1.0:
+                # Neutral indicators present with low positive/negative scores
                 sentiment = "neutral"
-                confidence = 0.6
+                confidence = 0.7
             elif has_mixed_sentiment and (constructive_criticism_count >= 2 or has_significant_negative):
                 # Mixed sentiment with constructive criticism or significant negatives
                 sentiment = "neutral"
@@ -398,14 +411,37 @@ class MultilingualSentimentAnalyzer:
     def analyze_mixed_sentiment(self, text):
         """Analyze mixed language text by combining both methods"""
         try:
-            # Try English analysis first
+            text_lower = text.lower()
+            
+            # First check for neutral indicators (important for Tagalog expressions)
+            neutral_count = sum(1 for indicator in self.neutral_indicators if indicator in text_lower)
+            
+            # Try Tagalog analysis first (since it has better neutral detection for Filipino phrases)
+            tagalog_result = self.analyze_tagalog_sentiment(text)
+            
+            # Try English analysis
             english_result = self.analyze_english_sentiment(text)
 
-            # Try Tagalog analysis
-            tagalog_result = self.analyze_tagalog_sentiment(text)
-
-            # Combine results based on confidence
+            # If neutral indicators are present and Tagalog analysis says neutral, trust it
+            if neutral_count >= 1 and tagalog_result.get('sentiment') == 'neutral':
+                return tagalog_result
+                
+            # If Tagalog has high positive/negative score, trust it (it has strong lexicon matches)
+            tagalog_total = abs(tagalog_result.get('total_score', 0))
+            if tagalog_total >= 2.0:
+                return tagalog_result
+            
+            # Otherwise, combine results based on confidence
             if english_result.get('confidence', 0) > tagalog_result.get('confidence', 0):
+                # But override if English says positive but we have neutral indicators
+                if english_result.get('sentiment') == 'positive' and neutral_count >= 1:
+                    return {
+                        'sentiment': 'neutral',
+                        'confidence': 0.7,
+                        'method': 'mixed_neutral_override',
+                        'original_english': english_result,
+                        'original_tagalog': tagalog_result
+                    }
                 return english_result
             else:
                 return tagalog_result
@@ -688,6 +724,27 @@ def main():
             previous_year = data.get('previousYear', 2023)
             result = analyze_quantitative(current_year_data, previous_year_data, current_year, previous_year)
             print(json.dumps(result))
+
+        elif action == 'analyze_single':
+            # Analyze a single comment and return sentiment
+            comment = data.get('comment', '')
+            if not comment or not comment.strip():
+                print(json.dumps({
+                    'success': True,
+                    'sentiment': 'neutral',
+                    'confidence': 0.0,
+                    'method': 'empty_text'
+                }))
+            else:
+                analyzer = MultilingualSentimentAnalyzer()
+                result = analyzer.analyze_sentiment(comment)
+                print(json.dumps({
+                    'success': True,
+                    'sentiment': result.get('sentiment', 'neutral'),
+                    'confidence': result.get('confidence', 0.5),
+                    'method': result.get('method', 'unknown'),
+                    'details': result
+                }))
 
         else:
             print(json.dumps({

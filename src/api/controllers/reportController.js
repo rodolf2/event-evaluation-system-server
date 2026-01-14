@@ -361,70 +361,41 @@ const getDynamicQualitativeData = async (req, res) => {
       negative: [],
     };
 
-    filteredTextResponses.slice(0, parseInt(limit)).forEach((response) => {
-      const answer = response.answer || "";
-      const text = answer.toLowerCase();
+    // Use centralized sentiment analysis for categorization
+    const analyzePromises = filteredTextResponses
+      .slice(0, parseInt(limit))
+      .map(async (response) => {
+        const answer = response.answer || "";
 
-      let category = "neutral";
-      const positiveKeywords = [
-        "good",
-        "great",
-        "excellent",
-        "amazing",
-        "wonderful",
-        "fantastic",
-        "love",
-        "like",
-        "best",
-        "awesome",
-        "perfect",
-        "satisfied",
-        "happy",
-        "pleased",
-      ];
-      const negativeKeywords = [
-        "bad",
-        "terrible",
-        "awful",
-        "horrible",
-        "hate",
-        "dislike",
-        "worst",
-        "disappointed",
-        "unsatisfied",
-        "sad",
-        "angry",
-        "frustrated",
-        "poor",
-        "fail",
-      ];
+        // Use the centralized sentiment analysis function
+        const sentimentResult = await AnalysisService.analyzeCommentSentiment(
+          answer
+        );
+        const category = sentimentResult.sentiment;
 
-      const positiveMatches = positiveKeywords.filter((keyword) =>
-        text.includes(keyword)
-      ).length;
-      const negativeMatches = negativeKeywords.filter((keyword) =>
-        text.includes(keyword)
-      ).length;
+        const identity = processRespondentIdentity(
+          response.respondentName,
+          response.respondentEmail
+        );
 
-      if (positiveMatches > negativeMatches && positiveMatches > 0) {
-        category = "positive";
-      } else if (negativeMatches > positiveMatches && negativeMatches > 0) {
-        category = "negative";
-      }
-
-      const identity = processRespondentIdentity(
-        response.respondentName,
-        response.respondentEmail
-      );
-
-      categorizedComments[category].push({
-        id: response.id,
-        comment: answer,
-        user: identity.name,
-        email: identity.email,
-        questionTitle: response.questionTitle,
-        createdAt: response.submittedAt,
+        return {
+          category,
+          data: {
+            id: response.id,
+            comment: answer,
+            user: identity.name,
+            email: identity.email,
+            questionTitle: response.questionTitle,
+            createdAt: response.submittedAt,
+          },
+        };
       });
+
+    const analyzedResponses = await Promise.all(analyzePromises);
+
+    // Categorize the analyzed responses
+    analyzedResponses.forEach(({ category, data }) => {
+      categorizedComments[category].push(data);
     });
 
     // NEW: Build per-question breakdown
@@ -752,62 +723,24 @@ const getDynamicCommentsData = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const paginatedResponses = responses.slice(skip, skip + parseInt(limit));
 
-    // Process comments based on type
+    // Process comments based on type using centralized sentiment analysis
     let processedComments = paginatedResponses;
     if (type !== "all") {
-      processedComments = paginatedResponses.filter((response) => {
-        const text = (response.answer || "").toLowerCase();
-        const positiveKeywords = [
-          "good",
-          "great",
-          "excellent",
-          "amazing",
-          "wonderful",
-          "fantastic",
-          "love",
-          "like",
-          "best",
-          "awesome",
-          "perfect",
-          "satisfied",
-          "happy",
-          "pleased",
-        ];
-        const negativeKeywords = [
-          "bad",
-          "terrible",
-          "awful",
-          "horrible",
-          "hate",
-          "dislike",
-          "worst",
-          "disappointed",
-          "unsatisfied",
-          "sad",
-          "angry",
-          "frustrated",
-          "poor",
-          "fail",
-        ];
-
-        const positiveMatches = positiveKeywords.filter((keyword) =>
-          text.includes(keyword)
-        ).length;
-        const negativeMatches = negativeKeywords.filter((keyword) =>
-          text.includes(keyword)
-        ).length;
-
-        if (type === "positive") {
-          return positiveMatches > negativeMatches && positiveMatches > 0;
-        } else if (type === "negative") {
-          return negativeMatches > positiveMatches && negativeMatches > 0;
-        } else {
-          return (
-            (positiveMatches === 0 && negativeMatches === 0) ||
-            positiveMatches === negativeMatches
-          );
-        }
+      // Analyze all comments first (async)
+      const analysisPromises = paginatedResponses.map(async (response) => {
+        const text = response.answer || "";
+        const sentimentResult = await AnalysisService.analyzeCommentSentiment(
+          text
+        );
+        return { response, sentiment: sentimentResult.sentiment };
       });
+
+      const analyzedComments = await Promise.all(analysisPromises);
+
+      // Filter by the requested type
+      processedComments = analyzedComments
+        .filter(({ sentiment }) => sentiment === type)
+        .map(({ response }) => response);
     }
 
     // Filter by role if specified (using attendee list)
