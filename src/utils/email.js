@@ -2,47 +2,79 @@ const nodemailer = require("nodemailer");
 const { generateRatingEmailHtml } = require("./ratingEmailTemplate.js");
 
 /**
- * Validates email environment variables
+ * Validates email environment variables based on service
  */
 const validateEmailConfig = () => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  const emailService = process.env.EMAIL_SERVICE || "gmail";
+
+  if (emailService === "sendgrid") {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.error(
+        "❌ [EMAIL-CONFIG] SendGrid API key missing. Set SENDGRID_API_KEY environment variable.",
+      );
+      return false;
+    }
+  } else if (emailService === "gmail") {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error(
+        "❌ [EMAIL-CONFIG] Gmail credentials missing. Set EMAIL_USER and EMAIL_PASS environment variables.",
+      );
+      return false;
+    }
+  } else {
     console.error(
-      "❌ [EMAIL-CONFIG] Critical error: EMAIL_USER or EMAIL_PASS environment variables are missing.",
+      `❌ [EMAIL-CONFIG] Invalid EMAIL_SERVICE: ${emailService}. Use 'gmail' or 'sendgrid'.`,
     );
     return false;
   }
+
   return true;
 };
 
-// nodemailer v7+ uses default export
-const createTransport =
-  nodemailer.createTransport || nodemailer.default?.createTransport;
+/**
+ * Creates email transporter based on configured service
+ */
+const createEmailTransporter = () => {
+  const emailService = process.env.EMAIL_SERVICE || "gmail";
 
-if (!createTransport) {
-  throw new Error(
-    "nodemailer is not properly installed. Please run: npm install nodemailer",
-  );
-}
+  if (emailService === "sendgrid") {
+    return nodemailer.createTransport({
+      host: "smtp.sendgrid.net",
+      port: 587,
+      secure: false,
+      auth: {
+        user: "apikey",
+        pass: process.env.SENDGRID_API_KEY,
+      },
+    });
+  } else {
+    // Gmail configuration
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
+  }
+};
 
 /**
  * Shared transporter for the entire application
  */
-const transporter = createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  tls: {
-    // This setting is often needed for cloud environments like Render
-    rejectUnauthorized: false,
-  },
-});
+const transporter = createEmailTransporter();
 
 const sendEmail = async (options) => {
   if (!validateEmailConfig()) {
     throw new Error("Email configuration missing in environment variables");
   }
+
+  console.log(
+    `[EMAIL] Attempting to send email to: ${options.to} via ${process.env.EMAIL_SERVICE || "gmail"}`,
+  );
 
   let htmlContent = options.html || "";
   let subject = options.subject;
@@ -71,10 +103,26 @@ const sendEmail = async (options) => {
     attachments: options.attachments || [],
   };
 
-  const info = await transporter.sendMail(mailOptions);
-
-  console.log("Email sent successfully: %s", info.messageId);
-  return info;
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(
+      `[EMAIL] ✓ Email sent successfully to ${options.to}: ${info.messageId}`,
+    );
+    return info;
+  } catch (error) {
+    console.error(
+      `[EMAIL] ✗ Failed to send email to ${options.to}:`,
+      error.message,
+    );
+    console.error(`[EMAIL] Error details:`, {
+      service: process.env.EMAIL_SERVICE || "gmail",
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+    });
+    throw error;
+  }
 };
 
 module.exports = {
