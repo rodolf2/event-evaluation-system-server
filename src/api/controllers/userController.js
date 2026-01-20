@@ -214,6 +214,34 @@ const updateUser = async (req, res) => {
       }
     }
 
+    // Handle role elevation to club-officer with automatic expiration
+    if (updates.role === "club-officer" && user.role !== "club-officer") {
+      // User is being elevated to club-officer
+      const oneYearFromNow = new Date();
+      oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+
+      updates.roleExpiresAt = oneYearFromNow;
+      updates.previousRole = user.role;
+      updates.elevationDate = new Date();
+      updates.elevatedBy = req.user?._id || null;
+
+      console.log(
+        `[RoleElevation] User ${user.email} elevated to club-officer, expires at ${oneYearFromNow.toISOString()}`,
+      );
+    }
+
+    // If role is being changed away from club-officer, clear expiration fields
+    if (
+      updates.role &&
+      updates.role !== "club-officer" &&
+      user.role === "club-officer"
+    ) {
+      updates.roleExpiresAt = null;
+      updates.previousRole = null;
+      updates.elevationDate = null;
+      updates.elevatedBy = null;
+    }
+
     // Update user fields
     Object.keys(updates).forEach((key) => {
       user[key] = updates[key];
@@ -346,7 +374,7 @@ const bulkUpdateUsers = async (req, res) => {
     const result = await User.updateMany(
       { _id: { $in: userIds } },
       { $set: updates },
-      { new: true }
+      { new: true },
     );
 
     res.json({

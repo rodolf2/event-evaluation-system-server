@@ -28,12 +28,12 @@ passport.use(
         const allowedDomains = [
           ...defaultDomains,
           ...dynamicWhitelist.map((d) =>
-            d.domain.startsWith("@") ? d.domain : `@${d.domain}`
+            d.domain.startsWith("@") ? d.domain : `@${d.domain}`,
           ),
         ];
 
         const isAllowedDomain = allowedDomains.some((domain) =>
-          googleEmail.toLowerCase().endsWith(domain.toLowerCase())
+          googleEmail.toLowerCase().endsWith(domain.toLowerCase()),
         );
 
         if (!isAllowedDomain) {
@@ -52,12 +52,15 @@ passport.use(
               message: "Email mismatch. Please contact administrator.",
             });
           }
-          // Update profile picture if available
+          // Update profile picture and name if available
           if (profile.photos && profile.photos[0]) {
             user.profilePicture = profile.photos[0].value;
             user.avatar = profile.photos[0].value; // Save as backup
-            await user.save();
           }
+          if (profile.displayName) {
+            user.name = profile.displayName;
+          }
+          await user.save();
           return done(null, user);
         }
 
@@ -77,41 +80,24 @@ passport.use(
             user.profilePicture = profile.photos[0].value;
             user.avatar = profile.photos[0].value; // Save as backup
           }
+          if (profile.displayName) {
+            user.name = profile.displayName;
+          }
           await user.save();
           return done(null, user);
         }
 
-        // Determine user role based on email domain
-        const userEmail = profile.emails[0].value;
-        let userRole = User.getUserTypeFromEmail(userEmail);
-
-        // For development: allow any email with 'mis' for MIS role testing
-        const isProduction = process.env.NODE_ENV === "production";
-        if (!isProduction && userEmail.includes("mis")) {
-          userRole = "mis";
-        }
-
-        // Create new user
-        const newUser = new User({
-          name: profile.displayName,
-          email: userEmail,
-          googleId: profile.id,
-          role: userRole,
-          profilePicture: profile.photos ? profile.photos[0].value : null,
-          avatar: profile.photos ? profile.photos[0].value : null, // Save as backup
-          // Extract country from Google profile locale if available
-          country: profile._json?.locale?.includes("PH")
-            ? "Philippines"
-            : "Philippines", // Default to Philippines
+        // User not found in the system - reject login
+        // Only pre-registered users can log in
+        return done(null, false, {
+          message:
+            "Access denied. Your account is not registered in the system. Please contact an administrator to request access.",
         });
-
-        user = await newUser.save();
-        return done(null, user);
       } catch (error) {
         return done(error, null);
       }
-    }
-  )
+    },
+  ),
 );
 // Serialize user into the session
 passport.serializeUser((user, done) => {

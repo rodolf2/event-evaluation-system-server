@@ -48,7 +48,7 @@ class CertificateController {
       const result = await certificateService.generateCertificate(
         userId,
         eventId,
-        options
+        options,
       );
 
       res.status(201).json({
@@ -103,7 +103,7 @@ class CertificateController {
       const results = await certificateService.generateBulkCertificates(
         eventId,
         participantIds,
-        options
+        options,
       );
 
       const successCount = results.filter((r) => r.success).length;
@@ -159,9 +159,8 @@ class CertificateController {
     try {
       const { certificateId } = req.params;
 
-      const certificate = await certificateService.getCertificate(
-        certificateId
-      );
+      const certificate =
+        await certificateService.getCertificate(certificateId);
 
       res.status(200).json({
         success: true,
@@ -204,7 +203,7 @@ class CertificateController {
 
       const validatedPath = certificateService.validateCertificatePath(
         path.resolve(path.join(__dirname, "../../uploads/certificates")),
-        certificate.filePath
+        certificate.filePath,
       );
 
       if (!fs.existsSync(validatedPath)) {
@@ -222,7 +221,7 @@ class CertificateController {
         "Content-Disposition",
         isInline
           ? `inline; filename="${certificate.certificateId}.pdf"`
-          : `attachment; filename="${certificate.certificateId}.pdf"`
+          : `attachment; filename="${certificate.certificateId}.pdf"`,
       );
 
       const fileStream = fs.createReadStream(validatedPath);
@@ -244,7 +243,17 @@ class CertificateController {
   async getMyCertificates(req, res) {
     try {
       const userId = req.user._id;
-      console.log("getMyCertificates called for userId:", userId);
+      // Get user email for additional lookup (normalized)
+      const userEmail = req.user.email
+        ? req.user.email.toLowerCase().trim()
+        : null;
+
+      console.log(
+        "getMyCertificates called for userId:",
+        userId,
+        "userEmail:",
+        userEmail,
+      );
 
       if (!userId) {
         return res.status(400).json({
@@ -272,18 +281,26 @@ class CertificateController {
         });
       }
 
+      // Build query to match by userId OR respondentEmail
+      // This ensures users see certificates even when userId doesn't match
+      const queryConditions = [{ userId: userId }];
+      if (userEmail) {
+        queryConditions.push({ respondentEmail: userEmail });
+      }
+      const findQuery = { $or: queryConditions };
+
       console.log(
-        "Fetching certificates for userId:",
-        userId,
+        "Fetching certificates with query:",
+        JSON.stringify(findQuery),
         "page:",
         pageNum,
         "limit:",
-        limitNum
+        limitNum,
       );
 
       let certificates;
       try {
-        certificates = await Certificate.find({ userId })
+        certificates = await Certificate.find(findQuery)
           .populate({
             path: "userId",
             select: "name email",
@@ -306,7 +323,7 @@ class CertificateController {
       } catch (populateError) {
         console.error("Error in populate queries:", populateError);
         // Fallback to basic query without populate
-        certificates = await Certificate.find({ userId })
+        certificates = await Certificate.find(findQuery)
           .sort({ issuedDate: -1 })
           .limit(limitNum)
           .skip((pageNum - 1) * limitNum)
@@ -316,7 +333,7 @@ class CertificateController {
 
       console.log("Found certificates:", certificates.length);
 
-      const total = await Certificate.countDocuments({ userId });
+      const total = await Certificate.countDocuments(findQuery);
       console.log("Total certificates:", total);
 
       res.status(200).json({
@@ -471,7 +488,7 @@ class CertificateController {
 
       const validatedPath = certificateService.validateCertificatePath(
         path.join(__dirname, "../../uploads/certificates"),
-        certificate.filePath
+        certificate.filePath,
       );
 
       if (!fs.existsSync(validatedPath)) {
@@ -491,7 +508,7 @@ class CertificateController {
 
       await certificateService.sendCertificateByEmail(
         certificateData,
-        validatedPath
+        validatedPath,
       );
 
       res.status(200).json({
@@ -528,7 +545,7 @@ class CertificateController {
       try {
         const validatedPath = certificateService.validateCertificatePath(
           path.join(__dirname, "../../uploads/certificates"),
-          certificate.filePath
+          certificate.filePath,
         );
 
         if (fs.existsSync(validatedPath)) {
@@ -627,7 +644,7 @@ class CertificateController {
       const certificate = await Certificate.findOneAndUpdate(
         { certificateId },
         { templateId, studentName, customMessage, sendEmail },
-        { new: true }
+        { new: true },
       );
 
       if (!certificate) {
@@ -735,6 +752,9 @@ class CertificateController {
   async getLatestCertificateId(req, res) {
     try {
       const userId = req.user?._id;
+      const userEmail = req.user?.email
+        ? req.user.email.toLowerCase().trim()
+        : null;
 
       if (!userId) {
         return res.status(401).json({
@@ -743,8 +763,15 @@ class CertificateController {
         });
       }
 
+      // Build query to match by userId OR respondentEmail
+      const queryConditions = [{ userId: userId }];
+      if (userEmail) {
+        queryConditions.push({ respondentEmail: userEmail });
+      }
+      const findQuery = { $or: queryConditions };
+
       // Find the latest certificate issued to the participant
-      const latestCertificate = await Certificate.findOne({ userId })
+      const latestCertificate = await Certificate.findOne(findQuery)
         .sort({ issuedDate: -1 })
         .select("_id certificateId")
         .limit(1);

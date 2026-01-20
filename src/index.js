@@ -86,7 +86,7 @@ app.use(
       },
     },
     crossOriginEmbedderPolicy: false, // Allow loading external resources
-  })
+  }),
 );
 
 // 2. NoSQL Injection Sanitization (sanitize req.body only to avoid read-only query issue)
@@ -178,7 +178,7 @@ app.use(
       sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
-  })
+  }),
 );
 
 // Initialize Passport
@@ -189,7 +189,7 @@ app.use(passport.session());
 app.use(
   "/uploads",
   requireAuth,
-  express.static(path.join(__dirname, "../uploads"))
+  express.static(path.join(__dirname, "../uploads")),
 );
 app.use(express.static(path.join(__dirname, "../public")));
 
@@ -203,7 +203,7 @@ const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
 if (missingEnvVars.length > 0) {
   console.error(
     "❌ Missing required environment variables:",
-    missingEnvVars.join(", ")
+    missingEnvVars.join(", "),
   );
   process.exit(1);
 }
@@ -367,6 +367,14 @@ const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+
+  // Initialize cron jobs after server starts
+  try {
+    const { initRoleDemotionCron } = require("./jobs/roleDemotionCron");
+    initRoleDemotionCron();
+  } catch (cronError) {
+    console.error("❌ Failed to initialize role demotion cron job:", cronError);
+  }
 });
 
 // Graceful shutdown handling
@@ -383,7 +391,7 @@ const gracefulShutdown = (signal) => {
   // Force close after 10 seconds
   setTimeout(() => {
     console.error(
-      "⚠️ Could not close connections in time, forcefully shutting down"
+      "⚠️ Could not close connections in time, forcefully shutting down",
     );
     process.exit(1);
   }, 10000);

@@ -4,6 +4,7 @@ const passport = require("passport");
 const jwt = require("jsonwebtoken");
 const User = require("../../models/User");
 const { requireAuth } = require("../../middlewares/auth");
+const { createAuditLog } = require("../controllers/auditLogController");
 
 // Google OAuth routes
 router.get(
@@ -11,7 +12,7 @@ router.get(
   passport.authenticate("google", {
     scope: ["profile", "email"],
     prompt: "select_account",
-  })
+  }),
 );
 
 router.get(
@@ -22,24 +23,60 @@ router.get(
       if (err) {
         console.error("Google OAuth error:", err);
         return res.redirect(
-          `${process.env.CLIENT_URL}/login?error=oauth_error`
+          `${process.env.CLIENT_URL}/login?error=oauth_error`,
         );
       }
 
       // Handle authentication failure (e.g., domain restriction)
       if (!user) {
         const errorMessage = info?.message || "Authentication failed";
+        // Log failed login attempt
+        const ipAddress =
+          req.headers["x-forwarded-for"] ||
+          req.connection?.remoteAddress ||
+          "Unknown";
+        createAuditLog({
+          action: "FAILED_LOGIN",
+          category: "security",
+          description: `Failed login attempt: ${errorMessage}`,
+          ipAddress:
+            typeof ipAddress === "string"
+              ? ipAddress.split(",")[0].trim()
+              : "Unknown",
+          severity: "warning",
+          status: "failure",
+        });
         // Encode the message for URL
         const encodedError = encodeURIComponent(errorMessage);
         return res.redirect(
-          `${process.env.CLIENT_URL}/login?error=access_denied&message=${encodedError}`
+          `${process.env.CLIENT_URL}/login?error=access_denied&message=${encodedError}`,
         );
       }
 
       // Check if user account is active
       if (!user.isActive) {
+        // Log inactive account login attempt
+        const ipAddress =
+          req.headers["x-forwarded-for"] ||
+          req.connection?.remoteAddress ||
+          "Unknown";
+        createAuditLog({
+          userId: user._id,
+          userName: user.name,
+          userEmail: user.email,
+          userRole: user.role,
+          action: "FAILED_LOGIN",
+          category: "security",
+          description: `Login attempt by inactive account: ${user.email}`,
+          ipAddress:
+            typeof ipAddress === "string"
+              ? ipAddress.split(",")[0].trim()
+              : "Unknown",
+          severity: "warning",
+          status: "failure",
+        });
         return res.redirect(
-          `${process.env.CLIENT_URL}/login?error=account_inactive`
+          `${process.env.CLIENT_URL}/login?error=account_inactive`,
         );
       }
 
@@ -52,6 +89,27 @@ router.get(
     // Update lastLogin timestamp
     req.user.lastLogin = Date.now();
     await req.user.save();
+
+    // Log the login event to audit logs
+    const ipAddress =
+      req.headers["x-forwarded-for"] ||
+      req.connection?.remoteAddress ||
+      "Unknown";
+    await createAuditLog({
+      userId: req.user._id,
+      userName: req.user.name,
+      userEmail: req.user.email,
+      userRole: req.user.role,
+      action: "USER_LOGIN",
+      category: "auth",
+      description: `User ${req.user.name} logged in via Google SSO`,
+      ipAddress:
+        typeof ipAddress === "string"
+          ? ipAddress.split(",")[0].trim()
+          : "Unknown",
+      severity: "info",
+      status: "success",
+    });
 
     // Generate JWT token with role information and profile picture
     const token = jwt.sign(
@@ -72,12 +130,12 @@ router.get(
         onboardingCompletedAt: req.user.onboardingCompletedAt,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     // Redirect to client with token
     res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
-  }
+  },
 );
 
 const Event = require("../../models/Event");
@@ -127,7 +185,7 @@ router.post("/guest", async (req, res) => {
     const attendee = event.attendees.find(
       (att) =>
         att.email.toLowerCase() === normalizedEmail &&
-        att.name.toLowerCase() === name.toLowerCase().trim()
+        att.name.toLowerCase() === name.toLowerCase().trim(),
     );
 
     if (!attendee) {
@@ -196,8 +254,29 @@ router.post("/guest", async (req, res) => {
         onboardingCompletedAt: user.onboardingCompletedAt,
       },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
+
+    // Log the guest login event to audit logs
+    const ipAddress =
+      req.headers["x-forwarded-for"] ||
+      req.connection?.remoteAddress ||
+      "Unknown";
+    await createAuditLog({
+      userId: user._id,
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      action: "GUEST_LOGIN",
+      category: "auth",
+      description: `Guest ${user.name} (${role}) logged in for event: ${event.name}`,
+      ipAddress:
+        typeof ipAddress === "string"
+          ? ipAddress.split(",")[0].trim()
+          : "Unknown",
+      severity: "info",
+      status: "success",
+    });
 
     res.json({
       success: true,
@@ -260,6 +339,9 @@ router.get("/profile", requireAuth, async (req, res) => {
           hasCompletedOnboarding: user.hasCompletedOnboarding,
           onboardingStep: user.onboardingStep,
           onboardingCompletedAt: user.onboardingCompletedAt,
+          permissions: user.permissions
+            ? Object.fromEntries(user.permissions)
+            : {},
         },
       },
     });

@@ -21,7 +21,7 @@ const getDynamicQuantitativeData = async (req, res) => {
     // Find the form
     const form = await Form.findById(reportId).populate(
       "createdBy",
-      "name email role"
+      "name email role",
     );
     if (!form) {
       return res.status(404).json({
@@ -63,7 +63,7 @@ const getDynamicQuantitativeData = async (req, res) => {
           const [min, max] = ratingFilter.split("-").map(Number);
           if (!isNaN(min) && !isNaN(max)) {
             filteredScaleResponses = scaleResponses.filter(
-              (r) => r.value >= min && r.value <= max
+              (r) => r.value >= min && r.value <= max,
             );
           }
         }
@@ -119,7 +119,7 @@ const getDynamicQuantitativeData = async (req, res) => {
       const [min, max] = ratingFilter.split("-").map(Number);
       if (!isNaN(min) && !isNaN(max)) {
         filteredScaleResponses = scaleResponses.filter(
-          (r) => r.value >= min && r.value <= max
+          (r) => r.value >= min && r.value <= max,
         );
       }
     }
@@ -127,10 +127,11 @@ const getDynamicQuantitativeData = async (req, res) => {
     // Process data for charts
     const yearData = processYearlyDataFromForm(form, responses);
     const ratingDistribution = processRatingDistributionFromForm(
-      filteredScaleResponses
+      filteredScaleResponses,
     );
     const statusBreakdown = processStatusBreakdownFromForm(form);
     const responseTrends = processResponseTrendsFromForm(responses);
+    const yearLevelBreakdown = processYearLevelBreakdown(form, responses);
 
     // Calculate metrics
     const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
@@ -159,6 +160,7 @@ const getDynamicQuantitativeData = async (req, res) => {
           ratingDistribution,
           statusBreakdown,
           responseTrends,
+          yearLevelBreakdown,
         },
         rawData: filteredScaleResponses,
         formInfo: {
@@ -238,7 +240,7 @@ const getDynamicQualitativeData = async (req, res) => {
     // Find the form
     const form = await Form.findById(reportId).populate(
       "createdBy",
-      "name email role"
+      "name email role",
     );
     if (!form) {
       return res.status(404).json({
@@ -350,7 +352,7 @@ const getDynamicQualitativeData = async (req, res) => {
     if (keyword) {
       const keywordLower = keyword.toLowerCase();
       filteredTextResponses = filteredTextResponses.filter((response) =>
-        (response.answer || "").toLowerCase().includes(keywordLower)
+        (response.answer || "").toLowerCase().includes(keywordLower),
       );
     }
 
@@ -368,14 +370,13 @@ const getDynamicQualitativeData = async (req, res) => {
         const answer = response.answer || "";
 
         // Use the centralized sentiment analysis function
-        const sentimentResult = await AnalysisService.analyzeCommentSentiment(
-          answer
-        );
+        const sentimentResult =
+          await AnalysisService.analyzeCommentSentiment(answer);
         const category = sentimentResult.sentiment;
 
         const identity = processRespondentIdentity(
           response.respondentName,
-          response.respondentEmail
+          response.respondentEmail,
         );
 
         return {
@@ -444,14 +445,14 @@ const getDynamicQualitativeData = async (req, res) => {
             value:
               responseCount > 0 ? Math.round((count / responseCount) * 100) : 0,
             count: count,
-          })
+          }),
         );
 
         const avgRating =
           responseCount > 0
             ? questionResponses.reduce(
                 (sum, r) => sum + (parseInt(r.answer) || 0),
-                0
+                0,
               ) / responseCount
             : 0;
 
@@ -511,10 +512,10 @@ const getDynamicQualitativeData = async (req, res) => {
           ];
 
           const posMatches = positiveKeywords.filter((k) =>
-            text.includes(k)
+            text.includes(k),
           ).length;
           const negMatches = negativeKeywords.filter((k) =>
-            text.includes(k)
+            text.includes(k),
           ).length;
 
           let sentiment = "neutral";
@@ -535,7 +536,7 @@ const getDynamicQualitativeData = async (req, res) => {
           if (idx < 9) {
             const identity = processRespondentIdentity(
               r.respondentName,
-              r.respondentEmail
+              r.respondentEmail,
             );
             sampleResponses.push({
               text: r.answer,
@@ -596,7 +597,7 @@ const getDynamicQualitativeData = async (req, res) => {
             value:
               responseCount > 0 ? Math.round((count / responseCount) * 100) : 0,
             count: count,
-          })
+          }),
         );
 
         questionBreakdown.push({
@@ -678,7 +679,7 @@ const getDynamicCommentsData = async (req, res) => {
     // Find the form
     const form = await Form.findById(reportId).populate(
       "createdBy",
-      "name email role"
+      "name email role",
     );
     if (!form) {
       return res.status(404).json({
@@ -693,7 +694,9 @@ const getDynamicCommentsData = async (req, res) => {
     // Apply filters
     if (searchTerm) {
       responses = responses.filter((response) =>
-        (response.answer || "").toLowerCase().includes(searchTerm.toLowerCase())
+        (response.answer || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()),
       );
     }
 
@@ -729,9 +732,8 @@ const getDynamicCommentsData = async (req, res) => {
       // Analyze all comments first (async)
       const analysisPromises = paginatedResponses.map(async (response) => {
         const text = response.answer || "";
-        const sentimentResult = await AnalysisService.analyzeCommentSentiment(
-          text
-        );
+        const sentimentResult =
+          await AnalysisService.analyzeCommentSentiment(text);
         return { response, sentiment: sentimentResult.sentiment };
       });
 
@@ -747,7 +749,7 @@ const getDynamicCommentsData = async (req, res) => {
     if (role && form.attendeeList) {
       processedComments = processedComments.filter((response) => {
         const attendee = form.attendeeList.find(
-          (a) => a.email === response.respondentEmail
+          (a) => a.email === response.respondentEmail,
         );
         return attendee && attendee.userId && attendee.userId.role === role;
       });
@@ -947,7 +949,7 @@ const getAllReportsWithLiveData = async (req, res) => {
 
         // Perform sentiment analysis (use Python for consistency)
         const responseAnalysis = await AnalysisService.analyzeResponses(
-          form.responses || []
+          form.responses || [],
         );
         const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
           positive: { count: 0, percentage: 0 },
@@ -961,7 +963,7 @@ const getAllReportsWithLiveData = async (req, res) => {
           processRatingDistributionFromForm(scaleResponses);
         const statusBreakdown = processStatusBreakdownFromForm(form);
         const responseTrends = processResponseTrendsFromForm(
-          form.responses || []
+          form.responses || [],
         );
 
         // Update report in database with live data
@@ -1008,7 +1010,7 @@ const getAllReportsWithLiveData = async (req, res) => {
           isSnapshot: false,
           snapshotDate: null,
         };
-      })
+      }),
     );
 
     // Get total count for pagination
@@ -1079,7 +1081,7 @@ const generateReport = async (req, res) => {
     // Perform analysis and generate report data
     // Perform sentiment analysis (use Python for consistency)
     const responseAnalysis = await AnalysisService.analyzeResponses(
-      form.responses || []
+      form.responses || [],
     );
     const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
       positive: { count: 0, percentage: 0 },
@@ -1105,7 +1107,7 @@ const generateReport = async (req, res) => {
     // Generate thumbnail
     const thumbnail = await ThumbnailService.generateReportThumbnail(
       form._id,
-      form.title || "Event Evaluation Report"
+      form.title || "Event Evaluation Report",
     );
 
     const reportData = {
@@ -1276,6 +1278,126 @@ function processYearlyDataFromForm(form, responses) {
   });
 
   return [lastYearData, currentYearData];
+}
+
+/**
+ * Process year level breakdown (1st year, 2nd year, etc.) from attendee list
+ * Maps attendee emails to responses and counts by year level, separated by calendar year
+ */
+function processYearLevelBreakdown(form, responses) {
+  const currentYear = new Date().getFullYear();
+  const previousYear = currentYear - 1;
+
+  // Initialize counts for both years
+  const createYearLevelCounts = () => ({
+    "First Year": 0,
+    "Second Year": 0,
+    "Third Year": 0,
+    "Fourth Year": 0,
+  });
+
+  const currentYearCounts = createYearLevelCounts();
+  const previousYearCounts = createYearLevelCounts();
+
+  // Helper to normalize year level values
+  const normalizeYearLevel = (yearLevel) => {
+    if (!yearLevel) return null;
+    const normalized = yearLevel.toString().toLowerCase().trim();
+
+    if (
+      normalized === "1" ||
+      normalized === "1st" ||
+      normalized === "first" ||
+      normalized === "first year" ||
+      normalized === "1st year"
+    ) {
+      return "First Year";
+    } else if (
+      normalized === "2" ||
+      normalized === "2nd" ||
+      normalized === "second" ||
+      normalized === "second year" ||
+      normalized === "2nd year"
+    ) {
+      return "Second Year";
+    } else if (
+      normalized === "3" ||
+      normalized === "3rd" ||
+      normalized === "third" ||
+      normalized === "third year" ||
+      normalized === "3rd year"
+    ) {
+      return "Third Year";
+    } else if (
+      normalized === "4" ||
+      normalized === "4th" ||
+      normalized === "fourth" ||
+      normalized === "fourth year" ||
+      normalized === "4th year"
+    ) {
+      return "Fourth Year";
+    }
+    return null;
+  };
+
+  // Create a map of attendee emails to year levels
+  const attendeeYearLevels = {};
+  const attendeeList = form.attendeeList || [];
+  attendeeList.forEach((attendee) => {
+    if (attendee.email && attendee.yearLevel) {
+      const normalizedLevel = normalizeYearLevel(attendee.yearLevel);
+      if (normalizedLevel) {
+        attendeeYearLevels[attendee.email.toLowerCase()] = normalizedLevel;
+      }
+    }
+  });
+
+  // Count responses by year level and calendar year
+  responses.forEach((response) => {
+    const email = response.respondentEmail?.toLowerCase();
+    const yearLevel = attendeeYearLevels[email];
+    if (!yearLevel) return;
+
+    const responseYear = new Date(response.submittedAt).getFullYear();
+
+    if (
+      responseYear === currentYear &&
+      currentYearCounts[yearLevel] !== undefined
+    ) {
+      currentYearCounts[yearLevel]++;
+    } else if (
+      responseYear === previousYear &&
+      previousYearCounts[yearLevel] !== undefined
+    ) {
+      previousYearCounts[yearLevel]++;
+    }
+  });
+
+  // Build result arrays
+  const buildBreakdown = (counts) => {
+    const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
+    return {
+      breakdown: ["First Year", "Second Year", "Third Year", "Fourth Year"].map(
+        (level) => ({
+          name: level,
+          count: counts[level],
+          percentage: total > 0 ? Math.round((counts[level] / total) * 100) : 0,
+        }),
+      ),
+      total,
+    };
+  };
+
+  return {
+    currentYear: {
+      year: currentYear,
+      ...buildBreakdown(currentYearCounts),
+    },
+    previousYear: {
+      year: previousYear,
+      ...buildBreakdown(previousYearCounts),
+    },
+  };
 }
 
 /**

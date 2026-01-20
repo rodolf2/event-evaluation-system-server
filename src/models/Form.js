@@ -183,6 +183,10 @@ const formSchema = new mongoose.Schema(
           trim: true,
           lowercase: true,
         },
+        yearLevel: {
+          type: String,
+          default: null,
+        },
         hasResponded: {
           type: Boolean,
           default: false,
@@ -232,8 +236,8 @@ const formSchema = new mongoose.Schema(
     },
     linkedCertificateType: {
       type: String,
-      enum: ['participation', 'completion', 'achievement'],
-      default: 'completion',
+      enum: ["participation", "completion", "achievement"],
+      default: "completion",
     },
     certificateTemplateName: {
       type: String,
@@ -260,21 +264,21 @@ const formSchema = new mongoose.Schema(
         type: String,
         default: "#0f3b66", // Default blue
         validate: {
-          validator: function(v) {
+          validator: function (v) {
             return /^#[0-9A-F]{6}$/i.test(v); // Hex color validation
           },
-          message: 'Primary color must be a valid hex color code'
-        }
+          message: "Primary color must be a valid hex color code",
+        },
       },
       secondaryColor: {
         type: String,
         default: "#c89d28", // Default gold
         validate: {
-          validator: function(v) {
+          validator: function (v) {
             return /^#[0-9A-F]{6}$/i.test(v); // Hex color validation
           },
-          message: 'Secondary color must be a valid hex color code'
-        }
+          message: "Secondary color must be a valid hex color code",
+        },
       },
       // Custom messages
       customTitle: {
@@ -316,8 +320,8 @@ const formSchema = new mongoose.Schema(
       // Download format preferences
       defaultDownloadFormat: {
         type: String,
-        enum: ['pdf', 'png', 'jpg'],
-        default: 'pdf',
+        enum: ["pdf", "png", "jpg"],
+        default: "pdf",
       },
       // Additional participant details to include
       includeEventDate: {
@@ -336,7 +340,7 @@ const formSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Index for efficient queries

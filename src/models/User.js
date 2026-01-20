@@ -22,15 +22,15 @@ const UserSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: [
-      "participant",
+      "student",
       "psas",
       "club-officer",
-      "school-admin",
+      "senior-management",
       "mis",
       "evaluator",
       "guest-speaker",
     ],
-    default: "participant",
+    default: "student",
     required: true,
   },
   isActive: {
@@ -115,6 +115,20 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Role expiration for auto-demotion (e.g., club-officer -> student after 1 year)
+  roleExpiresAt: {
+    type: Date,
+    default: null,
+  },
+  previousRole: {
+    type: String,
+    default: null,
+  },
+  elevatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+  },
   // Detailed Permissions (for User Management toggles)
   permissions: {
     type: Map,
@@ -142,12 +156,12 @@ UserSchema.statics.getUserTypeFromEmail = function (email) {
     return "psas";
   } else if (emailPrefix.includes("club-officer")) {
     return "club-officer";
-  } else if (emailPrefix.includes("school-admin")) {
-    return "school-admin";
+  } else if (emailPrefix.includes("senior-management")) {
+    return "senior-management";
   } else if (emailPrefix.includes("mis")) {
     return "mis";
   }
-  return "participant";
+  return "student";
 };
 
 module.exports = mongoose.model("User", UserSchema);

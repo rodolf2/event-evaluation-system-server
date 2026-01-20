@@ -43,9 +43,9 @@ const upload = multer({
     } else {
       cb(
         new Error(
-          "Invalid file type. Allowed types: PDF, DOC, DOCX, CSV, XLS, XLSX, TXT"
+          "Invalid file type. Allowed types: PDF, DOC, DOCX, CSV, XLS, XLSX, TXT",
         ),
-        false
+        false,
       );
     }
   },
@@ -68,9 +68,9 @@ const attendeeUpload = multer({
     } else {
       cb(
         new Error(
-          "Invalid file type. Only CSV and Excel files are allowed for attendee lists."
+          "Invalid file type. Only CSV and Excel files are allowed for attendee lists.",
         ),
-        false
+        false,
       );
     }
   },
@@ -295,8 +295,8 @@ const createBlankForm = async (req, res) => {
                 name: student.name
                   ? student.name.trim()
                   : normalizedEmail
-                  ? normalizedEmail.split("@")[0].trim()
-                  : "Unknown",
+                    ? normalizedEmail.split("@")[0].trim()
+                    : "Unknown",
                 email: normalizedEmail,
                 role: "participant", // Default role for imported attendees
               });
@@ -310,7 +310,7 @@ const createBlankForm = async (req, res) => {
                   saveError.keyPattern?.googleId
                 ) {
                   console.log(
-                    "🔄 Duplicate googleId error - trying with unique ID..."
+                    "🔄 Duplicate googleId error - trying with unique ID...",
                   );
 
                   // Generate a unique googleId for manual users
@@ -342,7 +342,7 @@ const createBlankForm = async (req, res) => {
               hasResponded: false,
               uploadedAt: new Date(),
             };
-          })
+          }),
         );
 
         // Update form with attendee list
@@ -350,12 +350,12 @@ const createBlankForm = async (req, res) => {
         await savedForm.save();
 
         console.log(
-          `Added ${attendeeList.length} selected students to form attendee list`
+          `Added ${attendeeList.length} selected students to form attendee list`,
         );
       } catch (selectedStudentsError) {
         console.error(
           "Error processing selected students:",
-          selectedStudentsError
+          selectedStudentsError,
         );
         // Log the error but don't fail the form creation
       }
@@ -370,12 +370,17 @@ const createBlankForm = async (req, res) => {
               const fullPath = path.join(
                 __dirname,
                 "../../../uploads/csv",
-                fileName
+                fileName,
               );
 
-              const parsedAttendees = await formsService.parseAttendeeFile(
-                fullPath
+              console.log(`📁 [CSV Processing] URL: ${link.url}`);
+              console.log(
+                `📁 [CSV Processing] Extracted filename: ${fileName}`,
               );
+              console.log(`📁 [CSV Processing] Full path: ${fullPath}`);
+
+              const parsedAttendees =
+                await formsService.parseAttendeeFile(fullPath);
 
               if (parsedAttendees.length > 0) {
                 // Convert parsed attendees to attendeeList format with user creation
@@ -394,8 +399,8 @@ const createBlankForm = async (req, res) => {
                         name: attendee.name
                           ? attendee.name.trim()
                           : normalizedEmail
-                          ? normalizedEmail.split("@")[0].trim()
-                          : "Unknown",
+                            ? normalizedEmail.split("@")[0].trim()
+                            : "Unknown",
                         email: normalizedEmail,
                         role: "participant", // Default role for imported attendees
                       });
@@ -409,7 +414,7 @@ const createBlankForm = async (req, res) => {
                           saveError.keyPattern?.googleId
                         ) {
                           console.log(
-                            "🔄 Duplicate googleId error - trying with unique ID..."
+                            "🔄 Duplicate googleId error - trying with unique ID...",
                           );
 
                           // Generate a unique googleId for manual users
@@ -422,7 +427,7 @@ const createBlankForm = async (req, res) => {
                           try {
                             await user.save();
                             console.log(
-                              "✅ User saved with generated googleId"
+                              "✅ User saved with generated googleId",
                             );
                           } catch (retryError) {
                             console.error("❌ Retry also failed:", retryError);
@@ -443,13 +448,13 @@ const createBlankForm = async (req, res) => {
                       hasResponded: false,
                       uploadedAt: new Date(),
                     };
-                  })
+                  }),
                 );
 
                 // Validate attendee data
                 const validAttendees = attendeeList.filter(
                   (attendee) =>
-                    attendee.name.trim() !== "" && attendee.email.includes("@")
+                    attendee.name.trim() !== "" && attendee.email.includes("@"),
                 );
 
                 if (validAttendees.length > 0) {
@@ -459,7 +464,7 @@ const createBlankForm = async (req, res) => {
                   break; // Only process the first CSV file
                 } else {
                   console.warn(
-                    "No valid attendees found in CSV after filtering"
+                    "No valid attendees found in CSV after filtering",
                   );
                 }
               }
@@ -873,25 +878,25 @@ const publishForm = async (req, res) => {
     if (linkedCertificateId !== undefined) {
       form.linkedCertificateId = linkedCertificateId;
       console.log(
-        `[FORM-PUB] ✓ Set linkedCertificateId: ${linkedCertificateId}`
+        `[FORM-PUB] ✓ Set linkedCertificateId: ${linkedCertificateId}`,
       );
     }
     if (linkedCertificateType !== undefined) {
       form.linkedCertificateType = linkedCertificateType;
       console.log(
-        `[FORM-PUB] ✓ Set linkedCertificateType: ${linkedCertificateType}`
+        `[FORM-PUB] ✓ Set linkedCertificateType: ${linkedCertificateType}`,
       );
     }
     if (certificateTemplateName !== undefined) {
       form.certificateTemplateName = certificateTemplateName;
       console.log(
-        `[FORM-PUB] ✓ Set certificateTemplateName: ${certificateTemplateName}`
+        `[FORM-PUB] ✓ Set certificateTemplateName: ${certificateTemplateName}`,
       );
     }
     if (isCertificateLinked !== undefined) {
       form.isCertificateLinked = isCertificateLinked;
       console.log(
-        `[FORM-PUB] ✓ Set isCertificateLinked: ${isCertificateLinked}`
+        `[FORM-PUB] ✓ Set isCertificateLinked: ${isCertificateLinked}`,
       );
     }
 
@@ -925,8 +930,8 @@ const publishForm = async (req, res) => {
                 name: student.name
                   ? student.name.trim()
                   : normalizedEmail
-                  ? normalizedEmail.split("@")[0].trim()
-                  : "Unknown",
+                    ? normalizedEmail.split("@")[0].trim()
+                    : "Unknown",
                 email: normalizedEmail,
                 role: "participant", // Default role for imported attendees
               });
@@ -940,7 +945,7 @@ const publishForm = async (req, res) => {
                   saveError.keyPattern?.googleId
                 ) {
                   console.log(
-                    "🔄 Duplicate googleId error - trying with unique ID..."
+                    "🔄 Duplicate googleId error - trying with unique ID...",
                   );
 
                   // Generate a unique googleId for manual users
@@ -972,18 +977,18 @@ const publishForm = async (req, res) => {
               hasResponded: false,
               uploadedAt: new Date(),
             };
-          })
+          }),
         );
 
         // Update form with attendee list
         form.attendeeList = attendeeList;
         console.log(
-          `Added ${attendeeList.length} selected students to form attendee list during publish`
+          `Added ${attendeeList.length} selected students to form attendee list during publish`,
         );
       } catch (selectedStudentsError) {
         console.error(
           "Error processing selected students during publish:",
-          selectedStudentsError
+          selectedStudentsError,
         );
         // Log the error but don't fail the form publish
       }
@@ -1021,7 +1026,7 @@ const publishForm = async (req, res) => {
         const event = new Event(eventData);
         await event.save();
         console.log(
-          `[FORM-PUB] Created event with verification code: ${verificationCode}`
+          `[FORM-PUB] Created event with verification code: ${verificationCode}`,
         );
       } catch (eventError) {
         console.error("Failed to create event:", eventError);
@@ -1035,7 +1040,7 @@ const publishForm = async (req, res) => {
       await activityService.logFormPublished(
         req.user._id,
         savedForm.title,
-        req
+        req,
       );
     } catch (activityError) {
       console.error("Failed to log form publication activity:", activityError);
@@ -1048,7 +1053,7 @@ const publishForm = async (req, res) => {
     } catch (notificationError) {
       console.error(
         "Failed to create form publication notifications:",
-        notificationError
+        notificationError,
       );
       // Don't fail the form publication if notifications fail
     }
@@ -1193,7 +1198,7 @@ const submitFormResponse = async (req, res) => {
       const attendee = form.attendeeList.find(
         (attendee) =>
           attendee.email &&
-          attendee.email.toLowerCase().trim() === normalizedEmail
+          attendee.email.toLowerCase().trim() === normalizedEmail,
       );
 
       let shouldGenerateCertificate = false;
@@ -1211,7 +1216,7 @@ const submitFormResponse = async (req, res) => {
       if (shouldGenerateCertificate) {
         try {
           console.log(
-            `[CERT-GEN] Starting certificate generation for respondent: ${respondentEmail}`
+            `[CERT-GEN] Starting certificate generation for respondent: ${respondentEmail}`,
           );
           const certificateService = require("../../services/certificate/certificateService");
           const Event = require("../../models/Event");
@@ -1256,11 +1261,11 @@ const submitFormResponse = async (req, res) => {
               customMessage = `Certificate awarded for completing: ${form.title} (${form.linkedCertificateId})`;
             }
             console.log(
-              `[CERT-GEN] ✓ Using linked certificate template: ${form.linkedCertificateId} for form ${form.title}`
+              `[CERT-GEN] ✓ Using linked certificate template: ${form.linkedCertificateId} for form ${form.title}`,
             );
           } else {
             console.log(
-              `[CERT-GEN] ✗ No linked certificate found for form ${form.title}`
+              `[CERT-GEN] ✗ No linked certificate found for form ${form.title}`,
             );
             console.log(`[CERT-GEN] Form object:`, {
               isCertificateLinked: form.isCertificateLinked,
@@ -1292,7 +1297,7 @@ const submitFormResponse = async (req, res) => {
                 });
                 await foundUser.save();
                 console.log(
-                  `[CERT-GEN] Created new User for respondent ${respondentEmail} with id ${foundUser._id}`
+                  `[CERT-GEN] Created new User for respondent ${respondentEmail} with id ${foundUser._id}`,
                 );
               }
               resolvedUserId = foundUser._id;
@@ -1302,7 +1307,7 @@ const submitFormResponse = async (req, res) => {
             } catch (userResolveError) {
               console.error(
                 `[CERT-GEN] Failed to resolve/create user for ${respondentEmail}:`,
-                userResolveError
+                userResolveError,
               );
             }
           }
@@ -1322,12 +1327,12 @@ const submitFormResponse = async (req, res) => {
               respondentEmail: respondentEmail,
               respondentName: respondentName,
               templateId: form.linkedCertificateId || null,
-            }
+            },
           );
 
           console.log(
             `[CERT-GEN] Certificate generation result:`,
-            certificateResult
+            certificateResult,
           );
 
           if (certificateResult.success && attendee) {
@@ -1339,7 +1344,7 @@ const submitFormResponse = async (req, res) => {
             `Error generating certificate for ${
               respondentName || respondentEmail
             }:`,
-            certError
+            certError,
           );
           // Don't fail the response submission if certificate generation fails
         }
@@ -1354,7 +1359,7 @@ const submitFormResponse = async (req, res) => {
       invalidateCache(`qualitative_${id}`);
       invalidateCache(`quantitative_${id}`);
       console.log(
-        `[CACHE] Invalidated caches for form ${id} after response submission`
+        `[CACHE] Invalidated caches for form ${id} after response submission`,
       );
     } catch (cacheError) {
       console.warn("[CACHE] Failed to invalidate caches:", cacheError.message);
@@ -1469,7 +1474,7 @@ const uploadAttendeeList = [
 
       // Parse CSV/Excel file to extract attendee data
       const parsedAttendees = await formsService.parseAttendeeFile(
-        req.file.path
+        req.file.path,
       );
 
       const processedAttendees = await Promise.all(
@@ -1487,8 +1492,8 @@ const uploadAttendeeList = [
               name: attendee.name
                 ? attendee.name.trim()
                 : attendee.email
-                ? attendee.email.split("@")[0].trim()
-                : "Unknown", // Fallback name
+                  ? attendee.email.split("@")[0].trim()
+                  : "Unknown", // Fallback name
               email: normalizedEmail,
               role: "participant", // Default role for imported attendees
             });
@@ -1499,7 +1504,7 @@ const uploadAttendeeList = [
               // Handle duplicate key error for googleId
               if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
                 console.log(
-                  "🔄 Duplicate googleId error - trying with unique ID..."
+                  "🔄 Duplicate googleId error - trying with unique ID...",
                 );
 
                 // Generate a unique googleId for manual users
@@ -1526,10 +1531,11 @@ const uploadAttendeeList = [
             userId: user._id,
             name: attendee.name ? attendee.name.trim() : user.name,
             email: normalizedEmail,
+            yearLevel: attendee.yearLevel || null,
             hasResponded: false,
             uploadedAt: new Date(),
           };
-        })
+        }),
       );
 
       // Update form with processed attendee list
@@ -1619,8 +1625,8 @@ const updateAttendeeListJson = async (req, res) => {
             name: attendee.name
               ? attendee.name.trim()
               : normalizedEmail
-              ? normalizedEmail.split("@")[0].trim()
-              : "Unknown",
+                ? normalizedEmail.split("@")[0].trim()
+                : "Unknown",
             email: normalizedEmail,
             role: "participant",
           });
@@ -1631,7 +1637,7 @@ const updateAttendeeListJson = async (req, res) => {
             // Handle duplicate key error for googleId
             if (saveError.code === 11000 && saveError.keyPattern?.googleId) {
               console.log(
-                "🔄 Duplicate googleId error - trying with unique ID..."
+                "🔄 Duplicate googleId error - trying with unique ID...",
               );
 
               const timestamp = Date.now();
@@ -1658,7 +1664,7 @@ const updateAttendeeListJson = async (req, res) => {
           hasResponded: false,
           uploadedAt: new Date(),
         };
-      })
+      }),
     );
 
     // Update form with processed attendee list
@@ -1747,17 +1753,17 @@ const getMyEvaluations = async (req, res) => {
     }).select("title attendeeList createdAt");
 
     console.log(
-      `[MY-EVALUATIONS] Found ${allPublishedForms.length} published forms:`
+      `[MY-EVALUATIONS] Found ${allPublishedForms.length} published forms:`,
     );
     allPublishedForms.forEach((form, i) => {
       const attendeeCount = form.attendeeList ? form.attendeeList.length : 0;
       const hasUser = form.attendeeList?.some(
-        (a) => a.email && a.email.toLowerCase().trim() === userEmail
+        (a) => a.email && a.email.toLowerCase().trim() === userEmail,
       );
       console.log(
         `  ${i + 1}. "${
           form.title
-        }" - Attendees: ${attendeeCount}, User assigned: ${hasUser}`
+        }" - Attendees: ${attendeeCount}, User assigned: ${hasUser}`,
       );
       if (attendeeCount > 0 && attendeeCount <= 3) {
         form.attendeeList.forEach((attendee, j) => {
@@ -1783,12 +1789,12 @@ const getMyEvaluations = async (req, res) => {
     })
       .populate("createdBy", "name email")
       .select(
-        "title description shareableLink eventStartDate eventEndDate attendeeList createdAt type"
+        "title description shareableLink eventStartDate eventEndDate attendeeList createdAt type",
       )
       .sort({ createdAt: -1 });
 
     console.log(
-      `[MY-EVALUATIONS] Found ${forms.length} assigned forms for ${userEmail}:`
+      `[MY-EVALUATIONS] Found ${forms.length} assigned forms for ${userEmail}:`,
     );
     forms.forEach((form, i) => {
       console.log(`  ${i + 1}. "${form.title}" (ID: ${form._id})`);
@@ -1797,7 +1803,7 @@ const getMyEvaluations = async (req, res) => {
     });
 
     console.log(
-      `[MY-EVALUATIONS] User ${userEmail} is assigned to ${forms.length} forms`
+      `[MY-EVALUATIONS] User ${userEmail} is assigned to ${forms.length} forms`,
     );
 
     const now = new Date();
@@ -1827,14 +1833,14 @@ const getMyEvaluations = async (req, res) => {
     });
 
     console.log(
-      `[MY-EVALUATIONS] Final result: ${availableForms.length} forms available for ${userEmail}`
+      `[MY-EVALUATIONS] Final result: ${availableForms.length} forms available for ${userEmail}`,
     );
 
     // Normalize response objects so the frontend always has a stable _id field.
     const normalizedForms = availableForms.map((form) => {
       const attendee =
         form.attendeeList?.find(
-          (a) => a.email && a.email.toLowerCase().trim() === userEmail
+          (a) => a.email && a.email.toLowerCase().trim() === userEmail,
         ) || null;
       return {
         _id: form._id,
@@ -1907,7 +1913,7 @@ const getCompletionStats = async (req, res) => {
         (a) =>
           a.email &&
           a.email.toLowerCase().trim() === userEmail &&
-          a.hasResponded
+          a.hasResponded,
       );
       if (attendee) {
         completedCount += 1;
@@ -2090,7 +2096,7 @@ module.exports = {
 // Test endpoint to verify server is running updated code
 const testDebugging = (req, res) => {
   console.log(
-    "🧪 DEBUG TEST: Server is running updated code with debugging enabled"
+    "🧪 DEBUG TEST: Server is running updated code with debugging enabled",
   );
   console.log("Current timestamp:", new Date().toISOString());
 

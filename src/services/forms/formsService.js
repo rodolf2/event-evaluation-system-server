@@ -76,7 +76,7 @@ class FormsService {
             high: 5,
             lowLabel: "Not useful",
             highLabel: "Very useful",
-          }
+          },
         );
         break;
 
@@ -94,7 +94,7 @@ class FormsService {
             type: "multiple_choice",
             required: false,
             options: ["Yes, completely", "Mostly", "Somewhat", "Not at all"],
-          }
+          },
         );
         break;
 
@@ -117,7 +117,7 @@ class FormsService {
             high: 5,
             lowLabel: "Not accurate",
             highLabel: "Very accurate",
-          }
+          },
         );
         break;
 
@@ -208,7 +208,7 @@ class FormsService {
       if (!formIdMatch) {
         // Try docs.google.com format
         formIdMatch = finalUrl.match(
-          /docs\.google\.com\/forms\/d\/([a-zA-Z0-9-_]+)/
+          /docs\.google\.com\/forms\/d\/([a-zA-Z0-9-_]+)/,
         );
       }
       if (!formIdMatch) {
@@ -240,7 +240,7 @@ class FormsService {
         // The paper mentions supporting Google Forms integration, so we need to make this work
 
         console.log(
-          `🔍 [Google Forms Extraction] Fetching form from: ${finalUrl}`
+          `🔍 [Google Forms Extraction] Fetching form from: ${finalUrl}`,
         );
         console.log(`🔍 [Google Forms Extraction] Form ID: ${formId}`);
 
@@ -270,7 +270,7 @@ class FormsService {
 
         const html = response.data;
         console.log(
-          `✅ [Google Forms Extraction] Successfully fetched HTML (${html.length} characters)`
+          `✅ [Google Forms Extraction] Successfully fetched HTML (${html.length} characters)`,
         );
 
         // Extract title and description from HTML directly
@@ -288,7 +288,7 @@ class FormsService {
           formDescription === "Form imported from Google Forms"
         ) {
           const descMatch = html.match(
-            /<meta name="description" content="(.*?)"/i
+            /<meta name="description" content="(.*?)"/i,
           );
           if (descMatch && descMatch[1]) {
             formDescription = descMatch[1];
@@ -308,7 +308,7 @@ class FormsService {
               try {
                 // Extract the JSON array from the script tag
                 let dataMatch = scriptTag.match(
-                  /FB_PUBLIC_LOAD_DATA_[^=]*=\s*(\[[\s\S]*?\]);/
+                  /FB_PUBLIC_LOAD_DATA_[^=]*=\s*(\[[\s\S]*?\]);/,
                 );
                 if (!dataMatch) {
                   // Try alternative pattern
@@ -415,7 +415,7 @@ class FormsService {
                                     .map((opt) =>
                                       Array.isArray(opt)
                                         ? (opt[0] || "").trim()
-                                        : String(opt).trim()
+                                        : String(opt).trim(),
                                     )
                                     .filter((opt) => opt && opt.length > 0);
                                 }
@@ -509,10 +509,10 @@ class FormsService {
                               if (q[4] && Array.isArray(q[4])) {
                                 options = q[4]
                                   .map((opt) =>
-                                    Array.isArray(opt) ? opt[0] : opt
+                                    Array.isArray(opt) ? opt[0] : opt,
                                   )
                                   .filter(
-                                    (opt) => opt && typeof opt === "string"
+                                    (opt) => opt && typeof opt === "string",
                                   );
                               }
 
@@ -572,7 +572,7 @@ class FormsService {
 
                       // Filter out any remaining nulls and duplicates
                       extractedQuestions = extractedQuestions.filter(
-                        (q) => q !== null
+                        (q) => q !== null,
                       );
 
                       if (extractedQuestions.length > 0) {
@@ -659,7 +659,7 @@ class FormsService {
                 const sectionTitle =
                   $elem
                     .find(
-                      ".freebirdFormviewerViewSectionTitle, h2, .section-title"
+                      ".freebirdFormviewerViewSectionTitle, h2, .section-title",
                     )
                     .first()
                     .text()
@@ -755,7 +755,7 @@ class FormsService {
                   $elem.find('input[type="checkbox"]').length > 0;
                 const hasScale =
                   $elem.find(
-                    '.freebirdFormviewerComponentsQuestionScaleSlider, [role="radiogroup"]'
+                    '.freebirdFormviewerComponentsQuestionScaleSlider, [role="radiogroup"]',
                   ).length > 0;
                 const hasDate = $elem.find('input[type="date"]').length > 0;
                 const hasTime = $elem.find('input[type="time"]').length > 0;
@@ -810,7 +810,7 @@ class FormsService {
 
                     // Strategy 0: Common Google Forms class
                     const container = $radio.closest(
-                      ".docssharedWizToggleLabeledContainer"
+                      ".docssharedWizToggleLabeledContainer",
                     );
                     if (container.length > 0) {
                       label = container
@@ -839,7 +839,7 @@ class FormsService {
                     // Strategy 3: Same container text
                     if (!label) {
                       const $container = $radio.closest(
-                        ".freebirdFormviewerComponentsQuestionRadioChoice, div"
+                        ".freebirdFormviewerComponentsQuestionRadioChoice, div",
                       );
                       const containerText = $container.text().trim();
                       if (containerText && containerText !== questionText) {
@@ -886,7 +886,7 @@ class FormsService {
                         label = labelWords
                           .filter(
                             (word) =>
-                              !questionWords.includes(word) || word.length < 3
+                              !questionWords.includes(word) || word.length < 3,
                           )
                           .join(" ")
                           .trim();
@@ -948,7 +948,7 @@ class FormsService {
                     // Strategy 3: Same container text
                     if (!label) {
                       const $container = $checkbox.closest(
-                        ".freebirdFormviewerComponentsQuestionCheckboxChoice, div"
+                        ".freebirdFormviewerComponentsQuestionCheckboxChoice, div",
                       );
                       const containerText = $container.text().trim();
                       if (containerText && containerText !== questionText) {
@@ -994,7 +994,7 @@ class FormsService {
                         label = labelWords
                           .filter(
                             (word) =>
-                              !questionWords.includes(word) || word.length < 3
+                              !questionWords.includes(word) || word.length < 3,
                           )
                           .join(" ")
                           .trim();
@@ -1031,7 +1031,7 @@ class FormsService {
                 if (questionType === "scale") {
                   // Try to find scale labels
                   const scaleLabels = $elem.find(
-                    ".freebirdFormviewerComponentsQuestionScaleSlider label, .scale-label"
+                    ".freebirdFormviewerComponentsQuestionScaleSlider label, .scale-label",
                   );
                   if (scaleLabels.length >= 2) {
                     lowLabel = $(scaleLabels[0]).text().trim() || "Poor";
@@ -1054,7 +1054,7 @@ class FormsService {
                   $elem.find('[aria-required="true"]').length > 0 ||
                   $elem.closest('[aria-required="true"]').length > 0 ||
                   $elem.find(
-                    ".freebirdFormviewerComponentsQuestionBaseRequiredAsterisk"
+                    ".freebirdFormviewerComponentsQuestionBaseRequiredAsterisk",
                   ).length > 0;
 
                 // Skip name and email fields
@@ -1139,7 +1139,7 @@ class FormsService {
       } catch (error) {
         console.log(
           "Could not extract form details from Google Forms:",
-          error.message
+          error.message,
         );
       }
 
@@ -1166,6 +1166,14 @@ class FormsService {
   // Parse attendee file (CSV/Excel) and extract attendee data
   async parseAttendeeFile(filePath) {
     try {
+      // Check if file exists before attempting to read
+      if (!fs.existsSync(filePath)) {
+        console.error(`[parseAttendeeFile] File not found: ${filePath}`);
+        throw new Error(
+          `Attendee file not found: ${filePath}. The file may have been moved or deleted.`,
+        );
+      }
+
       const attendees = [];
       const fileExtension = filePath.split(".").pop().toLowerCase();
 
@@ -1182,27 +1190,39 @@ class FormsService {
                   key.toLowerCase().includes("name") ||
                   key.toLowerCase().includes("full name") ||
                   key.toLowerCase().includes("full_name") ||
-                  key.toLowerCase().includes("student name")
+                  key.toLowerCase().includes("student name"),
               );
 
               const emailKeys = Object.keys(data).filter(
                 (key) =>
                   key.toLowerCase().includes("email") ||
                   key.toLowerCase().includes("e-mail") ||
-                  key.toLowerCase().includes("email address")
+                  key.toLowerCase().includes("email address"),
+              );
+
+              // Look for year level column
+              const yearKeys = Object.keys(data).filter(
+                (key) =>
+                  key.toLowerCase() === "year" ||
+                  key.toLowerCase().includes("year level") ||
+                  key.toLowerCase().includes("year_level") ||
+                  key.toLowerCase().includes("yearlevel"),
               );
 
               const name = nameKeys.length > 0 ? data[nameKeys[0]]?.trim() : "";
               const email =
                 emailKeys.length > 0 ? data[emailKeys[0]]?.trim() : "";
+              const yearLevel =
+                yearKeys.length > 0 ? data[yearKeys[0]]?.trim() : null;
 
               if (name && email) {
-                results.push({ name, email: email.toLowerCase() });
+                results.push({ name, email: email.toLowerCase(), yearLevel });
               } else if (email) {
                 // If only email is present, use email as name
                 results.push({
                   name: email.split("@")[0],
                   email: email.toLowerCase(),
+                  yearLevel,
                 });
               }
             })
@@ -1248,28 +1268,40 @@ class FormsService {
               key.toLowerCase().includes("name") ||
               key.toLowerCase().includes("full name") ||
               key.toLowerCase().includes("full_name") ||
-              key.toLowerCase().includes("student name")
+              key.toLowerCase().includes("student name"),
           );
 
           const emailKeys = Object.keys(row).filter(
             (key) =>
               key.toLowerCase().includes("email") ||
               key.toLowerCase().includes("e-mail") ||
-              key.toLowerCase().includes("email address")
+              key.toLowerCase().includes("email address"),
+          );
+
+          // Look for year level column
+          const yearKeys = Object.keys(row).filter(
+            (key) =>
+              key.toLowerCase() === "year" ||
+              key.toLowerCase().includes("year level") ||
+              key.toLowerCase().includes("year_level") ||
+              key.toLowerCase().includes("yearlevel"),
           );
 
           const name =
             nameKeys.length > 0 ? String(row[nameKeys[0]] || "").trim() : "";
           const email =
             emailKeys.length > 0 ? String(row[emailKeys[0]] || "").trim() : "";
+          const yearLevel =
+            yearKeys.length > 0 ? String(row[yearKeys[0]] || "").trim() : null;
 
           if (name && email) {
-            results.push({ name, email: email.toLowerCase() });
+            results.push({ name, email: email.toLowerCase(), yearLevel });
           } else if (email) {
             // If only email is present, use email username as name
             results.push({
               name: email.split("@")[0],
               email: email.toLowerCase(),
+              yearLevel,
             });
           }
         });
@@ -1277,7 +1309,7 @@ class FormsService {
         return results;
       } else {
         throw new Error(
-          "Unsupported file format. Only CSV and Excel files are supported."
+          "Unsupported file format. Only CSV and Excel files are supported.",
         );
       }
     } catch (error) {
@@ -1294,12 +1326,12 @@ class FormsService {
         "attendeeList.email": email,
         status: "published",
       }).select(
-        "title description attendeeList.$ shareableLink eventStartDate eventEndDate responses"
+        "title description attendeeList.$ shareableLink eventStartDate eventEndDate responses",
       );
 
       const dashboardData = forms.map((form) => {
         const attendeeInfo = form.attendeeList.find(
-          (attendee) => attendee.email === email
+          (attendee) => attendee.email === email,
         );
         const hasResponded = attendeeInfo ? attendeeInfo.hasResponded : false;
 
@@ -1384,7 +1416,7 @@ class FormsService {
       const form = await Form.findOneAndUpdate(
         { _id: formId, createdBy: userId },
         updateData,
-        { new: true }
+        { new: true },
       ).populate("createdBy", "name email");
 
       if (!form) {
@@ -1421,7 +1453,7 @@ class FormsService {
             } catch (fileError) {
               console.warn(
                 `⚠️ Failed to delete file ${file.path}:`,
-                fileError.message
+                fileError.message,
               );
             }
           }
@@ -1438,7 +1470,7 @@ class FormsService {
             const fullPath = path.join(
               __dirname,
               "../../../uploads/csv",
-              fileName
+              fileName,
             );
 
             if (fs.existsSync(fullPath)) {
@@ -1448,7 +1480,7 @@ class FormsService {
               } catch (csvError) {
                 console.warn(
                   `⚠️ Failed to delete CSV file ${fullPath}:`,
-                  csvError.message
+                  csvError.message,
                 );
               }
             }
@@ -1463,7 +1495,7 @@ class FormsService {
       });
 
       console.log(
-        `✅ Form ${formId} and associated files deleted successfully`
+        `✅ Form ${formId} and associated files deleted successfully`,
       );
       return form;
     } catch (error) {
@@ -1481,7 +1513,7 @@ class FormsService {
           status: "published",
           publishedAt: new Date(),
         },
-        { new: true }
+        { new: true },
       );
 
       if (!form) {

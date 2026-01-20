@@ -9,8 +9,8 @@ const {
 } = require("../controllers/reportsController");
 const { requireAuth } = require("../../middlewares/auth");
 
-// Get school admins for report sharing (requires authentication)
-router.get("/school-admins", requireAuth, getSchoolAdmins);
+// Get senior management for report sharing (requires authentication)
+router.get("/senior-management", requireAuth, getSchoolAdmins);
 
 // Share a report with school admins (requires authentication)
 router.post("/:reportId/share", requireAuth, shareReport);

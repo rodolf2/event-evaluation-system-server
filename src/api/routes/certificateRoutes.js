@@ -174,72 +174,202 @@ router.get(
   CertificateController.getFormCustomizations.bind(CertificateController)
 );
 
-// GET /api/certificates/templates - Get available certificate templates
+// GET /api/certificates/templates - Get available certificate templates (built-in + custom)
 router.get("/templates", requireAuth, async (req, res) => {
   try {
-    // For now, return static templates - in a real app, these would be from a database
-    const templates = [
+    const CertificateTemplate = require("../../models/CertificateTemplate");
+
+    // Built-in templates
+    const builtInTemplates = [
       {
         id: "classic-blue",
         name: "Classic Blue",
         preview: "/templates/classic-blue.json",
+        isBuiltIn: true,
       },
       {
         id: "elegant-gold",
         name: "Elegant Gold",
         preview: "/templates/elegant-gold.json",
+        isBuiltIn: true,
       },
       {
         id: "global-conference-recognition",
         name: "Global Conference Recognition",
         preview: "/templates/global-conference-recognition.json",
+        isBuiltIn: true,
       },
       {
         id: "leadership-workshop-completion",
         name: "Leadership Workshop Completion",
         preview: "/templates/leadership-workshop-completion.json",
+        isBuiltIn: true,
       },
       {
         id: "modern-red",
         name: "Modern Red",
         preview: "/templates/modern-red.json",
+        isBuiltIn: true,
       },
       {
         id: "professional-green",
         name: "Professional Green",
         preview: "/templates/professional-green.json",
+        isBuiltIn: true,
       },
       {
         id: "simple-black",
         name: "Simple Black",
         preview: "/templates/simple-black.json",
+        isBuiltIn: true,
       },
       {
         id: "skills-training-achievement",
         name: "Skills Training Achievement",
         preview: "/templates/skills-training-achievement.json",
+        isBuiltIn: true,
       },
       {
         id: "tech-innovation-summit",
         name: "Tech Innovation Summit",
         preview: "/templates/tech-innovation-summit.json",
+        isBuiltIn: true,
       },
       {
         id: "vintage-purple",
         name: "Vintage Purple",
         preview: "/templates/vintage-purple.json",
+        isBuiltIn: true,
       },
     ];
 
+    // Fetch custom templates from database (user's own + public)
+    const customTemplates = await CertificateTemplate.find({
+      $or: [{ createdBy: req.user._id }, { isPublic: true }],
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Format custom templates to match built-in template structure
+    const formattedCustomTemplates = customTemplates.map((t) => ({
+      id: t._id.toString(),
+      name: t.name,
+      description: t.description,
+      thumbnail: t.thumbnail,
+      category: t.category || "custom",
+      isBuiltIn: false,
+      isOwner: t.createdBy.toString() === req.user._id.toString(),
+      data: t.canvasData,
+      createdAt: t.createdAt,
+    }));
+
     res.status(200).json({
       success: true,
-      data: templates,
+      data: {
+        builtIn: builtInTemplates,
+        custom: formattedCustomTemplates,
+        all: [...formattedCustomTemplates, ...builtInTemplates],
+      },
     });
   } catch (error) {
     console.error("Error fetching certificate templates:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch certificate templates",
+      error: error.message,
+    });
+  }
+});
+
+// POST /api/certificates/templates - Create a new custom template
+router.post("/templates", requireAuth, async (req, res) => {
+  try {
+    const CertificateTemplate = require("../../models/CertificateTemplate");
+    const { name, description, canvasData, thumbnail, category, isPublic } =
+      req.body;
+
+    if (!name || !canvasData) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and canvas data are required",
+      });
+    }
+
+    const template = new CertificateTemplate({
+      name,
+      description: description || "",
+      canvasData,
+      thumbnail: thumbnail || null,
+      category: category || "custom",
+      isPublic: isPublic || false,
+      createdBy: req.user._id,
+    });
+
+    await template.save();
+
+    console.log(
+      `[TEMPLATES] Custom template created: ${template.name} by user ${req.user._id}`
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Template saved successfully",
+      data: {
+        id: template._id.toString(),
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        createdAt: template.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Error creating certificate template:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save template",
+      error: error.message,
+    });
+  }
+});
+
+// DELETE /api/certificates/templates/:templateId - Delete a custom template
+router.delete("/templates/:templateId", requireAuth, async (req, res) => {
+  try {
+    const CertificateTemplate = require("../../models/CertificateTemplate");
+    const { templateId } = req.params;
+
+    const template = await CertificateTemplate.findById(templateId);
+
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: "Template not found",
+      });
+    }
+
+    // Only allow owner to delete
+    if (template.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only delete your own templates",
+      });
+    }
+
+    await CertificateTemplate.findByIdAndDelete(templateId);
+
+    console.log(
+      `[TEMPLATES] Custom template deleted: ${template.name} by user ${req.user._id}`
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Template deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting certificate template:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete template",
       error: error.message,
     });
   }

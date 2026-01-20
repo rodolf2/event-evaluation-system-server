@@ -1,15 +1,24 @@
 const SharedReport = require("../../models/SharedReport");
 const User = require("../../models/User");
 const puppeteer = require("puppeteer");
+const sendEmail = require("../../utils/email");
+const {
+  generateSharedReportEmailHtml,
+} = require("../../utils/sharedReportEmailTemplate");
 
 // Get school admins and senior management for report sharing (accessible by PSAS/Club Officers)
 exports.getSchoolAdmins = async (req, res) => {
   try {
-    // Only return users with school-admin or senior-management roles
+    // Return users with school-admin, senior-management roles, or MIS with canViewReports permission
     const users = await User.find({
-      role: { $in: ["school-admin", "senior-management"] },
-      isActive: true,
-    }).select("name email department position role");
+      $or: [
+        {
+          role: { $in: ["school-admin", "senior-management"] },
+          isActive: true,
+        },
+        { role: "mis", "permissions.canViewReports": true, isActive: true },
+      ],
+    }).select("name email department position role permissions");
 
     res.status(200).json({
       success: true,
@@ -36,8 +45,9 @@ exports.getSchoolAdmins = async (req, res) => {
 exports.shareReport = async (req, res) => {
   try {
     const { reportId } = req.params;
-    const { schoolAdmins } = req.body;
+    const { schoolAdmins, reportTitle } = req.body;
     const sharedBy = req.user._id; // From auth middleware
+    const sharedByUser = req.user;
 
     if (
       !schoolAdmins ||
@@ -69,9 +79,43 @@ exports.shareReport = async (req, res) => {
       });
     }
 
+    // Send email notifications to all recipients
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const emailPromises = schoolAdmins.map(async (admin) => {
+      try {
+        const reportUrl = `${frontendUrl}/senior-management/reports/${reportId}`;
+        const htmlContent = generateSharedReportEmailHtml({
+          recipientName: admin.name || admin.email,
+          sharedByName: sharedByUser.name || sharedByUser.email,
+          reportTitle: reportTitle || "Evaluation Report",
+          reportUrl,
+        });
+
+        await sendEmail({
+          to: admin.email,
+          subject: `📊 Report Shared: ${reportTitle || "Evaluation Report"}`,
+          html: htmlContent,
+        });
+
+        console.log(`Email notification sent to ${admin.email}`);
+        return { email: admin.email, success: true };
+      } catch (emailError) {
+        console.error(`Failed to send email to ${admin.email}:`, emailError);
+        return {
+          email: admin.email,
+          success: false,
+          error: emailError.message,
+        };
+      }
+    });
+
+    const emailResults = await Promise.all(emailPromises);
+    const successfulEmails = emailResults.filter((r) => r.success).length;
+
     res.status(200).json({
-      message: `Report shared with ${schoolAdmins.length} school administrator(s)`,
+      message: `Report shared with ${schoolAdmins.length} school administrator(s). ${successfulEmails} email notification(s) sent.`,
       sharedReport,
+      emailResults,
     });
   } catch (error) {
     console.error("Error sharing report:", error);
@@ -162,7 +206,7 @@ exports.getSharedReports = async (req, res) => {
     const reportsWithDetails = await Promise.all(
       sharedReports.map(async (sharedReport) => {
         const form = await Form.findById(sharedReport.reportId).select(
-          "title description eventName thumbnail status createdAt updatedAt"
+          "title description eventName thumbnail status createdAt updatedAt",
         );
 
         return {
@@ -178,7 +222,7 @@ exports.getSharedReports = async (req, res) => {
           lastUpdated: form?.updatedAt,
           isShared: true,
         };
-      })
+      }),
     );
 
     // Filter out any reports where the form was not found
@@ -205,7 +249,7 @@ exports.getReportSharing = async (req, res) => {
 
     const sharedReport = await SharedReport.findOne({ reportId }).populate(
       "sharedBy",
-      "name email"
+      "name email",
     );
 
     if (!sharedReport) {

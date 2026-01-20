@@ -43,10 +43,10 @@ router.post("/", async (req, res) => {
 
     // Validate role against allowed values
     const allowedRoles = [
-      "participant",
+      "student",
       "psas",
       "club-officer",
-      "school-admin",
+      "senior-management",
       "mis",
     ];
     if (!allowedRoles.includes(role)) {
@@ -82,7 +82,7 @@ router.post("/", async (req, res) => {
 // Provision user with permissions - restricted to mis role
 router.post("/provision", async (req, res) => {
   try {
-    const { email, role, permissions } = req.body;
+    const { email, role, permissions, name } = req.body;
 
     if (!email || !role) {
       return res.status(400).json({
@@ -102,10 +102,10 @@ router.post("/provision", async (req, res) => {
 
     // Validate role against allowed values
     const allowedRoles = [
-      "participant",
+      "student",
       "psas",
       "club-officer",
-      "school-admin",
+      "senior-management",
       "mis",
     ];
     if (!allowedRoles.includes(role)) {
@@ -115,12 +115,15 @@ router.post("/provision", async (req, res) => {
       });
     }
 
-    // Create user with parsed name from email
-    const name = email.split("@")[0].replace(/[._]/g, " ");
-    const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+    // Determine name: use provided name or parse from email
+    let finalName = name;
+    if (!finalName) {
+      const parsedName = email.split("@")[0].replace(/[._]/g, " ");
+      finalName = parsedName.charAt(0).toUpperCase() + parsedName.slice(1);
+    }
 
     const user = await User.create({
-      name: formattedName,
+      name: finalName,
       email,
       role,
       permissions: permissions || {},
@@ -159,10 +162,10 @@ router.put("/:id", async (req, res) => {
     // Validate role if being updated
     if (role) {
       const allowedRoles = [
-        "participant",
+        "student",
         "psas",
         "club-officer",
-        "school-admin",
+        "senior-management",
         "mis",
       ];
       if (!allowedRoles.includes(role)) {
