@@ -1,17 +1,11 @@
-const nodemailer = require("nodemailer");
+const { transporter } = require("../../utils/email");
 const Reminder = require("../../models/Reminder");
 const notificationService = require("../notificationService");
 
 class ReminderService {
   constructor() {
-    // Configure nodemailer transporter
-    this.transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
+    // Use shared transporter from email utility
+    this.transporter = transporter;
   }
 
   generateReminderEmailTemplate(reminder, user) {
@@ -21,7 +15,6 @@ class ReminderService {
       month: "long",
       day: "numeric",
     });
-
 
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -73,7 +66,7 @@ class ReminderService {
     try {
       const reminder = await Reminder.findById(reminderId).populate(
         "userId",
-        "name email"
+        "name email",
       );
 
       if (!reminder) {
@@ -83,7 +76,7 @@ class ReminderService {
       const user = reminder.userId;
       if (!user || !user.email) {
         console.warn(
-          `Cannot send reminder email: User or email not found for reminder ${reminderId}`
+          `Cannot send reminder email: User or email not found for reminder ${reminderId}`,
         );
         return;
       }
@@ -123,28 +116,28 @@ class ReminderService {
         const user = await User.findById(reminderData.userId);
         console.log(
           "[createReminder] User found:",
-          user ? user.name : "NOT FOUND"
+          user ? user.name : "NOT FOUND",
         );
 
         if (user) {
           const notif = await notificationService.notifyReminderCreated(
             reminder,
-            user
+            user,
           );
           console.log(
             "[createReminder] Notification created successfully:",
-            notif._id
+            notif._id,
           );
         } else {
           console.warn(
             "[createReminder] No user found for userId:",
-            reminderData.userId
+            reminderData.userId,
           );
         }
       } catch (notificationError) {
         console.error(
           "[createReminder] Failed to create reminder notification:",
-          notificationError
+          notificationError,
         );
         // Don't fail the entire operation if notification creation fails
       }
@@ -210,12 +203,12 @@ class ReminderService {
       try {
         await notificationService.notifyReminderCompleted(
           reminder,
-          reminder.userId
+          reminder.userId,
         );
       } catch (notificationError) {
         console.error(
           "Failed to send reminder completion notification:",
-          notificationError
+          notificationError,
         );
         // Don't fail the operation if notification fails
       }
@@ -240,7 +233,7 @@ class ReminderService {
       }).populate("userId", "name email");
 
       console.log(
-        `Found ${upcomingReminders.length} upcoming reminders to send`
+        `Found ${upcomingReminders.length} upcoming reminders to send`,
       );
 
       for (const reminder of upcomingReminders) {
@@ -251,7 +244,7 @@ class ReminderService {
           // Send in-app notification to all roles
           await notificationService.notifyReminderDueSoon(
             reminder,
-            reminder.userId
+            reminder.userId,
           );
         } catch (error) {
           console.error(`Failed to send reminder ${reminder._id}:`, error);

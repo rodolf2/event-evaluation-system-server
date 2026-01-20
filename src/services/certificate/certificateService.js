@@ -5,6 +5,7 @@ const nodemailer = require("nodemailer");
 const Certificate = require("../../models/Certificate");
 
 const { createCanvas, loadImage } = require("canvas");
+const { transporter, validateEmailConfig } = require("../../utils/email");
 
 class CertificateService {
   validateCertificatePath(basePath, filePath) {
@@ -32,21 +33,14 @@ class CertificateService {
       fs.mkdirSync(this.certificatesDir, { recursive: true });
     }
 
-    // Configure nodemailer transporter
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      this.transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        },
-      });
-      this.emailConfigured = true;
-    } else {
+    // Use shared transporter from email utility
+    this.transporter = transporter;
+    this.emailConfigured = validateEmailConfig();
+
+    if (!this.emailConfigured) {
       console.warn(
         "[CERT-SVC] Email credentials missing in .env. Email sending will be disabled.",
       );
-      this.emailConfigured = false;
     }
   }
 

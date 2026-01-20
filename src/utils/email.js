@@ -1,24 +1,48 @@
 const nodemailer = require("nodemailer");
 const { generateRatingEmailHtml } = require("./ratingEmailTemplate.js");
 
-const sendEmail = async (options) => {
-  // nodemailer v7+ uses default export
-  const createTransport =
-    nodemailer.createTransport || nodemailer.default?.createTransport;
-
-  if (!createTransport) {
-    throw new Error(
-      "nodemailer is not properly installed. Please run: npm install nodemailer"
+/**
+ * Validates email environment variables
+ */
+const validateEmailConfig = () => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error(
+      "❌ [EMAIL-CONFIG] Critical error: EMAIL_USER or EMAIL_PASS environment variables are missing.",
     );
+    return false;
   }
+  return true;
+};
 
-  const transporter = createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+// nodemailer v7+ uses default export
+const createTransport =
+  nodemailer.createTransport || nodemailer.default?.createTransport;
+
+if (!createTransport) {
+  throw new Error(
+    "nodemailer is not properly installed. Please run: npm install nodemailer",
+  );
+}
+
+/**
+ * Shared transporter for the entire application
+ */
+const transporter = createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    // This setting is often needed for cloud environments like Render
+    rejectUnauthorized: false,
+  },
+});
+
+const sendEmail = async (options) => {
+  if (!validateEmailConfig()) {
+    throw new Error("Email configuration missing in environment variables");
+  }
 
   let htmlContent = options.html || "";
   let subject = options.subject;
@@ -44,12 +68,17 @@ const sendEmail = async (options) => {
     subject: subject,
     html: htmlContent,
     text: textContent || options.message,
+    attachments: options.attachments || [],
   };
 
   const info = await transporter.sendMail(mailOptions);
 
-  console.log("Rating notification email sent: %s", info.messageId);
+  console.log("Email sent successfully: %s", info.messageId);
   return info;
 };
 
-module.exports = sendEmail;
+module.exports = {
+  sendEmail,
+  transporter,
+  validateEmailConfig,
+};
