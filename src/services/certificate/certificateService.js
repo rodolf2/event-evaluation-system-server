@@ -14,7 +14,7 @@ class CertificateService {
     const normalizedBase = path.resolve(basePath);
     const normalizedPath = path.resolve(
       normalizedBase,
-      path.normalize(filePath)
+      path.normalize(filePath),
     );
 
     // Ensure the path is within the certificates directory
@@ -44,7 +44,7 @@ class CertificateService {
       this.emailConfigured = true;
     } else {
       console.warn(
-        "[CERT-SVC] Email credentials missing in .env. Email sending will be disabled."
+        "[CERT-SVC] Email credentials missing in .env. Email sending will be disabled.",
       );
       this.emailConfigured = false;
     }
@@ -74,7 +74,7 @@ class CertificateService {
         // Sanitize filename
         const fileName = `${certificateId}_${displayName.replace(
           /[^a-zA-Z0-9]/g,
-          "_"
+          "_",
         )}.pdf`; // ✅ added variable
         const safeFileName = fileName;
 
@@ -166,7 +166,7 @@ class CertificateService {
         width * 0.28,
         height - 60,
         0,
-        height - 110
+        height - 110,
       )
       .closePath();
     doc.fillColor(primaryColor).fill();
@@ -183,7 +183,7 @@ class CertificateService {
         width * 0.3,
         height - 40,
         0,
-        height - 80
+        height - 80,
       )
       .closePath();
     doc.fillColor("#ecd6a3").fill(); // Keep light gold accent
@@ -424,7 +424,7 @@ class CertificateService {
 
     if (!this.emailConfigured) {
       console.warn(
-        `[CERT-SVC] Skipping email for ${certificateId}: Email not configured`
+        `[CERT-SVC] Skipping email for ${certificateId}: Email not configured`,
       );
       await Certificate.findOneAndUpdate(
         { certificateId },
@@ -433,7 +433,7 @@ class CertificateService {
           emailDeliveryFailed: true,
           emailFinalError: "Email configuration missing in .env",
           emailRetryCount: 0,
-        }
+        },
       );
       return;
     }
@@ -441,7 +441,7 @@ class CertificateService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(
-          `[EMAIL-RETRY] Attempt ${attempt}/${maxRetries} for certificate ${certificateId}`
+          `[EMAIL-RETRY] Attempt ${attempt}/${maxRetries} for certificate ${certificateId}`,
         );
 
         const mailOptions = {
@@ -468,18 +468,18 @@ class CertificateService {
             emailRetryCount: attempt - 1,
             emailLastAttempt: new Date(),
             emailError: null,
-          }
+          },
         );
 
         console.log(
-          `[EMAIL-RETRY] ✓ Email sent successfully for certificate ${certificateId} on attempt ${attempt}`
+          `[EMAIL-RETRY] ✓ Email sent successfully for certificate ${certificateId} on attempt ${attempt}`,
         );
         return result;
       } catch (error) {
         lastError = error;
         console.error(
           `[EMAIL-RETRY] ✗ Attempt ${attempt}/${maxRetries} failed for certificate ${certificateId}:`,
-          error.message
+          error.message,
         );
 
         // Update certificate record with retry information
@@ -493,14 +493,14 @@ class CertificateService {
               attempt < maxRetries
                 ? new Date(Date.now() + Math.pow(2, attempt) * 60000)
                 : null, // Exponential backoff
-          }
+          },
         );
 
         // Wait before retry (exponential backoff: 1min, 2min, 4min)
         if (attempt < maxRetries) {
           const delayMs = Math.pow(2, attempt) * 60000; // 2^attempt minutes
           console.log(
-            `[EMAIL-RETRY] Waiting ${delayMs / 1000}s before retry...`
+            `[EMAIL-RETRY] Waiting ${delayMs / 1000}s before retry...`,
           );
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
@@ -509,7 +509,7 @@ class CertificateService {
 
     // All retries failed - mark as failed and create notification
     console.error(
-      `[EMAIL-RETRY] ❌ All ${maxRetries} email attempts failed for certificate ${certificateId}`
+      `[EMAIL-RETRY] ❌ All ${maxRetries} email attempts failed for certificate ${certificateId}`,
     );
 
     await Certificate.findOneAndUpdate(
@@ -519,7 +519,7 @@ class CertificateService {
         emailDeliveryFailed: true,
         emailFinalError: lastError.message,
         emailRetryCount: maxRetries,
-      }
+      },
     );
 
     // Create notification for the user about email failure
@@ -531,12 +531,12 @@ class CertificateService {
           certificateId: certificateData.certificateId,
           eventId: { name: certificateData.event.name },
         },
-        certificateData.user._id
+        certificateData.user._id,
       );
     } catch (notificationError) {
       console.error(
         "[EMAIL-RETRY] Failed to create email failure notification:",
-        notificationError
+        notificationError,
       );
     }
 
@@ -554,7 +554,7 @@ class CertificateService {
         <div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px;">
           <h3 style="margin-top: 0; color: #2C3E50;">${event.name}</h3>
           <p><strong>Date:</strong> ${new Date(
-            event.date
+            event.date,
           ).toLocaleDateString()}</p>
           <p><strong>Type:</strong> ${
             certificateType.charAt(0).toUpperCase() + certificateType.slice(1)
@@ -573,11 +573,11 @@ class CertificateService {
 
       console.log(`Loading template from path: ${templateId}`);
 
-      // Load template from client templates directory
+      // Load template from server templates directory
       const templatePath = path.join(
         __dirname,
-        "../../../../client/src/templates",
-        `${templateId}.json`
+        "../../templates",
+        `${templateId}.json`,
       );
 
       console.log(`Full template path: ${templatePath}`);
@@ -585,7 +585,7 @@ class CertificateService {
 
       if (!fs.existsSync(templatePath)) {
         throw new Error(
-          `Template ${templateId} not found at path: ${templatePath}`
+          `Template ${templateId} not found at path: ${templatePath}`,
         );
       }
 
@@ -593,13 +593,13 @@ class CertificateService {
       console.log(
         `Template loaded successfully, objects count: ${
           templateData.objects?.length || 0
-        }`
+        }`,
       );
 
       // Create canvas with template dimensions
       const canvas = createCanvas(
         templateData.width || 1056,
-        templateData.height || 816
+        templateData.height || 816,
       );
       const ctx = canvas.getContext("2d");
 
@@ -620,7 +620,7 @@ class CertificateService {
 
       const pdfPath = path.resolve(
         this.certificatesDir,
-        `${certificateId}_${studentName || user.name || "Participant"}.pdf`
+        `${certificateId}_${studentName || user.name || "Participant"}.pdf`,
       );
       const pdfStream = fs.createWriteStream(pdfPath);
       pdfDoc.pipe(pdfStream);
@@ -709,7 +709,7 @@ class CertificateService {
     let text = obj.text || "";
     text = text.replace(
       /\[?Recipient Name\]?|\[?Participant Name\]?/gi,
-      studentName || user.name || "Participant"
+      studentName || user.name || "Participant",
     );
 
     // Replace event name placeholder
@@ -896,7 +896,7 @@ class CertificateService {
       obj.top + obj.radius,
       obj.radius,
       0,
-      2 * Math.PI
+      2 * Math.PI,
     );
 
     if (obj.fill && obj.fill !== "transparent") {
@@ -954,7 +954,7 @@ class CertificateService {
     // For now, skip images as they require additional handling
     // This can be implemented later if needed
     console.log(
-      "Image rendering not yet implemented for server-side templates"
+      "Image rendering not yet implemented for server-side templates",
     );
   }
 
@@ -998,7 +998,7 @@ class CertificateService {
           formCustomizations = form.certificateCustomizations;
           console.log(
             `[CERT-SVC] Loaded form customizations:`,
-            formCustomizations
+            formCustomizations,
           );
         }
       }
@@ -1021,12 +1021,12 @@ class CertificateService {
       // Check if templateId is provided and use template-based generation
       if (options.templateId) {
         console.log(
-          `[CERT-SVC] ✓ Generating certificate from template: ${options.templateId}`
+          `[CERT-SVC] ✓ Generating certificate from template: ${options.templateId}`,
         );
         console.log(`[CERT-SVC] Template certificate data:`, certificateData);
         pdfResult = await this.generateCertificateFromTemplate(
           options.templateId,
-          certificateData
+          certificateData,
         );
         console.log(`[CERT-SVC] PDF generated from template:`, {
           filePath: pdfResult.filePath,
@@ -1035,7 +1035,7 @@ class CertificateService {
       } else {
         // Fall back to default PDF generation
         console.log(
-          `[CERT-SVC] Generating certificate using default PDF template`
+          `[CERT-SVC] Generating certificate using default PDF template`,
         );
         pdfResult = await this.generateCertificatePDF(certificateData);
         console.log(`[CERT-SVC] PDF generated from default template:`, {
@@ -1072,23 +1072,23 @@ class CertificateService {
         try {
           console.log(
             `[CERT-SVC] Sending certificate email to:`,
-            options.respondentEmail
+            options.respondentEmail,
           );
           await this.sendCertificateByEmail(
             certificateData,
-            pdfResult.filePath
+            pdfResult.filePath,
           );
           console.log(`[CERT-SVC] ✓ Email sent successfully`);
         } catch (emailError) {
           console.error(
             `[CERT-SVC] ✗ Failed to send certificate email:`,
-            emailError.message
+            emailError.message,
           );
         }
       }
 
       console.log(
-        `[CERT-SVC] Certificate generation complete - returning success`
+        `[CERT-SVC] Certificate generation complete - returning success`,
       );
       return {
         success: true,
@@ -1127,7 +1127,7 @@ class CertificateService {
           const result = await this.generateCertificate(
             userId,
             eventId,
-            options
+            options,
           );
           results.push({
             userId,
