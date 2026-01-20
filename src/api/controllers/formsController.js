@@ -1290,20 +1290,24 @@ const submitFormResponse = async (req, res) => {
             templateId: form.linkedCertificateId || null,
             certificateName: certificateName,
           });
-          // Ensure attendee has a valid userId. If attendee exists but no userId, try to find/create a User
+          // Ensure we have a valid userId for the certificate
           let resolvedUserId = attendee?.userId;
-          if (attendee && !resolvedUserId && respondentEmail) {
+
+          // If we have an email but no resolved user (either not in attendee list or no userId in attendee object)
+          if (!resolvedUserId && respondentEmail) {
             try {
               const UserModel = require("../../models/User");
               let foundUser = await UserModel.findOne({
                 email: respondentEmail.toLowerCase().trim(),
               });
+
               if (!foundUser) {
                 // Create a lightweight participant user to attach certificate to
                 foundUser = new UserModel({
-                  name: attendee.name || certificateName,
+                  name: respondentName || attendee?.name || certificateName,
                   email: respondentEmail.toLowerCase().trim(),
                   role: "student",
+                  isGuest: true, // Mark as guest/auto-created
                 });
                 await foundUser.save();
                 console.log(
@@ -1312,8 +1316,10 @@ const submitFormResponse = async (req, res) => {
               }
               resolvedUserId = foundUser._id;
 
-              // Persist the resolved userId on the attendee so future lookups succeed
-              attendee.userId = resolvedUserId;
+              // If this was an attendee, update their record with the userId
+              if (attendee) {
+                attendee.userId = resolvedUserId;
+              }
             } catch (userResolveError) {
               console.error(
                 `[CERT-GEN] Failed to resolve/create user for ${respondentEmail}:`,
