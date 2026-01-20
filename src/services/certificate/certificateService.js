@@ -445,7 +445,7 @@ class CertificateService {
         );
 
         const mailOptions = {
-          from: process.env.EMAIL_USER,
+          from: `Event Evaluation System <${process.env.EMAIL_USER}>`,
           to: user.email,
           subject: `Certificate of Participation - ${event.name}`,
           html: this.generateEmailTemplate(certificateData),
