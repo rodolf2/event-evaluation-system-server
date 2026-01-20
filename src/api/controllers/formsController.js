@@ -167,8 +167,14 @@ const getFormById = async (req, res) => {
       createdBy: userId,
     }).populate("createdBy", "name email");
 
-    // If not found and user is a participant, check if they're assigned to the form
-    if (!form && req.user.role === "participant") {
+    // If not found and user is a participant/student, check if they're assigned to the form
+    if (
+      !form &&
+      (req.user.role === "student" ||
+        req.user.role === "participant" ||
+        req.user.role === "evaluator" ||
+        req.user.role === "guest-speaker")
+    ) {
       form = await Form.findOne({
         _id: id,
         status: "published",
@@ -185,8 +191,12 @@ const getFormById = async (req, res) => {
       }).populate("createdBy", "name email");
     }
 
-    // If still not found and user is school-admin, check if report has been shared with them
-    if (!form && req.user.role === "school-admin") {
+    // If still not found and user is school-admin/senior-management, check if report has been shared with them
+    if (
+      !form &&
+      (req.user.role === "senior-management" ||
+        req.user.role === "school-admin")
+    ) {
       const SharedReport = require("../../models/SharedReport");
       const sharedReport = await SharedReport.findOne({
         reportId: id,
@@ -298,7 +308,7 @@ const createBlankForm = async (req, res) => {
                     ? normalizedEmail.split("@")[0].trim()
                     : "Unknown",
                 email: normalizedEmail,
-                role: "participant", // Default role for imported attendees
+                role: "student", // Default role for imported attendees
               });
 
               try {
@@ -402,7 +412,7 @@ const createBlankForm = async (req, res) => {
                             ? normalizedEmail.split("@")[0].trim()
                             : "Unknown",
                         email: normalizedEmail,
-                        role: "participant", // Default role for imported attendees
+                        role: "student", // Default role for imported attendees
                       });
 
                       try {
@@ -1293,7 +1303,7 @@ const submitFormResponse = async (req, res) => {
                 foundUser = new UserModel({
                   name: attendee.name || certificateName,
                   email: respondentEmail.toLowerCase().trim(),
-                  role: "participant",
+                  role: "student",
                 });
                 await foundUser.save();
                 console.log(
@@ -1406,8 +1416,14 @@ const getFormResponses = async (req, res) => {
       createdBy: userId,
     });
 
-    // If not found and user is a participant, check if they're assigned to the form
-    if (!form && req.user.role === "participant") {
+    // If not found and user is a participant/student, check if they're assigned to the form
+    if (
+      !form &&
+      (req.user.role === "student" ||
+        req.user.role === "participant" ||
+        req.user.role === "evaluator" ||
+        req.user.role === "guest-speaker")
+    ) {
       form = await Form.findOne({
         _id: id,
         status: "published",
@@ -1495,7 +1511,7 @@ const uploadAttendeeList = [
                   ? attendee.email.split("@")[0].trim()
                   : "Unknown", // Fallback name
               email: normalizedEmail,
-              role: "participant", // Default role for imported attendees
+              role: "student", // Default role for imported attendees
             });
 
             try {
