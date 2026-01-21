@@ -35,9 +35,25 @@ const validateEmailConfig = () => {
  * Creates email transporter based on configured service
  */
 const createEmailTransporter = () => {
-  const emailService = process.env.EMAIL_SERVICE || "gmail";
+  const emailService = (process.env.EMAIL_SERVICE || "gmail")
+    .toLowerCase()
+    .trim();
+  console.log(
+    `[EMAIL-TRANSPORTER] Creating transporter for service: ${emailService}`,
+  );
 
   if (emailService === "sendgrid") {
+    console.log(
+      `[EMAIL-TRANSPORTER] SendGrid API key present: ${!!process.env.SENDGRID_API_KEY}`,
+    );
+
+    if (!process.env.SENDGRID_API_KEY) {
+      console.error(
+        `[EMAIL-TRANSPORTER] SendGrid API key missing! Falling back to Gmail.`,
+      );
+      return createGmailTransporter();
+    }
+
     return nodemailer.createTransport({
       host: "smtp.sendgrid.net",
       port: 587,
@@ -46,26 +62,56 @@ const createEmailTransporter = () => {
         user: "apikey",
         pass: process.env.SENDGRID_API_KEY,
       },
+      // Add timeout and connection settings
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
     });
   } else {
-    // Gmail configuration
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
+    console.log(`[EMAIL-TRANSPORTER] Using Gmail configuration`);
+    return createGmailTransporter();
   }
+};
+
+/**
+ * Create Gmail transporter
+ */
+const createGmailTransporter = () => {
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+    // Add timeout settings
+    connectionTimeout: 10000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
+  });
 };
 
 /**
  * Shared transporter for the entire application
  */
 const transporter = createEmailTransporter();
+
+// Log email service configuration on startup
+const configuredService = (process.env.EMAIL_SERVICE || "gmail")
+  .toLowerCase()
+  .trim();
+console.log(
+  `[EMAIL-INIT] EMAIL_SERVICE env var: "${process.env.EMAIL_SERVICE || "not set"}"`,
+);
+console.log(`[EMAIL-INIT] Resolved service: ${configuredService}`);
+console.log(
+  `[EMAIL-INIT] SendGrid API key present: ${!!process.env.SENDGRID_API_KEY}`,
+);
+console.log(
+  `[EMAIL-INIT] Gmail credentials present: ${!!process.env.EMAIL_USER && !!process.env.EMAIL_PASS}`,
+);
 
 const sendEmail = async (options) => {
   if (!validateEmailConfig()) {
@@ -94,8 +140,17 @@ const sendEmail = async (options) => {
       `${options.ratingData.participantName} - Rating Response: ${options.ratingData.questionText} = ${options.ratingData.ratingScore}`;
   }
 
+  // Determine the from address based on the email service
+  const emailService = (process.env.EMAIL_SERVICE || "gmail")
+    .toLowerCase()
+    .trim();
+  const fromEmail =
+    emailService === "sendgrid"
+      ? process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER
+      : process.env.EMAIL_USER;
+
   const mailOptions = {
-    from: `"Event Evaluation System" <${process.env.EMAIL_USER}>`,
+    from: `"Event Evaluation System" <${fromEmail}>`,
     to: options.to || options.email,
     subject: subject,
     html: htmlContent,

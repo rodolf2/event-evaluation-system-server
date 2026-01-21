@@ -64,6 +64,10 @@ class ReminderService {
 
   async sendReminderEmail(reminderId) {
     try {
+      console.log(
+        `[REMINDER-EMAIL] Attempting to send email for reminder: ${reminderId}`,
+      );
+
       const reminder = await Reminder.findById(reminderId).populate(
         "userId",
         "name email",
@@ -76,10 +80,14 @@ class ReminderService {
       const user = reminder.userId;
       if (!user || !user.email) {
         console.warn(
-          `Cannot send reminder email: User or email not found for reminder ${reminderId}`,
+          `[REMINDER-EMAIL] Cannot send reminder email: User or email not found for reminder ${reminderId}`,
         );
         return;
       }
+
+      console.log(
+        `[REMINDER-EMAIL] Sending to user: ${user.name} (${user.email})`,
+      );
 
       const mailOptions = {
         from: process.env.EMAIL_USER,
@@ -143,10 +151,19 @@ class ReminderService {
       }
 
       // Send email notification
+      console.log(
+        `[REMINDER-CREATE] About to send email for reminder: ${reminder._id}`,
+      );
       try {
         await this.sendReminderEmail(reminder._id);
+        console.log(
+          `[REMINDER-CREATE] Email sent successfully for reminder: ${reminder._id}`,
+        );
       } catch (emailError) {
-        console.error("Failed to send reminder email:", emailError);
+        console.error(
+          "[REMINDER-CREATE] Failed to send reminder email:",
+          emailError,
+        );
         // Don't fail the entire operation if email fails
       }
 

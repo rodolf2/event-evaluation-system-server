@@ -288,6 +288,14 @@ app.use("/api/mis", misRoutes);
 app.use("/api/thumbnails", require("./api/routes/thumbnailRoutes"));
 app.use("/api/guest", require("./api/routes/guestRoutes"));
 app.use("/api/settings", require("./api/routes/settingsRoutes"));
+
+// Test endpoint for email functionality (protected) - Disabled: module not found
+// app.use(
+//   "/api/test",
+//   requireAuth,
+//   require("./middlewares/auth").requireRole(["admin", "mis"]),
+//   require("../../test-email-endpoint"),
+// );
 app.use("/api/personnel", personnelRoutes);
 
 // Test routes for development
