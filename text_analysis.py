@@ -135,7 +135,7 @@ class MultilingualSentimentAnalyzer:
             # English neutral
             'okay', 'ok', 'alright', 'fine', 'so-so', 'average', 'normal', 
             'ordinary', 'mediocre', 'fair', 'decent', 'not bad', 'moderate',
-            'acceptable', 'passable', 'adequate', 'sufficient',
+            'acceptable', 'passable', 'adequate', 'sufficient','however'
             # Tagalog neutral - common expressions
             'okay lang', 'ok lang', 'oks lang', 'ayos lang', 'pwede na', 
             'pwede naman', 'ganon lang', 'ganun lang', 'sige lang', 

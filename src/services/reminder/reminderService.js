@@ -1,11 +1,10 @@
-const { transporter } = require("../../utils/email");
+const { sendEmail } = require("../../utils/email");
 const Reminder = require("../../models/Reminder");
 const notificationService = require("../notificationService");
 
 class ReminderService {
   constructor() {
-    // Use shared transporter from email utility
-    this.transporter = transporter;
+    // No longer need direct transporter access
   }
 
   generateReminderEmailTemplate(reminder, user) {
@@ -89,14 +88,14 @@ class ReminderService {
         `[REMINDER-EMAIL] Sending to user: ${user.name} (${user.email})`,
       );
 
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
+      const result = await sendEmail({
         to: user.email,
         subject: `📅 Reminder: ${reminder.title}`,
         html: this.generateReminderEmailTemplate(reminder, user),
-      };
-
-      const result = await this.transporter.sendMail(mailOptions);
+        text: `Reminder: ${reminder.title}\n${
+          reminder.description || ""
+        }\nDate: ${new Date(reminder.date).toLocaleDateString()}`,
+      });
 
       // Update reminder to mark email as sent
       await Reminder.findByIdAndUpdate(reminderId, {

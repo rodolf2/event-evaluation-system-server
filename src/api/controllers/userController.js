@@ -415,10 +415,15 @@ const provisionUser = async (req, res) => {
     }
 
     // Create user with parsed name from email
-    const name = email.split("@")[0].replace(/[._]/g, " ");
+    const name = email
+      .split("@")[0]
+      .replace(/[._]/g, " ")
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
 
     const newUser = new User({
-      name: name.charAt(0).toUpperCase() + name.slice(1),
+      name: name,
       email,
       role,
       permissions: permissions || {},

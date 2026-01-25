@@ -21,12 +21,12 @@ services:
         sync: false
       - key: SESSION_SECRET
         sync: false
-      # Email Configuration (SendGrid recommended for production)
+      # Email Configuration (Resend recommended for production)
       - key: EMAIL_SERVICE
         sync: false
-      - key: SENDGRID_API_KEY
+      - key: RESEND_API_KEY
         sync: false
-      - key: SENDGRID_FROM_EMAIL
+      - key: RESEND_FROM_EMAIL
         sync: false
       # Gmail fallback (optional)
       - key: EMAIL_USER

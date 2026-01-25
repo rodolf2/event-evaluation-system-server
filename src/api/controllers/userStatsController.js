@@ -79,7 +79,7 @@ const getUserStatistics = async (req, res) => {
     const formattedLoginTrend = loginTrend.map((item) => ({
       date: `${item._id.year}-${String(item._id.month).padStart(
         2,
-        "0"
+        "0",
       )}-${String(item._id.day).padStart(2, "0")}`,
       count: item.count,
     }));
@@ -88,7 +88,7 @@ const getUserStatistics = async (req, res) => {
     const recentRegistrations = await User.find()
       .sort({ createdAt: -1 })
       .limit(10)
-      .select("name email role createdAt isActive")
+      .select("name email role createdAt isActive profilePicture avatar")
       .lean();
 
     // Users by department (if applicable)
@@ -162,7 +162,7 @@ const getTopActiveUsers = async (req, res) => {
     const topUsers = await User.find({ lastLogin: { $ne: null } })
       .sort({ lastLogin: -1 })
       .limit(parseInt(limit))
-      .select("name email role lastLogin createdAt")
+      .select("name email role lastLogin createdAt profilePicture avatar")
       .lean();
 
     // Get activity counts per user
@@ -175,12 +175,12 @@ const getTopActiveUsers = async (req, res) => {
     // Merge with user data
     const userIds = activityCounts.map((a) => a._id);
     const activeUsers = await User.find({ _id: { $in: userIds } })
-      .select("name email role")
+      .select("name email role profilePicture avatar")
       .lean();
 
     const topActiveUsers = activityCounts.map((ac) => {
       const user = activeUsers.find(
-        (u) => u._id.toString() === ac._id.toString()
+        (u) => u._id.toString() === ac._id.toString(),
       );
       return {
         ...user,

@@ -5,7 +5,11 @@ const nodemailer = require("nodemailer");
 const Certificate = require("../../models/Certificate");
 
 const { createCanvas, loadImage } = require("canvas");
-const { transporter, validateEmailConfig } = require("../../utils/email");
+const {
+  transporter,
+  validateEmailConfig,
+  sendEmail,
+} = require("../../utils/email");
 
 class CertificateService {
   validateCertificatePath(basePath, filePath) {
@@ -438,9 +442,12 @@ class CertificateService {
           `[EMAIL-RETRY] Attempt ${attempt}/${maxRetries} for certificate ${certificateId}`,
         );
 
-        const mailOptions = {
-          from: `Event Evaluation System <${process.env.EMAIL_USER}>`,
-          to: user.email,
+        // Use respondentEmail if available, otherwise fall back to user.email
+        const recipientEmail = certificateData.respondentEmail || user.email;
+        console.log(`[EMAIL-RETRY] Sending to: ${recipientEmail}`);
+
+        const result = await sendEmail({
+          to: recipientEmail,
           subject: `Certificate of Participation - ${event.name}`,
           html: this.generateEmailTemplate(certificateData),
           attachments: [
@@ -449,9 +456,7 @@ class CertificateService {
               path: pdfPath,
             },
           ],
-        };
-
-        const result = await this.transporter.sendMail(mailOptions);
+        });
 
         // Update certificate record on successful send
         await Certificate.findOneAndUpdate(
@@ -506,7 +511,7 @@ class CertificateService {
       `[EMAIL-RETRY] ❌ All ${maxRetries} email attempts failed for certificate ${certificateId}`,
     );
 
-    await Certificate.findOneAndUpdate(
+    const updatedCert = await Certificate.findOneAndUpdate(
       { certificateId },
       {
         isEmailSent: false,
@@ -514,19 +519,27 @@ class CertificateService {
         emailFinalError: lastError.message,
         emailRetryCount: maxRetries,
       },
+      { new: true },
     );
 
     // Create notification for the user about email failure
     try {
       const notificationService = require("../../services/notificationService");
-      await notificationService.notifyCertificateEmailFailed(
-        {
-          _id: certificateData.certificateId,
-          certificateId: certificateData.certificateId,
-          eventId: { name: certificateData.event.name },
-        },
-        certificateData.user._id,
-      );
+      if (updatedCert) {
+        // Construct notification object with real _id but preserving event info
+        const notificationCert = {
+          ...updatedCert.toObject(),
+          eventId: {
+            _id: updatedCert.eventId,
+            name: certificateData.event?.name || "Event",
+          },
+        };
+
+        await notificationService.notifyCertificateEmailFailed(
+          notificationCert,
+          certificateData.user._id,
+        );
+      }
     } catch (notificationError) {
       console.error(
         "[EMAIL-RETRY] Failed to create email failure notification:",
@@ -996,7 +1009,6 @@ class CertificateService {
           );
         }
       }
-
       const certificateId = this.generateCertificateId();
       console.log(`[CERT-SVC] Generated certificateId:`, certificateId);
 
@@ -1007,8 +1019,15 @@ class CertificateService {
         certificateType: options.certificateType || "participation",
         customMessage: options.customMessage,
         studentName: options.respondentName || options.studentName,
+        respondentEmail: options.respondentEmail, // Include respondent email for sending
         formCustomizations, // Include form customizations
       };
+
+      console.log(`[CERT-SVC] 🔍 EMAIL DEBUG:`, {
+        optionsRespondentEmail: options.respondentEmail,
+        userEmail: user?.email,
+        certificateDataRespondentEmail: certificateData.respondentEmail,
+      });
 
       let pdfResult;
 

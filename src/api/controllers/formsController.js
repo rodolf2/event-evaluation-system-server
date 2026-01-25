@@ -165,7 +165,7 @@ const getFormById = async (req, res) => {
     form = await Form.findOne({
       _id: id,
       createdBy: userId,
-    }).populate("createdBy", "name email");
+    }).populate("createdBy", "name email role");
 
     // If not found and user is a participant/student, check if they're assigned to the form
     if (
@@ -179,7 +179,7 @@ const getFormById = async (req, res) => {
         _id: id,
         status: "published",
         "attendeeList.email": userEmail,
-      }).populate("createdBy", "name email");
+      }).populate("createdBy", "name email role");
     }
 
     // If still not found, check if user has any role and is assigned to the form
@@ -188,7 +188,7 @@ const getFormById = async (req, res) => {
         _id: id,
         status: "published",
         "attendeeList.email": userEmail,
-      }).populate("createdBy", "name email");
+      }).populate("createdBy", "name email role");
     }
 
     // If still not found and user is school-admin/senior-management, check if report has been shared with them
@@ -205,13 +205,13 @@ const getFormById = async (req, res) => {
 
       if (sharedReport) {
         // User has access via sharing, fetch the form directly
-        form = await Form.findById(id).populate("createdBy", "name email");
+        form = await Form.findById(id).populate("createdBy", "name email role");
       }
     }
 
     // If still not found and user is MIS, allow access to any form
     if (!form && req.user.role === "mis") {
-      form = await Form.findById(id).populate("createdBy", "name email");
+      form = await Form.findById(id).populate("createdBy", "name email role");
     }
 
     if (!form) {

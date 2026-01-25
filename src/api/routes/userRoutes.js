@@ -119,7 +119,10 @@ router.post("/provision", async (req, res) => {
     let finalName = name;
     if (!finalName) {
       const parsedName = email.split("@")[0].replace(/[._]/g, " ");
-      finalName = parsedName.charAt(0).toUpperCase() + parsedName.slice(1);
+      finalName = parsedName
+        .split(" ")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
     }
 
     const user = await User.create({
@@ -138,6 +141,78 @@ router.post("/provision", async (req, res) => {
     });
   } catch (error) {
     console.error("Error provisioning user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+// Bulk update user permissions - restricted to mis role
+// NOTE: This route must be defined BEFORE /:id to prevent 'bulk-permissions' being matched as an ID
+router.put("/bulk-permissions", async (req, res) => {
+  try {
+    const { users } = req.body;
+
+    if (!users || !Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Users array is required",
+      });
+    }
+
+    const updateResults = [];
+
+    for (const userData of users) {
+      const { userId, permissions } = userData;
+
+      if (!userId || !permissions) {
+        continue;
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        continue;
+      }
+
+      // Update permissions
+      user.permissions = {
+        ...Object.fromEntries(user.permissions || new Map()),
+        ...permissions,
+      };
+
+      await user.save();
+      updateResults.push({
+        userId,
+        success: true,
+      });
+
+      // Log the permission change
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "PERMISSION_CHANGE",
+        category: "user",
+        description: `Updated permissions for ${user.email}`,
+        severity: "info",
+        metadata: {
+          targetId: user._id,
+          targetType: "User",
+          permissions: permissions,
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Updated permissions for ${updateResults.length} users`,
+      data: {
+        updated: updateResults.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating bulk permissions:", error);
     res.status(500).json({
       success: false,
       message: "Server error",

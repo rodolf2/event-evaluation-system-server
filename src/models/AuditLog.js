@@ -72,7 +72,7 @@ const auditLogSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Indexes for efficient querying
@@ -137,7 +137,7 @@ auditLogSchema.statics.getLogsWithFilters = async function (filters = {}) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate("userId", "name email")
+      .populate("userId", "name email profilePicture avatar")
       .lean(),
     this.countDocuments(query),
   ]);

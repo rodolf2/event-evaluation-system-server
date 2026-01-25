@@ -46,6 +46,7 @@
     "pdfkit": "^0.17.2",
     "puppeteer": "^24.31.0",
     "python-shell": "^3.0.1",
+    "resend": "^6.8.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
