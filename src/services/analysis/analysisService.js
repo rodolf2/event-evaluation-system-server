@@ -1,6 +1,7 @@
 const Feedback = require("../../models/Feedback");
 const Event = require("../../models/Event");
 const Form = require("../../models/Form");
+const Lexicon = require("../../models/Lexicon");
 const mongoose = require("mongoose");
 const path = require("path");
 const { PythonShell } = require("python-shell");
@@ -45,6 +46,17 @@ const generateQualitativeReport = async (eventId) => {
     };
   }
 
+  // Fetch lexicon keywords from database
+  let dbLexicon = [];
+  try {
+    dbLexicon = await Lexicon.find();
+  } catch (lexError) {
+    console.warn(
+      "Failed to fetch lexicon from DB, using fallback defaults:",
+      lexError.message,
+    );
+  }
+
   try {
     // Call Python script for advanced multilingual sentiment analysis
     const pythonResult = await new Promise((resolve, reject) => {
@@ -56,13 +68,13 @@ const generateQualitativeReport = async (eventId) => {
         __dirname,
         "../../../venv",
         "Scripts",
-        "python.exe"
+        "python.exe",
       );
       const venvPathUnix = path.resolve(
         __dirname,
         "../../../venv",
         "bin",
-        "python"
+        "python",
       );
 
       if (
@@ -94,7 +106,8 @@ const generateQualitativeReport = async (eventId) => {
         JSON.stringify({
           action: "generate_report",
           feedbacks: comments,
-        })
+          lexicon: dbLexicon,
+        }),
       );
 
       let result = "";
@@ -149,7 +162,7 @@ const generateQualitativeReport = async (eventId) => {
     console.warn("⚠️ ============================================== ⚠️");
     console.error(
       "Error calling Python script for qualitative analysis:",
-      error
+      error,
     );
     console.error("Error details:", error.message);
     console.warn("Fallback reason:", error.message || "Unknown error");
@@ -160,7 +173,8 @@ const generateQualitativeReport = async (eventId) => {
     // Pass the fallback reason to include in the response
     return await enhancedQualitativeAnalysis(
       comments,
-      error.message || "Python script execution failed"
+      dbLexicon,
+      error.message || "Python script execution failed",
     );
   }
 };
@@ -218,13 +232,13 @@ const generateQuantitativeReport = async (eventId) => {
         __dirname,
         "../../../venv",
         "Scripts",
-        "python.exe"
+        "python.exe",
       );
       const venvPathUnix = path.resolve(
         __dirname,
         "../../../venv",
         "bin",
-        "python"
+        "python",
       );
 
       if (
@@ -252,7 +266,7 @@ const generateQuantitativeReport = async (eventId) => {
           previousYear: previousEvent
             ? previousEvent.date.getFullYear()
             : lastYear.getFullYear(),
-        })
+        }),
       );
 
       let result = "";
@@ -327,40 +341,40 @@ function generateInsights(analysisResult) {
 
   if (positivePercent > 60) {
     insights.push(
-      `Excellent feedback received with ${positivePercent}% positive sentiment, indicating high satisfaction with the event.`
+      `Excellent feedback received with ${positivePercent}% positive sentiment, indicating high satisfaction with the event.`,
     );
   } else if (positivePercent > 40) {
     insights.push(
-      `Generally positive feedback with ${positivePercent}% positive sentiment, showing good overall satisfaction.`
+      `Generally positive feedback with ${positivePercent}% positive sentiment, showing good overall satisfaction.`,
     );
   } else if (negativePercent > 30) {
     insights.push(
-      `Areas of concern identified with ${negativePercent}% negative sentiment that require attention.`
+      `Areas of concern identified with ${negativePercent}% negative sentiment that require attention.`,
     );
   }
 
   // Language insights
   const englishCount = analyzed_feedbacks.filter(
-    (f) => f.analysis.language?.language === "en"
+    (f) => f.analysis.language?.language === "en",
   ).length;
   const tagalogCount = analyzed_feedbacks.filter(
-    (f) => f.analysis.language?.language === "tl"
+    (f) => f.analysis.language?.language === "tl",
   ).length;
 
   if (englishCount > 0 && tagalogCount > 0) {
     insights.push(
-      `Multilingual feedback received: ${englishCount} English and ${tagalogCount} Tagalog comments analyzed.`
+      `Multilingual feedback received: ${englishCount} English and ${tagalogCount} Tagalog comments analyzed.`,
     );
   }
 
   // Confidence insights
   const highConfidence = analyzed_feedbacks.filter(
-    (f) => f.analysis.confidence > 0.7
+    (f) => f.analysis.confidence > 0.7,
   ).length;
   const confidenceRate = ((highConfidence / total) * 100).toFixed(1);
 
   insights.push(
-    `Analysis confidence: ${confidenceRate}% of feedback was analyzed with high confidence using advanced multilingual sentiment analysis.`
+    `Analysis confidence: ${confidenceRate}% of feedback was analyzed with high confidence using advanced multilingual sentiment analysis.`,
   );
 
   return insights.join(" ");
@@ -378,32 +392,32 @@ function generateRecommendations(analysisResult) {
 
   if (negativePercent > 20) {
     recommendations.push(
-      "Address negative feedback promptly to improve future events."
+      "Address negative feedback promptly to improve future events.",
     );
     recommendations.push(
-      "Consider follow-up surveys to understand specific concerns mentioned."
+      "Consider follow-up surveys to understand specific concerns mentioned.",
     );
   }
 
   if (positivePercent > 70) {
     recommendations.push(
-      "Continue successful practices that contributed to high satisfaction."
+      "Continue successful practices that contributed to high satisfaction.",
     );
     recommendations.push(
-      "Use positive feedback examples in future event planning."
+      "Use positive feedback examples in future event planning.",
     );
   }
 
   if (analyzed_feedbacks.some((f) => f.analysis.language?.language === "tl")) {
     recommendations.push(
-      "Ensure multilingual support in future communications and surveys."
+      "Ensure multilingual support in future communications and surveys.",
     );
   }
 
   if (recommendations.length === 0) {
     recommendations.push("Maintain current event quality standards.");
     recommendations.push(
-      "Continue gathering detailed feedback for continuous improvement."
+      "Continue gathering detailed feedback for continuous improvement.",
     );
   }
 
@@ -413,12 +427,17 @@ function generateRecommendations(analysisResult) {
 /**
  * Enhanced JavaScript qualitative analysis with multilingual support
  * @param {string[]} comments - Array of comments to analyze
+ * @param {Array} dbLexicon - Optional lexicon keywords from DB
  * @param {string} fallbackReason - Optional reason why Python fallback was triggered
  */
-async function enhancedQualitativeAnalysis(comments, fallbackReason = null) {
+async function enhancedQualitativeAnalysis(
+  comments,
+  dbLexicon = [],
+  fallbackReason = null,
+) {
   console.warn("⚠️ Using JavaScript fallback for sentiment analysis");
   console.log(
-    "🔄 Using enhanced JavaScript sentiment analysis with multilingual support"
+    "🔄 Using enhanced JavaScript sentiment analysis with multilingual support",
   );
   if (fallbackReason) {
     console.warn("Fallback triggered because:", fallbackReason);
@@ -437,11 +456,18 @@ async function enhancedQualitativeAnalysis(comments, fallbackReason = null) {
   };
 
   // Comprehensive multilingual sentiment lexicon
-  // This covers common event feedback vocabulary in both English and Tagalog
-  const multilingualKeywords = {
+  let multilingualKeywords = {
+    positive: { english: [], tagalog: [] },
+    negative: { english: [], tagalog: [] },
+    neutral: { english: [], tagalog: [] },
+    contrastIndicators: { english: [], tagalog: [] },
+    intensifiers: { english: [], tagalog: [] },
+  };
+
+  // Fallback defaults if DB is empty
+  const fallbackLexicon = {
     positive: {
       english: [
-        // General positive
         "good",
         "great",
         "excellent",
@@ -450,458 +476,50 @@ async function enhancedQualitativeAnalysis(comments, fallbackReason = null) {
         "fantastic",
         "awesome",
         "perfect",
-        "outstanding",
-        "brilliant",
-        "superb",
-        "marvelous",
-        "magnificent",
-        "incredible",
-        "fabulous",
-        "splendid",
-        "terrific",
-        "phenomenal",
-        "exceptional",
-        "remarkable",
-        "impressive",
-        "stellar",
-        "top-notch",
-        "first-rate",
-        "world-class",
-        // Emotions
         "love",
-        "loved",
-        "like",
-        "liked",
         "enjoy",
-        "enjoyed",
-        "happy",
-        "pleased",
-        "satisfied",
-        "delighted",
-        "thrilled",
-        "excited",
-        "grateful",
-        "thankful",
-        "appreciate",
-        "appreciated",
-        "glad",
-        "joyful",
-        "enthusiastic",
-        // Event-specific positive
-        "informative",
         "helpful",
-        "useful",
-        "valuable",
-        "insightful",
-        "enlightening",
-        "educational",
-        "inspiring",
-        "motivating",
-        "engaging",
-        "interesting",
-        "fun",
-        "entertaining",
         "well-organized",
-        "well-prepared",
-        "well-managed",
-        "smooth",
-        "professional",
-        "efficient",
-        "effective",
-        "productive",
-        "beneficial",
-        "rewarding",
-        "worthwhile",
-        "memorable",
-        "unforgettable",
-        // Quality descriptors
-        "nice",
-        "fine",
-        "lovely",
-        "beautiful",
-        "elegant",
-        "polished",
-        "clean",
-        "clear",
-        "organized",
-        "structured",
-        "thorough",
-        "comprehensive",
-        "detailed",
-        // Recommendations
-        "recommend",
-        "recommended",
-        "worth it",
-        "must attend",
-        "highly recommend",
-        // Intensified positive
-        "very good",
-        "so good",
-        "really good",
-        "absolutely amazing",
-        "truly excellent",
       ],
       tagalog: [
-        // General positive
         "maganda",
-        "mabuti",
         "mahusay",
         "galing",
-        "astig",
         "ayos",
-        "swabe",
-        "lupet",
-        "mabait",
-        "maayos",
-        "malinaw",
-        "malinis",
-        "magaling",
-        "kahanga-hanga",
-        // Intensified
-        "napakaganda",
-        "napakahusay",
-        "napakagaling",
-        "napakaayos",
-        "sobrang ganda",
-        "sobrang galing",
-        "sobrang husay",
-        "ang ganda",
-        "ang galing",
-        "ang husay",
-        "grabe ang ganda",
-        "grabe ang galing",
-        "hindi ko inexpect na ganito kaganda",
-        // Emotions
-        "masaya",
-        "masayang-masaya",
-        "natutuwa",
-        "nakakatuwa",
-        "nakaka-aliw",
-        "satisfied",
-        "contento",
-        "may kasiyahan",
-        "may galak",
-        "nakakaproud",
-        "nakakatuwa talaga",
-        "tuwa na tuwa",
-        "napakasaya",
-        "lubos na kasiyahan",
-        // Event-specific
-        "nakakaengganyo",
-        "nakaka-inspire",
-        "nakakapag-isip",
-        "informative",
-        "maraming natutunan",
-        "madaming natutunan",
-        "may natutunan",
-        "natuto ako",
-        "nagustuhan ko",
-        "bet ko",
-        "love it",
-        "go go go",
         "sulit",
-        "worth it",
-        "hindi sayang",
-        "sulit sa oras",
-        "sulit sa panahon",
-        // Appreciation
-        "salamat",
+        "masaya",
+        "napakaganda",
+        "sobrang ganda",
         "maraming salamat",
-        "thank you",
-        "appreciate",
-        "nagpapasalamat",
-        // Recommendations
-        "irecommend ko",
-        "irerecommend ko",
-        "punta kayo",
-        "attend kayo",
       ],
     },
     negative: {
       english: [
-        // Strong negative
         "bad",
         "terrible",
         "awful",
         "horrible",
         "hate",
-        "hated",
-        "dislike",
         "worst",
-        "disaster",
-        "pathetic",
-        "lousy",
-        "dreadful",
-        "abysmal",
-        "atrocious",
-        "appalling",
-        "deplorable",
-        "shocking",
-        "unacceptable",
-        "unbearable",
-        "intolerable",
-        "miserable",
-        "disgusting",
-        "repulsive",
-        "offensive",
-        // Emotions
         "disappointed",
-        "disappointing",
-        "unsatisfied",
-        "sad",
-        "angry",
-        "frustrated",
-        "annoyed",
-        "irritated",
-        "upset",
-        "unhappy",
-        "dissatisfied",
-        "regret",
-        "waste",
-        "wasted",
-        "bored",
         "boring",
-        "tired",
-        "exhausted",
-        "stressed",
-        // Event-specific negative
         "disorganized",
-        "unprepared",
-        "unprofessional",
-        "chaotic",
-        "messy",
-        "confusing",
-        "unclear",
-        "vague",
-        "rushed",
-        "too fast",
-        "too slow",
-        "too long",
-        "too short",
-        "delayed",
-        "late",
-        "behind schedule",
-        "overcrowded",
-        "cramped",
-        "noisy",
-        "distracting",
-        "uncomfortable",
-        // Quality issues
-        "poor",
-        "weak",
-        "lacking",
-        "inadequate",
-        "insufficient",
-        "incomplete",
-        "shallow",
-        "superficial",
-        "generic",
-        "repetitive",
-        "redundant",
-        "outdated",
-        "irrelevant",
-        "useless",
-        "pointless",
-        "meaningless",
-        // Mild criticism / constructive
-        "mediocre",
-        "average",
-        "okay",
-        "meh",
-        "underwhelming",
-        "unimpressive",
-        "forgettable",
-        "nothing special",
-        "fair",
-        "passable",
-        "tolerable",
-        "could be better",
-        "needs improvement",
-        "room for improvement",
-        "not well",
-        "not good",
-        "not great",
-        "not enough",
-        "not clear",
-        // Issues
-        "issue",
-        "issues",
-        "problem",
-        "problems",
-        "concern",
-        "concerns",
-        "difficulty",
-        "difficulties",
-        "challenge",
-        "challenges",
-        "obstacle",
-        "flaw",
-        "flaws",
-        "mistake",
-        "mistakes",
-        "error",
-        "errors",
-        // Negation patterns
-        "didn't like",
-        "don't like",
-        "wasn't good",
-        "weren't good",
-        "couldn't understand",
-        "didn't enjoy",
-        "not satisfied",
-        "not happy",
+        "waste of time",
       ],
       tagalog: [
-        // Strong negative
         "masama",
         "pangit",
         "nakakainis",
-        "nakakaasar",
-        "nakakagalit",
-        "nakakabadtrip",
-        "badtrip",
-        "nakakasuka",
-        "nakakadiri",
-        "nakakahiya",
-        "nakakadismaya",
-        "napakapangit",
-        "sobrang pangit",
-        "napakamasama",
-        "sobrang masama",
-        // Intensified negative
-        "ayaw",
-        "ayaw ko",
-        "ayaw na ayaw",
         "galit",
-        "galit na galit",
-        "inis na inis",
-        "napakagalit",
-        "sobrang galit",
-        "grabe ang pangit",
         "walang kwenta",
-        // Emotions
-        "nalungkot",
-        "nainis",
-        "nagalit",
-        "nadisappoint",
-        "nadismaya",
-        "nafrustrate",
-        "na-stress",
-        "napagod",
-        "naumay",
-        "nagsawa",
-        "nabore",
-        "walang gana",
-        // Event-specific
-        "magulo",
-        "hindi maayos",
-        "hindi malinaw",
-        "mabagal",
-        "matagal",
-        "maikli",
-        "masikip",
-        "mainit",
-        "maingay",
-        "walang organisasyon",
-        "late",
-        "delayed",
-        "hindi prepared",
-        "kulang",
-        "kulang-kulang",
-        // Quality issues
+        "sayang",
         "hindi maganda",
-        "hindi okay",
-        "hindi ayos",
-        "hindi sapat",
-        "hindi kumpleto",
-        "boring",
-        "nakakabore",
-        "nakakaumay",
-        "nakakasawa",
-        "paulit-ulit",
-        // Mild criticism
-        "pwede pa",
-        "pwede pang i-improve",
-        "may kulang",
-        "may pagkukulang",
-        "okay lang",
-        "so-so",
-        "meh",
-        "hindi masama pero hindi rin maganda",
-        // Issues
-        "problema",
-        "issue",
-        "concern",
-        "hirap",
-        "mahirap",
-        "nakakalito",
       ],
     },
     neutral: {
-      english: [
-        // Neutral descriptors
-        "okay",
-        "ok",
-        "fine",
-        "alright",
-        "normal",
-        "standard",
-        "typical",
-        "regular",
-        "ordinary",
-        "common",
-        "usual",
-        "expected",
-        "predictable",
-        // Suggestions without negative tone
-        "suggest",
-        "suggestion",
-        "hope",
-        "hoping",
-        "maybe",
-        "perhaps",
-        "consider",
-        "considering",
-        "would be nice",
-        "it would help",
-        // Observations
-        "noticed",
-        "observed",
-        "saw",
-        "attended",
-        "participated",
-        "joined",
-        "learned",
-        "understood",
-        "heard",
-        "experienced",
-      ],
-      tagalog: [
-        // Neutral descriptors
-        "okay lang",
-        "ayos lang",
-        "pwede na",
-        "okey",
-        "normal",
-        "katamtaman",
-        "sakto lang",
-        "pasado",
-        "puwede",
-        // Suggestions
-        "sana",
-        "siguro",
-        "baka pwede",
-        "kung pwede",
-        // Observations
-        "napansin ko",
-        "nakita ko",
-        "natutunan ko",
-        "naintindihan ko",
-        "dumalo ako",
-        "sumali ako",
-      ],
+      english: ["okay", "fine", "alright", "normal", "average"],
+      tagalog: ["okay lang", "ayos lang", "pwede na", "sakto lang"],
     },
-    // Contrast indicators - signal mixed sentiment
     contrastIndicators: {
       english: [
         "but",
@@ -910,45 +528,17 @@ async function enhancedQualitativeAnalysis(comments, fallbackReason = null) {
         "though",
         "yet",
         "still",
-        "nevertheless",
-        "nonetheless",
         "despite",
-        "in spite of",
-        "even though",
-        "while",
-        "whereas",
-        "on the other hand",
         "unfortunately",
-        "sadly",
-        "except",
-        "other than",
-        "apart from",
-        "aside from",
-        "only issue",
-        "only problem",
-        "my only concern",
-        "the only thing",
-        "one thing",
       ],
       tagalog: [
         "pero",
         "ngunit",
         "subalit",
         "kahit",
-        "kahit na",
-        "bagamat",
         "gayunpaman",
-        "sa kabila ng",
-        "maliban sa",
         "kaya lang",
-        "ang problema lang",
-        "ang issue lang",
-        "yung lang",
-        "isa lang",
-        "sayang",
         "sayang lang",
-        "kaso",
-        "kaso lang",
       ],
     },
     intensifiers: {
@@ -959,26 +549,8 @@ async function enhancedQualitativeAnalysis(comments, fallbackReason = null) {
         "so",
         "absolutely",
         "totally",
-        "completely",
-        "utterly",
         "highly",
         "incredibly",
-        "tremendously",
-        "enormously",
-        "immensely",
-        "vastly",
-        "hugely",
-        "massively",
-        "particularly",
-        "especially",
-        "definitely",
-        "certainly",
-        "surely",
-        "quite",
-        "rather",
-        "fairly",
-        "pretty",
-        "somewhat",
       ],
       tagalog: [
         "napaka",
@@ -988,178 +560,154 @@ async function enhancedQualitativeAnalysis(comments, fallbackReason = null) {
         "lubos",
         "grabe",
         "talagang",
-        "totoo",
-        "tunay",
-        "sadyang",
-        "lubha",
-        "labis na",
-        "lubos na",
-        "napaka-",
-        "super",
-        "ang",
-        "ang-",
-        "todo",
       ],
     },
   };
 
+  // Merge DB lexicon or use fallbacks
+  if (dbLexicon && dbLexicon.length > 0) {
+    dbLexicon.forEach((item) => {
+      const type = item.sentiment;
+      const lang = item.language === "en" ? "english" : "tagalog";
+      // Handle contrastIndicators and intensifiers if they were stored in DB (they currently aren't, but let's be flexible)
+      if (multilingualKeywords[type] && multilingualKeywords[type][lang]) {
+        multilingualKeywords[type][lang].push(item.word);
+      }
+    });
+
+    // Always add core contrast and intensifiers to the working set from fallbacks
+    // since they aren't in the DB yet
+    multilingualKeywords.contrastIndicators =
+      fallbackLexicon.contrastIndicators;
+    multilingualKeywords.intensifiers = fallbackLexicon.intensifiers;
+    // Add neutral fallback if DB doesn't have neutral words
+    if (multilingualKeywords.neutral.english.length === 0) {
+      multilingualKeywords.neutral = fallbackLexicon.neutral;
+    }
+  } else {
+    multilingualKeywords = fallbackLexicon;
+  }
+
   // Language detection patterns
   const languagePatterns = {
     tagalog:
-      /\b(ang|ng|sa|kay|ko|mo|nya|kami|kayo|sila|ito|iyan|iyon|dito|doon|kanino|alin|paano|kailan|bakit|talaga|nga|naman|rin|din|pa|po|ho|ka|ta|ta ka|ka ba|ba|ako|ikaw|siya|kami|kayo|sila)\b/i,
+      /\b(ang|ng|sa|kay|ko|mo|nya|kami|kayo|sila|ito|dito|doon|talaga|nga|naman|rin|din|pa|po|ba|ako|ikaw|siya)\b/i,
     english:
-      /\b(the|a|an|and|or|but|in|on|at|to|for|of|with|by|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|can|could|should|may|might|must|shall)\b/i,
+      /\b(the|a|an|and|or|but|in|on|at|to|for|of|with|by|is|are|was|were|be|been|have|has|had|do|does|did|will|would|can|could)\b/i,
   };
 
   comments.forEach((comment) => {
     if (!comment || !comment.trim()) return;
 
     const text = comment.toLowerCase();
-    let language = "mixed";
 
-    // Simple language detection
+    // Language detection
     const hasTagalog = languagePatterns.tagalog.test(text);
     const hasEnglish = languagePatterns.english.test(text);
+    const language =
+      hasTagalog && !hasEnglish
+        ? "tagalog"
+        : hasEnglish && !hasTagalog
+          ? "english"
+          : "mixed";
 
-    if (hasTagalog && !hasEnglish) language = "tagalog";
-    else if (hasEnglish && !hasTagalog) language = "english";
-    else language = "mixed";
-
-    // Analyze sentiment based on language - use ALL language keywords for mixed language
     let positiveScore = 0;
     let negativeScore = 0;
     let neutralScore = 0;
     let intensifierMultiplier = 1;
-    let hasContrastIndicator = false;
 
-    // Check for intensifiers first (both languages)
+    // Intensifiers
     const allIntensifiers = [
       ...multilingualKeywords.intensifiers.english,
       ...multilingualKeywords.intensifiers.tagalog,
     ];
-    const intensifierCount = allIntensifiers.filter((intensifier) =>
-      text.includes(intensifier)
+    const intensifierCount = allIntensifiers.filter((i) =>
+      text.includes(i),
     ).length;
-    if (intensifierCount > 0) {
-      intensifierMultiplier = 1 + intensifierCount * 0.3; // Increase weight for intensifiers
-    }
+    if (intensifierCount > 0)
+      intensifierMultiplier = 1 + intensifierCount * 0.3;
 
-    // Check for contrast indicators (both languages) - signals mixed sentiment
-    const allContrastIndicators = [
-      ...multilingualKeywords.contrastIndicators.english,
-      ...multilingualKeywords.contrastIndicators.tagalog,
-    ];
-    hasContrastIndicator = allContrastIndicators.some((indicator) =>
-      text.includes(indicator)
-    );
-
-    // Count positive keywords (both languages for mixed)
-    const allPositiveKeywords = [
+    // Sentiment Scores
+    const posKeys = [
       ...multilingualKeywords.positive.english,
       ...multilingualKeywords.positive.tagalog,
     ];
     positiveScore =
-      allPositiveKeywords.filter((keyword) => text.includes(keyword)).length *
-      intensifierMultiplier;
+      posKeys.filter((k) => text.includes(k)).length * intensifierMultiplier;
 
-    // Count negative keywords (both languages for mixed)
-    const allNegativeKeywords = [
+    const negKeys = [
       ...multilingualKeywords.negative.english,
       ...multilingualKeywords.negative.tagalog,
     ];
     negativeScore =
-      allNegativeKeywords.filter((keyword) => text.includes(keyword)).length *
-      intensifierMultiplier;
+      negKeys.filter((k) => text.includes(k)).length * intensifierMultiplier;
 
-    // Count neutral keywords (both languages)
-    const allNeutralKeywords = [
+    const neuKeys = [
       ...multilingualKeywords.neutral.english,
       ...multilingualKeywords.neutral.tagalog,
     ];
-    neutralScore = allNeutralKeywords.filter((keyword) =>
-      text.includes(keyword)
-    ).length;
+    neutralScore = neuKeys.filter((k) => text.includes(k)).length;
 
-    // Determine sentiment with improved mixed detection
+    // Contrast Check
+    const contrastKeys = [
+      ...multilingualKeywords.contrastIndicators.english,
+      ...multilingualKeywords.contrastIndicators.tagalog,
+    ];
+    const hasContrast = contrastKeys.some((k) => text.includes(k));
+
+    // Classification logic
     let sentiment = "neutral";
     let confidence = 0.5;
 
-    // Check if this is truly mixed sentiment:
-    // 1. Has both positive AND negative keywords, OR
-    // 2. Has contrast indicator with any sentiment keywords
-    const hasBothSentiments = positiveScore > 0 && negativeScore > 0;
-    const hasContrastWithSentiment =
-      hasContrastIndicator && (positiveScore > 0 || negativeScore > 0);
-
-    if (hasBothSentiments || hasContrastWithSentiment) {
-      // Mixed sentiment - classify as neutral
+    if (
+      (positiveScore > 0 && negativeScore > 0) ||
+      (hasContrast && (positiveScore > 0 || negativeScore > 0))
+    ) {
       sentiment = "neutral";
-      // Higher confidence if both scores are significant
-      confidence = Math.min(0.6 + (positiveScore + negativeScore) * 0.03, 0.85);
-    } else if (positiveScore > negativeScore && positiveScore > 0) {
+      confidence = 0.6;
+    } else if (positiveScore > negativeScore) {
       sentiment = "positive";
-      confidence = Math.min(0.5 + positiveScore * 0.08, 0.95);
-    } else if (negativeScore > positiveScore && negativeScore > 0) {
+      confidence = Math.min(0.5 + positiveScore * 0.1, 0.95);
+    } else if (negativeScore > positiveScore) {
       sentiment = "negative";
-      confidence = Math.min(0.5 + negativeScore * 0.08, 0.95);
+      confidence = Math.min(0.5 + negativeScore * 0.1, 0.95);
     } else if (neutralScore > 0) {
-      // Only neutral keywords found
       sentiment = "neutral";
-      confidence = Math.min(0.5 + neutralScore * 0.1, 0.7);
-    } else {
-      // No keywords found - default to neutral with low confidence
-      sentiment = "neutral";
-      confidence = 0.3;
-    }
-
-    // Adjust confidence for mixed language
-    if (language === "mixed") {
-      confidence *= 0.9; // Slight reduction for mixed language
+      confidence = 0.7;
     }
 
     categorized_comments[sentiment].push({
       text: comment,
       analysis: {
-        sentiment: sentiment,
-        confidence: confidence,
-        language: language,
+        sentiment,
+        confidence,
+        language,
         method: "enhanced_javascript_multilingual",
         scores: { positive: positiveScore, negative: negativeScore },
       },
     });
-
     sentiment_counts[sentiment]++;
   });
 
   const total = comments.length;
   const summary = {};
-
-  for (const sentiment of ["positive", "negative", "neutral"]) {
-    const count = sentiment_counts[sentiment];
-    const percentage =
-      total > 0 ? Math.round((count / total) * 100 * 100) / 100 : 0;
-    summary[sentiment] = {
-      count: count,
-      percentage: percentage,
+  ["positive", "negative", "neutral"].forEach((s) => {
+    const count = sentiment_counts[s];
+    summary[s] = {
+      count,
+      percentage: total > 0 ? Math.round((count / total) * 100 * 100) / 100 : 0,
     };
-  }
-
-  // Generate enhanced insights
-  const insights = generateEnhancedInsights(summary, comments);
+  });
 
   return {
-    summary: summary,
-    insights: insights,
+    summary,
+    insights: generateEnhancedInsights(summary, comments),
     recommendations: generateEnhancedRecommendations(summary),
     comments: categorized_comments,
     analysis_method: "enhanced_javascript_multilingual",
-    language_support: "English and Tagalog with mixed language detection",
-    // Fallback metadata - useful for monitoring and debugging
     fallback_used: true,
     fallback_reason: fallbackReason,
     fallback_timestamp: new Date().toISOString(),
-    fallback_warning:
-      "⚠️ Python sentiment analysis was unavailable. JavaScript fallback was used. Check server logs for details.",
   };
 }
 
@@ -1175,15 +723,15 @@ function generateEnhancedInsights(summary, comments) {
 
   if (positivePercent > 60) {
     insights.push(
-      `Excellent multilingual feedback received with ${positivePercent}% positive sentiment, indicating high satisfaction across English and Tagalog responses.`
+      `Excellent multilingual feedback received with ${positivePercent}% positive sentiment, indicating high satisfaction across English and Tagalog responses.`,
     );
   } else if (positivePercent > 40) {
     insights.push(
-      `Generally positive multilingual feedback with ${positivePercent}% positive sentiment, showing good overall satisfaction.`
+      `Generally positive multilingual feedback with ${positivePercent}% positive sentiment, showing good overall satisfaction.`,
     );
   } else if (negativePercent > 30) {
     insights.push(
-      `Areas of concern identified with ${negativePercent}% negative sentiment that require attention in both languages.`
+      `Areas of concern identified with ${negativePercent}% negative sentiment that require attention in both languages.`,
     );
   }
 
@@ -1193,22 +741,22 @@ function generateEnhancedInsights(summary, comments) {
       c &&
       c
         .toLowerCase()
-        .match(/\b(the|a|an|and|or|but|in|on|at|to|for|of|with|by)\b/i)
+        .match(/\b(the|a|an|and|or|but|in|on|at|to|for|of|with|by)\b/i),
   ).length;
   const tagalogComments = comments.filter(
-    (c) => c && c.toLowerCase().match(/\b(ang|ng|sa|kay|ko|mo|nya)\b/i)
+    (c) => c && c.toLowerCase().match(/\b(ang|ng|sa|kay|ko|mo|nya)\b/i),
   ).length;
 
   if (englishComments > 0 && tagalogComments > 0) {
     const englishPercent = Math.round((englishComments / total) * 100);
     const tagalogPercent = Math.round((tagalogComments / total) * 100);
     insights.push(
-      `Multilingual feedback received: approximately ${englishPercent}% English and ${tagalogPercent}% Tagalog responses analyzed.`
+      `Multilingual feedback received: approximately ${englishPercent}% English and ${tagalogPercent}% Tagalog responses analyzed.`,
     );
   }
 
   insights.push(
-    `Enhanced sentiment analysis completed with multilingual keyword detection and confidence scoring.`
+    `Enhanced sentiment analysis completed with multilingual keyword detection and confidence scoring.`,
   );
 
   return insights.join(" ");
@@ -1224,27 +772,27 @@ function generateEnhancedRecommendations(summary) {
 
   if (negativePercent > 20) {
     recommendations.push(
-      "Address negative feedback promptly to improve future events."
+      "Address negative feedback promptly to improve future events.",
     );
     recommendations.push(
-      "Consider follow-up surveys in both English and Tagalog to understand specific concerns."
+      "Consider follow-up surveys in both English and Tagalog to understand specific concerns.",
     );
   }
 
   if (positivePercent > 70) {
     recommendations.push(
-      "Continue successful practices that contributed to high satisfaction."
+      "Continue successful practices that contributed to high satisfaction.",
     );
     recommendations.push(
-      "Use positive feedback examples in future multilingual communications."
+      "Use positive feedback examples in future multilingual communications.",
     );
   }
 
   recommendations.push(
-    "Maintain multilingual support in surveys and communications."
+    "Maintain multilingual support in surveys and communications.",
   );
   recommendations.push(
-    "Continue gathering detailed feedback for continuous improvement."
+    "Continue gathering detailed feedback for continuous improvement.",
   );
 
   return recommendations.join(" ");
@@ -1329,13 +877,13 @@ async function analyzeResponses(responses, usePython = true) {
         __dirname,
         "../../../venv",
         "Scripts",
-        "python.exe"
+        "python.exe",
       );
       const venvPathUnix = path.resolve(
         __dirname,
         "../../../venv",
         "bin",
-        "python"
+        "python",
       );
 
       if (
@@ -1362,7 +910,7 @@ async function analyzeResponses(responses, usePython = true) {
         JSON.stringify({
           action: "generate_report",
           feedbacks: textContents,
-        })
+        }),
       );
 
       let result = "";
@@ -1577,19 +1125,19 @@ function fallbackAnalyzeResponses(responses) {
 
           // Check for negation patterns
           const hasNegationPattern = negationPatterns.some((pattern) =>
-            textContent.includes(pattern)
+            textContent.includes(pattern),
           );
 
           // Check for neutral/mixed indicators
           const hasNeutralIndicator = neutralIndicators.some((indicator) =>
-            textContent.includes(indicator)
+            textContent.includes(indicator),
           );
 
           const positiveMatches = positiveKeywords.filter((keyword) =>
-            textContent.includes(keyword)
+            textContent.includes(keyword),
           ).length;
           const negativeMatches = negativeKeywords.filter((keyword) =>
-            textContent.includes(keyword)
+            textContent.includes(keyword),
           ).length;
 
           // Determine sentiment with improved logic
@@ -1750,13 +1298,13 @@ function getPythonPath() {
     __dirname,
     "../../../venv",
     "Scripts",
-    "python.exe"
+    "python.exe",
   );
   const venvPathUnix = path.resolve(
     __dirname,
     "../../../venv",
     "bin",
-    "python"
+    "python",
   );
 
   if (process.platform === "win32" && fs.existsSync(venvPathWin)) {
@@ -1791,15 +1339,19 @@ async function analyzeCommentSentiment(text) {
   }
 
   let result;
+  let dbLexicon = [];
 
   try {
+    // Fetch lexicon to pass to Python for custom word support
+    dbLexicon = await Lexicon.find().lean();
+
     // Try Python analysis first (most accurate)
-    result = await analyzeSingleWithPython(cleanText);
+    result = await analyzeSingleWithPython(cleanText, dbLexicon);
   } catch (error) {
     console.log(
       `[SENTIMENT] Python failed for "${cleanText.substring(0, 30)}...": ${
         error.message
-      }`
+      }`,
     );
     // Fallback to JavaScript
     result = analyzeWithJavaScript(cleanText);
@@ -1818,8 +1370,10 @@ async function analyzeCommentSentiment(text) {
 
 /**
  * Analyze single comment with Python
+ * @param {string} text - The comment text
+ * @param {Array} lexicon - Custom lexicon from DB
  */
-async function analyzeSingleWithPython(text) {
+async function analyzeSingleWithPython(text, lexicon = []) {
   return new Promise((resolve, reject) => {
     const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
     const pythonPath = getPythonPath();
@@ -1829,7 +1383,13 @@ async function analyzeSingleWithPython(text) {
       pythonOptions: ["-u"],
     });
 
-    pyshell.send(JSON.stringify({ action: "analyze_single", comment: text }));
+    pyshell.send(
+      JSON.stringify({
+        action: "analyze_single",
+        comment: text,
+        lexicon: lexicon,
+      }),
+    );
 
     let result = "";
     pyshell.on("message", (message) => {
@@ -2020,16 +1580,16 @@ function analyzeWithJavaScript(text) {
   ];
 
   const hasNegationPattern = negationPatterns.some((p) =>
-    textLower.includes(p)
+    textLower.includes(p),
   );
   const hasNeutralIndicator = neutralIndicators.some((n) =>
-    textLower.includes(n)
+    textLower.includes(n),
   );
   const positiveMatches = positiveKeywords.filter((k) =>
-    textLower.includes(k)
+    textLower.includes(k),
   ).length;
   const negativeMatches = negativeKeywords.filter((k) =>
-    textLower.includes(k)
+    textLower.includes(k),
   ).length;
 
   let sentiment = "neutral";

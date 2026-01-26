@@ -12,7 +12,7 @@ from textblob import TextBlob
 import langid
 
 class MultilingualSentimentAnalyzer:
-    def __init__(self):
+    def __init__(self, custom_lexicon=None):
         # Enhanced Tagalog sentiment lexicons with phrase patterns
         self.tagalog_positive = {
             # Basic positive words (weight: 1)
@@ -42,7 +42,7 @@ class MultilingualSentimentAnalyzer:
             # Learning and satisfaction
             'natuto': 1, 'natutunan': 1, 'nakatulong': 1, 'helpful': 1,
             'informative': 1.5, 'enlightening': 1, 'satisfied': 1,
-            'enjoyed': 1.5, 'enjoyable': 1, 'fun': 1, 'interesting': 1,
+            'enjoy': 1.5, 'enjoyed': 1.5, 'enjoyable': 1, 'fun': 1, 'interesting': 1,
             'educational': 1, 'insightful': 1.5, 'valuable': 1.5,
             'useful': 1, 'inspiring': 1.5, 'motivating': 1,
             'engaging': 1, 'memorable': 1.5, 'unforgettable': 2,
@@ -74,6 +74,7 @@ class MultilingualSentimentAnalyzer:
 
             # Problems and issues
             'problem': -0.7, 'issue': -0.7, 'problema': -0.7, 'mali': -0.8,
+            'fail': -1.2, 'failed': -1.5, 'failure': -1.5, 'nag-fail': -1.2,
             'kulang': -0.7, 'kakulangan': -0.8, 'incomplete': -0.7, 'poor': -1,
             'crowded': -0.8, 'difficult': -0.8, 'nahirapan': -0.8, 'hard': -0.7, 'challenging': -0.6,
 
@@ -162,8 +163,68 @@ class MultilingualSentimentAnalyzer:
         ]
         
         # Emoticons and emoji patterns
-        self.positive_emoticons = ['😊', '😀', '😃', '😄', '👍', '❤️', '💯', '✨', '🎉', '😍', ':)', ':-)', ':D']
+        self.positive_emoticons = ['😊', '😀', '😄', '😍', '👍', '🙌', '🎉', ':)', ':-)', ':D']
         self.negative_emoticons = ['😞', '😢', '😠', '😡', '👎', '😕', '😔', ':(', ':-(', 'D:']
+
+        # Common Tagalog affixes for stemming
+        self.tagalog_prefixes = ['nag-', 'nag', 'mag-', 'mag', 'na-', 'na', 'ma-', 'ma', 'naka-', 'naka', 'ipinag-', 'ipinag', 'pag-', 'pag']
+        self.tagalog_suffixes = ['-an', 'an', '-in', 'in', '-nan', 'nan', '-hin', 'hin']
+
+        # Load custom lexicon if provided
+        if custom_lexicon:
+            self.load_custom_lexicon(custom_lexicon)
+
+    def stem_tagalog(self, word):
+        """Simple rule-based stemming for Tagalog/Taglish"""
+        if len(word) <= 4:
+            return word
+        
+        stemmed = word
+        # Handle prefixes
+        for prefix in sorted(self.tagalog_prefixes, key=len, reverse=True):
+            if stemmed.startswith(prefix):
+                stemmed = stemmed[len(prefix):]
+                if stemmed.startswith('-'):
+                    stemmed = stemmed[1:]
+                break
+        
+        # Handle suffixes
+        if len(stemmed) > 4:
+            for suffix in sorted(self.tagalog_suffixes, key=len, reverse=True):
+                if stemmed.endswith(suffix):
+                    stemmed = stemmed[:-len(suffix)]
+                    if stemmed.endswith('-'):
+                        stemmed = stemmed[:-1]
+                    break
+        
+        return stemmed if len(stemmed) >= 3 else word
+
+    def load_custom_lexicon(self, lexicon):
+        """Load lexicon from database format"""
+        # Clear default lexicons to prioritize DB lexicon if that's the intention
+        # Or just update them. Let's update/extend.
+        for item in lexicon:
+            word = item.get('word', '').lower()
+            sentiment = item.get('sentiment')
+            weight = float(item.get('weight', 1.0))
+            language = item.get('language', 'en')
+            is_phrase = item.get('isPhrase', False)
+
+            if language == 'tl':
+                if sentiment == 'positive':
+                    self.tagalog_positive[word] = weight
+                    if is_phrase:
+                        self.positive_phrases.append(word)
+                elif sentiment == 'negative':
+                    self.tagalog_negative[word] = -weight
+                    if is_phrase:
+                        self.negative_phrases.append(word)
+                elif sentiment == 'neutral':
+                    self.neutral_indicators.append(word)
+            # For English, TextBlob handles basic words, but we can boost them
+            # if we implement a custom English scoring wrap. 
+            # For now, focus on Tagalog as it's the primary custom lexicon target.
+
 
     def detect_language(self, text):
         """Detect language with confidence score"""
@@ -249,13 +310,17 @@ class MultilingualSentimentAnalyzer:
         for i, word in enumerate(words):
             is_negated = i > 0 and words[i-1] in self.negations
             multiplier = 1.5 if i > 0 and words[i-1] in self.intensifiers else 1.0
-
-            if word in self.tagalog_positive:
-                score = self.tagalog_positive[word] * multiplier
+            
+            # Direct check
+            stemmed = self.stem_tagalog(word)
+            
+            # Check both original and stemmed
+            if word in self.tagalog_positive or stemmed in self.tagalog_positive:
+                score = (self.tagalog_positive.get(word) or self.tagalog_positive.get(stemmed)) * multiplier
                 pos_score += score if not is_negated else 0
                 neg_score += score if is_negated else 0
-            elif word in self.tagalog_negative:
-                score = abs(self.tagalog_negative[word]) * multiplier
+            elif word in self.tagalog_negative or stemmed in self.tagalog_negative:
+                score = abs(self.tagalog_negative.get(word) or self.tagalog_negative.get(stemmed)) * multiplier
                 neg_score += score if not is_negated else 0
                 pos_score += score if is_negated else 0
 
@@ -329,16 +394,19 @@ class MultilingualSentimentAnalyzer:
                 elif i > 0 and words[i-1] in self.diminishers:
                     multiplier = 0.5
 
-                # Score the word
-                if word in self.tagalog_positive:
-                    score = self.tagalog_positive[word] * multiplier
+                # Stemming
+                stemmed = self.stem_tagalog(word)
+
+                # Score the word (check original and stemmed)
+                if word in self.tagalog_positive or stemmed in self.tagalog_positive:
+                    score = (self.tagalog_positive.get(word) or self.tagalog_positive.get(stemmed)) * multiplier
                     if is_negated:
                         negative_score += score  # Flip to negative
                     else:
                         positive_score += score
 
-                elif word in self.tagalog_negative:
-                    score = abs(self.tagalog_negative[word]) * multiplier
+                elif word in self.tagalog_negative or stemmed in self.tagalog_negative:
+                    score = abs(self.tagalog_negative.get(word) or self.tagalog_negative.get(stemmed)) * multiplier
                     if is_negated:
                         positive_score += score  # Flip to positive (double negative)
                     else:
@@ -375,10 +443,10 @@ class MultilingualSentimentAnalyzer:
                 # Close scores with mixed elements
                 sentiment = "neutral"
                 confidence = 0.7
-            elif total_score > 1.0:
+            elif total_score >= 0.8:
                 sentiment = "positive"
                 confidence = min(0.5 + (total_score / 5), 0.95)
-            elif total_score < -1.0:
+            elif total_score <= -0.8:
                 sentiment = "negative"
                 confidence = min(0.5 + (abs(total_score) / 5), 0.95)
             else:
@@ -432,15 +500,28 @@ class MultilingualSentimentAnalyzer:
                 return tagalog_result
             
             # Otherwise, combine results based on confidence
+            # Check for contrast indicators in the whole text
+            contrast_words = ['but', 'however', 'although', 'pero', 'ngunit', 'subalit']
+            has_contrast = any(word in text_lower for word in contrast_words)
+
+            if has_contrast and (tagalog_result.get('positive_score', 0) > 0 or tagalog_result.get('negative_score', 0) > 0):
+                # If there's contrast and ANY sentiment found, lean towards neutral
+                return {
+                    'sentiment': 'neutral',
+                    'confidence': 0.8,
+                    'method': 'mixed_contrast_override',
+                    'original_english': english_result,
+                    'original_tagalog': tagalog_result
+                }
+
             if english_result.get('confidence', 0) > tagalog_result.get('confidence', 0):
-                # But override if English says positive but we have neutral indicators
-                if english_result.get('sentiment') == 'positive' and neutral_count >= 1:
+                # If Tagalog found strong tokens even if English has higher confidence, blend them
+                if tagalog_total > 1.0:
+                    blended_sentiment = 'positive' if (english_result.get('polarity', 0) + tagalog_result.get('total_score', 0)) > 0 else 'negative'
                     return {
-                        'sentiment': 'neutral',
-                        'confidence': 0.7,
-                        'method': 'mixed_neutral_override',
-                        'original_english': english_result,
-                        'original_tagalog': tagalog_result
+                        'sentiment': blended_sentiment,
+                        'confidence': (english_result.get('confidence', 0) + tagalog_result.get('confidence', 0)) / 2,
+                        'method': 'blended_mixed_confidence'
                     }
                 return english_result
             else:
@@ -561,10 +642,10 @@ def split_comment_by_sentiment(text, analyzer):
             'error': str(e)
         }
 
-def generate_report(feedbacks):
+def generate_report(feedbacks, lexicon=None):
     """Generate qualitative report with sentiment analysis and comment splitting"""
     try:
-        analyzer = MultilingualSentimentAnalyzer()
+        analyzer = MultilingualSentimentAnalyzer(custom_lexicon=lexicon)
 
         categorized_comments = {
             'positive': [],
@@ -714,7 +795,8 @@ def main():
 
         if action == 'generate_report':
             feedbacks = data.get('feedbacks', [])
-            result = generate_report(feedbacks)
+            lexicon = data.get('lexicon', None)
+            result = generate_report(feedbacks, lexicon=lexicon)
             print(json.dumps(result))
 
         elif action == 'analyze_quantitative':
@@ -728,6 +810,7 @@ def main():
         elif action == 'analyze_single':
             # Analyze a single comment and return sentiment
             comment = data.get('comment', '')
+            lexicon = data.get('lexicon', None)
             if not comment or not comment.strip():
                 print(json.dumps({
                     'success': True,
@@ -736,7 +819,7 @@ def main():
                     'method': 'empty_text'
                 }))
             else:
-                analyzer = MultilingualSentimentAnalyzer()
+                analyzer = MultilingualSentimentAnalyzer(custom_lexicon=lexicon)
                 result = analyzer.analyze_sentiment(comment)
                 print(json.dumps({
                     'success': True,

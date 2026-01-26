@@ -20,7 +20,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
   const thumbnailPath = path.join(
     __dirname,
     "../../../public/thumbnails",
-    filename
+    filename,
   );
 
   // Handle MIS-specific static thumbnails
@@ -65,7 +65,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
     // Return a placeholder if generation fails
     const placeholderPath = path.join(
       __dirname,
-      "../../../public/thumbnails/default.png"
+      "../../../public/thumbnails/default.png",
     );
     if (fs.existsSync(placeholderPath)) {
       return res.sendFile(placeholderPath);
@@ -82,7 +82,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
 
   // Extract ID from filename (format: form-{id}.png, certificate-{id}.png, or analytics-{id}.png)
   const match = filename.match(
-    /^(form|certificate|analytics)-([a-zA-Z0-9]+)\.png$/
+    /^(form|certificate|analytics)-([a-zA-Z0-9]+)\.png$/,
   );
 
   if (match) {
@@ -111,17 +111,26 @@ router.get("/:filename", requireAuth, async (req, res) => {
           }).select("title");
         }
 
-        // For admin roles, allow access to all forms
+        // For admin and shared roles, allow access to all forms
         if (
           !form &&
-          ["psas", "club-officer", "school-admin", "mis"].includes(userRole)
+          [
+            "psas",
+            "club-officer",
+            "school-admin",
+            "senior-management",
+            "club-adviser",
+            "mis",
+            "evaluator",
+            "guest-speaker",
+          ].includes(userRole)
         ) {
           form = await Form.findById(id).select("title");
         }
 
         if (form) {
           console.log(
-            `Generating thumbnail for form ${id}: ${form.title} (accessed by ${userRole})`
+            `Generating thumbnail for form ${id}: ${form.title} (accessed by ${userRole})`,
           );
           await thumbnailService.generateReportThumbnail(id, form.title);
 
@@ -131,7 +140,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
           }
         } else {
           console.log(
-            `Access denied: User ${userId} (${userRole}) cannot access form ${id}`
+            `Access denied: User ${userId} (${userRole}) cannot access form ${id}`,
           );
           return res.status(403).send("Access denied");
         }
@@ -157,17 +166,26 @@ router.get("/:filename", requireAuth, async (req, res) => {
           }).select("title attendeeList responses");
         }
 
-        // For admin roles, allow access to all forms
+        // For admin and shared roles, allow access to all forms
         if (
           !form &&
-          ["psas", "club-officer", "school-admin", "mis"].includes(userRole)
+          [
+            "psas",
+            "club-officer",
+            "school-admin",
+            "senior-management",
+            "club-adviser",
+            "mis",
+            "evaluator",
+            "guest-speaker",
+          ].includes(userRole)
         ) {
           form = await Form.findById(id).select("title attendeeList responses");
         }
 
         if (form) {
           console.log(
-            `Generating analytics thumbnail for form ${id}: ${form.title}`
+            `Generating analytics thumbnail for form ${id}: ${form.title}`,
           );
 
           // Calculate accurate analytics data (same logic as analytics controller)
@@ -257,7 +275,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
 
           console.log(
             `✅ Using accurate analytics data for form ${id}:`,
-            thumbnailData
+            thumbnailData,
           );
 
           // Generate thumbnail with accurate data
@@ -275,7 +293,16 @@ router.get("/:filename", requireAuth, async (req, res) => {
         let certificate;
 
         if (
-          ["psas", "club-officer", "school-admin", "mis"].includes(userRole)
+          [
+            "psas",
+            "club-officer",
+            "school-admin",
+            "senior-management",
+            "club-adviser",
+            "mis",
+            "evaluator",
+            "guest-speaker",
+          ].includes(userRole)
         ) {
           // Admins can view all certificates
           certificate = await Certificate.findById(id)
@@ -295,12 +322,12 @@ router.get("/:filename", requireAuth, async (req, res) => {
           const userName = certificate.userId?.name || "Participant";
           const certType = certificate.certificateType || "participation";
           console.log(
-            `Generating thumbnail for certificate ${id}: ${userName}`
+            `Generating thumbnail for certificate ${id}: ${userName}`,
           );
           await thumbnailService.generateCertificateThumbnail(
             id,
             userName,
-            certType
+            certType,
           );
 
           // Check if it was generated successfully
@@ -309,7 +336,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
           }
         } else {
           console.log(
-            `Access denied: User ${userId} (${userRole}) cannot access certificate ${id}`
+            `Access denied: User ${userId} (${userRole}) cannot access certificate ${id}`,
           );
           return res.status(403).send("Access denied");
         }
@@ -322,7 +349,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
   // Try to serve default.png if specific thumbnail not found
   const defaultPath = path.join(
     __dirname,
-    "../../../public/thumbnails/default.png"
+    "../../../public/thumbnails/default.png",
   );
 
   if (fs.existsSync(defaultPath)) {

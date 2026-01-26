@@ -26,6 +26,7 @@ const UserSchema = new mongoose.Schema({
       "psas",
       "club-officer",
       "senior-management",
+      "club-adviser",
       "mis",
       "evaluator",
       "guest-speaker",
@@ -158,6 +159,8 @@ UserSchema.statics.getUserTypeFromEmail = function (email) {
     return "club-officer";
   } else if (emailPrefix.includes("senior-management")) {
     return "senior-management";
+  } else if (emailPrefix.includes("club-adviser")) {
+    return "club-adviser";
   } else if (emailPrefix.includes("mis")) {
     return "mis";
   }

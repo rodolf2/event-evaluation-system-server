@@ -4,8 +4,46 @@ const SystemSettings = require("../../models/SystemSettings");
 
 const AnalysisService = require("../../services/analysis/analysisService");
 const ThumbnailService = require("../../services/thumbnail/thumbnailService");
+const SharedReport = require("../../models/SharedReport");
 const mongoose = require("mongoose");
 const { cache, invalidateCache } = require("../../utils/cache");
+
+/**
+ * Helper to check if a user has access to a shared report
+ */
+const checkSharedReportAccess = async (reportId, user) => {
+  // PSAS, MIS, and Club Officers always have access (they create/manage reports)
+  if (
+    user.role === "psas" ||
+    user.role === "mis" ||
+    user.role === "club-officer"
+  ) {
+    return true;
+  }
+
+  // For other roles, check if shared and not expired
+  // Use case-insensitive email matching
+  const userEmailLower = user.email?.toLowerCase();
+  const sharedReport = await SharedReport.findOne({
+    reportId,
+  });
+
+  if (!sharedReport) return false;
+
+  // Check if user's email is in the sharedWith list (case-insensitive)
+  const isSharedWithUser = sharedReport.sharedWith.some(
+    (recipient) => recipient.email?.toLowerCase() === userEmailLower,
+  );
+
+  if (!isSharedWithUser) return false;
+
+  // Check expiration
+  if (sharedReport.expiresAt && new Date(sharedReport.expiresAt) < new Date()) {
+    return false;
+  }
+
+  return true;
+};
 
 /**
  * Get dynamic quantitative data with filtering and date range
@@ -17,6 +55,16 @@ const getDynamicQuantitativeData = async (req, res) => {
       req.query;
 
     const userId = req.user._id;
+
+    // Check shared access if necessary
+    const hasAccess = await checkSharedReportAccess(reportId, req.user);
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You do not have permission to view this report or it has expired",
+      });
+    }
 
     // Find the form
     const form = await Form.findById(reportId).populate(
@@ -206,6 +254,16 @@ const getDynamicQualitativeData = async (req, res) => {
     } = req.query;
 
     const userId = req.user._id;
+
+    // Check shared access if necessary
+    const hasAccess = await checkSharedReportAccess(reportId, req.user);
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You do not have permission to view this report or it has expired",
+      });
+    }
 
     // Check system settings for anonymity
     const settings = await SystemSettings.getSettings();
@@ -659,6 +717,16 @@ const getDynamicQualitativeData = async (req, res) => {
 const getDynamicCommentsData = async (req, res) => {
   try {
     const { reportId } = req.params;
+
+    // Check shared access if necessary
+    const hasAccess = await checkSharedReportAccess(reportId, req.user);
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You do not have permission to view this report or it has expired",
+      });
+    }
 
     // Check system settings for anonymity
     const settings = await SystemSettings.getSettings();

@@ -13,7 +13,16 @@ exports.getSchoolAdmins = async (req, res) => {
     const users = await User.find({
       $or: [
         {
-          role: { $in: ["school-admin", "senior-management"] },
+          role: {
+            $in: [
+              "school-admin",
+              "senior-management",
+              "club-adviser",
+              "club-officer",
+              "evaluator",
+              "guest-speaker",
+            ],
+          },
           isActive: true,
         },
         { role: "mis", "permissions.canViewReports": true, isActive: true },
@@ -45,7 +54,7 @@ exports.getSchoolAdmins = async (req, res) => {
 exports.shareReport = async (req, res) => {
   try {
     const { reportId } = req.params;
-    const { schoolAdmins, reportTitle } = req.body;
+    const { schoolAdmins, reportTitle, expiresAt } = req.body;
     const sharedBy = req.user._id; // From auth middleware
     const sharedByUser = req.user;
 
@@ -60,6 +69,37 @@ exports.shareReport = async (req, res) => {
       });
     }
 
+    const hasGuest = schoolAdmins.some((admin) =>
+      ["evaluator", "guest-speaker"].includes(admin.role),
+    );
+
+    let expirationDate = null;
+
+    if (hasGuest) {
+      if (!expiresAt) {
+        return res.status(400).json({
+          message: "Please provide an expiration date for guest access",
+        });
+      }
+
+      expirationDate = new Date(expiresAt);
+      const now = new Date();
+      const minExpiration = new Date(now);
+      minExpiration.setMonth(now.getMonth() + 6);
+      const maxExpiration = new Date(now);
+      maxExpiration.setFullYear(now.getFullYear() + 1);
+
+      if (expirationDate < minExpiration || expirationDate > maxExpiration) {
+        return res.status(400).json({
+          message:
+            "Guest expiration must be between 6 months and 1 year from now",
+        });
+      }
+    } else if (expiresAt) {
+      // If expiresAt is provided even for staff, we can use it, but it's not mandatory
+      expirationDate = new Date(expiresAt);
+    }
+
     // Check if already shared with these admins, if so update
     let sharedReport = await SharedReport.findOne({ reportId });
 
@@ -68,6 +108,7 @@ exports.shareReport = async (req, res) => {
       sharedReport.sharedWith = schoolAdmins;
       sharedReport.sharedBy = sharedBy;
       sharedReport.sharedAt = new Date();
+      sharedReport.expiresAt = expirationDate;
       await sharedReport.save();
     } else {
       // Create new shared report
@@ -76,6 +117,7 @@ exports.shareReport = async (req, res) => {
         eventId: reportId, // Using reportId as eventId for now
         sharedWith: schoolAdmins,
         sharedBy,
+        expiresAt: expirationDate,
       });
     }
 
@@ -83,7 +125,9 @@ exports.shareReport = async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const emailPromises = schoolAdmins.map(async (admin) => {
       try {
-        const reportUrl = `${frontendUrl}/senior-management/reports/${reportId}`;
+        const reportUrl = `${frontendUrl}/${
+          admin.role === "club-adviser" ? "club-adviser" : "senior-management"
+        }/reports/${reportId}`;
         const htmlContent = generateSharedReportEmailHtml({
           recipientName: admin.name || admin.email,
           sharedByName: sharedByUser.name || sharedByUser.email,
@@ -196,25 +240,36 @@ exports.getSharedReports = async (req, res) => {
   try {
     const userEmail = req.user.email;
     const Form = require("../../models/Form");
+    const Report = require("../../models/Report");
 
-    // Find all reports shared with this user's email
+    // Find all reports shared with this user's email that haven't expired
     const sharedReports = await SharedReport.find({
       "sharedWith.email": userEmail,
+      $or: [
+        { expiresAt: null },
+        { expiresAt: { $exists: false } },
+        { expiresAt: { $gt: new Date() } },
+      ],
     }).populate("sharedBy", "name email");
 
     // Fetch the actual form/report data for each shared report
     const reportsWithDetails = await Promise.all(
       sharedReports.map(async (sharedReport) => {
         const form = await Form.findById(sharedReport.reportId).select(
-          "title description eventName thumbnail status createdAt updatedAt",
+          "title description eventName status createdAt updatedAt",
         );
+
+        // Try to get thumbnail from the Report model
+        const report = await Report.findOne({
+          formId: sharedReport.reportId,
+        }).select("thumbnail");
 
         return {
           id: sharedReport.reportId,
           formId: sharedReport.reportId,
           title: form?.title || form?.eventName || "Shared Report",
           description: form?.description || "",
-          thumbnail: form?.thumbnail || null,
+          thumbnail: report?.thumbnail || null,
           status: form?.status || "shared",
           sharedBy: sharedReport.sharedBy,
           sharedAt: sharedReport.sharedAt,

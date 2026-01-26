@@ -270,6 +270,7 @@ const analyticsRoutes = require("./api/routes/analyticsRoutes");
 const reportsRoutes = require("./api/routes/reports");
 const misRoutes = require("./api/routes/misRoutes");
 const personnelRoutes = require("./api/routes/personnelRoutes");
+const lexiconRoutes = require("./api/routes/lexiconRoutes");
 
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/certificates", certificateRoutes);
@@ -288,6 +289,7 @@ app.use("/api/mis", misRoutes);
 app.use("/api/thumbnails", require("./api/routes/thumbnailRoutes"));
 app.use("/api/guest", require("./api/routes/guestRoutes"));
 app.use("/api/settings", require("./api/routes/settingsRoutes"));
+app.use("/api/lexicon", lexiconRoutes);
 
 // Test endpoint for email functionality (protected) - Disabled: module not found
 // app.use(

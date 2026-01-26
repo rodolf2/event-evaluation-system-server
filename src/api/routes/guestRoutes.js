@@ -3,7 +3,7 @@ const router = express.Router();
 const GuestToken = require("../../models/GuestToken");
 const Form = require("../../models/Form");
 const { requireAuth, requireRole } = require("../../middlewares/auth");
-const sendEmail = require("../../utils/email");
+const { sendEmail } = require("../../utils/email");
 const multer = require("multer");
 const csv = require("csv-parser");
 const fs = require("fs");
@@ -87,7 +87,7 @@ const generateGuestAccessEmailHtml = ({
 router.post(
   "/generate-token",
   requireAuth,
-  requireRole(["psas", "superadmin"]),
+  requireRole(["psas", "superadmin", "club-officer"]),
   async (req, res) => {
     try {
       const { email, name, reportId, expirationDays = 48 } = req.body;
@@ -158,14 +158,14 @@ router.post(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // POST /api/guest/generate-tokens - Generate tokens from CSV
 router.post(
   "/generate-tokens",
   requireAuth,
-  requireRole(["psas", "superadmin"]),
+  requireRole(["psas", "superadmin", "club-officer"]),
   upload.single("csvFile"),
   async (req, res) => {
     try {
@@ -253,7 +253,7 @@ router.post(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // POST /api/guest/validate-token - Validate a token (public)
@@ -367,7 +367,7 @@ router.get("/report/:token", async (req, res) => {
 router.get(
   "/tokens/:reportId",
   requireAuth,
-  requireRole(["psas", "superadmin"]),
+  requireRole(["psas", "superadmin", "club-officer"]),
   async (req, res) => {
     try {
       const { reportId } = req.params;
@@ -403,14 +403,14 @@ router.get(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // DELETE /api/guest/revoke/:tokenId - Revoke a token
 router.delete(
   "/revoke/:tokenId",
   requireAuth,
-  requireRole(["psas", "superadmin"]),
+  requireRole(["psas", "superadmin", "club-officer"]),
   async (req, res) => {
     try {
       const { tokenId } = req.params;
@@ -438,21 +438,21 @@ router.delete(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // POST /api/guest/send-email/:tokenId - Send access email
 router.post(
   "/send-email/:tokenId",
   requireAuth,
-  requireRole(["psas", "superadmin"]),
+  requireRole(["psas", "superadmin", "club-officer"]),
   async (req, res) => {
     try {
       const { tokenId } = req.params;
 
       const guestToken = await GuestToken.findById(tokenId).populate(
         "reportId",
-        "title"
+        "title",
       );
 
       if (!guestToken) {
@@ -504,7 +504,7 @@ router.post(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // POST /api/guest/revoke-token - Revoke by token string (legacy support)
@@ -539,7 +539,7 @@ router.post(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // GET /api/guest/event-tokens - Get tokens by event (legacy support)
@@ -585,7 +585,7 @@ router.get(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // ============================================
@@ -646,7 +646,7 @@ router.post(
         eventId: form.eventId,
         expiresAt,
         expirationDays: Math.ceil(
-          (expiresAt - new Date()) / (1000 * 60 * 60 * 24)
+          (expiresAt - new Date()) / (1000 * 60 * 60 * 24),
         ),
         createdBy: req.user._id,
       });
@@ -676,7 +676,7 @@ router.post(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // POST /api/guest/evaluator/validate-token - Validate a token (public)
@@ -750,7 +750,7 @@ router.get("/evaluator/form/:token", async (req, res) => {
     const { token } = req.params;
 
     const evaluatorToken = await EvaluatorToken.findOne({ token }).populate(
-      "formId"
+      "formId",
     );
 
     if (!evaluatorToken) {
@@ -816,7 +816,7 @@ router.post("/evaluator/submit/:token", async (req, res) => {
     const { responses } = req.body;
 
     const evaluatorToken = await EvaluatorToken.findOne({ token }).populate(
-      "formId"
+      "formId",
     );
 
     if (!evaluatorToken) {
@@ -889,7 +889,7 @@ router.post(
 
       const evaluatorToken = await EvaluatorToken.findById(tokenId).populate(
         "formId",
-        "title"
+        "title",
       );
 
       if (!evaluatorToken) {
@@ -942,7 +942,7 @@ router.post(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // GET /api/guest/evaluator/tokens/:formId - List tokens for a form
@@ -987,7 +987,7 @@ router.get(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 // DELETE /api/guest/evaluator/revoke/:tokenId - Revoke a token
@@ -1022,7 +1022,7 @@ router.delete(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 module.exports = router;
