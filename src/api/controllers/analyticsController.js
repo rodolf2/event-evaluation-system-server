@@ -27,39 +27,64 @@ const getFormAnalytics = async (req, res) => {
       } for form ${formId}`
     );
 
-    // Find the form - only creator can view analytics
-    const form = await Form.findOne({
-      _id: formId,
-      createdBy: userId,
-    }).populate("createdBy", "name email");
+    // Find the form - creator can always view
+    // Other authorized roles (MIS, School Admin, etc.) can also view if they have the right role (checked by middleware)
+    let form = await Form.findOne({ _id: formId }).populate("createdBy", "name email");
 
     if (!form) {
       return res.status(404).json({
         success: false,
-        message:
-          "Form not found or you don't have permission to view its analytics",
+        message: "Form not found",
       });
     }
 
-    // Calculate recorded responses from the official attendee list
-    const respondedAttendees = form.attendeeList
+    // Permission check: If not creator, must be an authorized role (MIS, PSAS, etc.)
+    // Note: requireRole middleware already filters allowed roles for this route,
+    // so we just need to ensure the user isn't a student trying to peek at others' forms
+    const isCreator = form.createdBy && form.createdBy._id.toString() === userId.toString();
+    const isAuthorizedRole = ["psas", "senior-management", "mis", "school-admin", "club-officer"].includes(req.user.role);
+
+    if (!isCreator && !isAuthorizedRole) {
+      return res.status(403).json({
+        success: false,
+        message: "You don't have permission to view this form's analytics",
+      });
+    }
+
+    // Calculate recorded unique respondents from the official attendee list
+    const uniqueInvitedRespondents = form.attendeeList
       ? form.attendeeList.filter((attendee) => attendee.hasResponded).length
       : 0;
 
-    // Calculate total responses received
-    const totalResponses = form.responses ? form.responses.length : 0;
+    // Calculate total responses received (submissions)
+    const totalSubmissions = form.responses ? form.responses.length : 0;
 
-    // Guest responses are those that don't match anyone in the attendee list
-    // (This works because only people in the attendee list can have hasResponded = true)
-    const guestResponses = Math.max(0, totalResponses - respondedAttendees);
+    // To improve accuracy, we should distinguish between guest responses and invited ones.
+    // However, since we favor anonymity, we use a heuristic for now:
+    // Any response beyond the unique count of invited respondents is either a duplicate or a guest.
+    // In a future update, we'll tag submissions as 'isGuest' or 'isDuplicate' at submission time.
 
-    // Initial attendees from CSV/selection
-    const initialAttendeesCount = form.attendeeList
-      ? form.attendeeList.length
-      : 0;
+    // Total attendees = (Unique invited people who were invited) + (Heuristic for guests)
+    // For now, if no attendee list exists, all responses are "guests".
+    const initialAttendeesCount = form.attendeeList ? form.attendeeList.length : 0;
 
-    // Total participants includes both initial attendees and any guests who responded
-    const totalAttendees = initialAttendeesCount + guestResponses;
+    // If the form has an attendee list, we assume respondents not in it are guests.
+    // If it doesn't have an attendee list (e.g. pure public form), all responses are guests.
+    let guestResponses = 0;
+    if (initialAttendeesCount > 0) {
+      // Heuristic: guestResponses are those that don't match anyone in attendee list.
+      // Since we don't store email for anonymity, we'll use a safer heuristic:
+      // total - (responses from invited). But we don't know who responded from invited except the flag.
+      // So guestResponses = max(0, totalSubmissions - uniqueInvitedRespondents)
+      // NOTE: This still counts duplicate submissions as guests! 
+      // We will fix this in formsController by tagging guest responses.
+      guestResponses = Math.max(0, totalSubmissions - uniqueInvitedRespondents);
+    } else {
+      guestResponses = totalSubmissions;
+    }
+
+    const totalAttendees = initialAttendeesCount + (initialAttendeesCount > 0 ? guestResponses : 0);
+    const totalResponses = totalSubmissions;
 
     // Calculate response rate based on the expanded participant pool
     const responseRate =
@@ -68,7 +93,7 @@ const getFormAnalytics = async (req, res) => {
         : 0;
 
     // Calculate remaining non-responses
-    const remainingNonResponses = totalAttendees - totalResponses;
+    const remainingNonResponses = Math.max(0, initialAttendeesCount - uniqueInvitedRespondents);
 
     // Analyze responses for sentiment and breakdown
     let responseAnalysis;

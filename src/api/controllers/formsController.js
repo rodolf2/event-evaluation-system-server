@@ -1564,6 +1564,15 @@ const uploadAttendeeList = [
 
       await form.save();
 
+      // Invalidate analytics cache for this form
+      try {
+        const { invalidateCache } = require("../../utils/cache");
+        invalidateCache(`analytics_form_${id}`);
+        console.log(`[CACHE] Invalidated analytics cache for form ${id} after attendee list upload`);
+      } catch (cacheError) {
+        console.warn("[CACHE] Failed to invalidate analytics cache:", cacheError.message);
+      }
+
       // Clean up uploaded file
       try {
         fs.unlinkSync(req.file.path);
