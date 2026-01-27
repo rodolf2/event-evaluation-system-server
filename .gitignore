@@ -8,3 +8,4 @@
 
 # Secrets/tokens
 /tokens
+.cache/
