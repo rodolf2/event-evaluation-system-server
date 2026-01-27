@@ -33,6 +33,9 @@ services:
         sync: false
       - key: EMAIL_PASS
         sync: false
+      # Puppeteer configuration - disabled on Render due to Chrome installation issues
+      - key: ENABLE_PUPPETEER
+        value: "false"
       # Puppeteer cache directory - must match .puppeteerrc.cjs configuration
       - key: PUPPETEER_CACHE_DIR
         value: /opt/render/project/puppeteer
