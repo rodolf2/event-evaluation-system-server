@@ -425,28 +425,31 @@ class FormsService {
                                   high = 5,
                                   lowLabel = "Poor",
                                   highLabel = "Excellent";
-                                if (
-                                  questionType === 5 &&
-                                  qData[4] &&
-                                  Array.isArray(qData[4]) &&
-                                  qData[4].length >= 2
-                                ) {
-                                  const scaleData = qData[4];
-                                  if (
-                                    scaleData[0] &&
-                                    Array.isArray(scaleData[0]) &&
-                                    scaleData[0].length >= 2
-                                  ) {
-                                    low = scaleData[0][0] || 1;
-                                    high = scaleData[0][1] || 5;
-                                  }
-                                  if (
-                                    scaleData[1] &&
-                                    Array.isArray(scaleData[1]) &&
-                                    scaleData[1].length >= 2
-                                  ) {
-                                    lowLabel = scaleData[1][0] || "Poor";
-                                    highLabel = scaleData[1][1] || "Excellent";
+
+                                if (questionType === 5) {
+                                  // Attempt to extract scale labels even if structure varies slightly
+                                  if (qData[4] && Array.isArray(qData[4])) {
+                                    const scaleData = qData[4];
+
+                                    // Try to find range
+                                    if (
+                                      scaleData[0] &&
+                                      Array.isArray(scaleData[0]) &&
+                                      scaleData[0].length >= 2
+                                    ) {
+                                      low = parseInt(scaleData[0][0]) || 1;
+                                      high = parseInt(scaleData[0][1]) || 5;
+                                    }
+
+                                    // Try to find labels (permissive)
+                                    // Look for array of strings which indicates labels
+                                    for (let i = 1; i < scaleData.length; i++) {
+                                      if (Array.isArray(scaleData[i]) && scaleData[i].length >= 2 && typeof scaleData[i][0] === 'string') {
+                                        lowLabel = scaleData[i][0] || "Poor";
+                                        highLabel = scaleData[i][scaleData[i].length - 1] || "Excellent";
+                                        break;
+                                      }
+                                    }
                                   }
                                 }
 
@@ -459,9 +462,31 @@ class FormsService {
                                   5: "scale",
                                   6: "multiple_choice", // Multiple choice grid
                                   7: "multiple_choice", // Checkbox grid
-                                  9: "date",
                                   10: "time",
+                                  18: "scale",
                                 };
+
+                                // Handle Type 18 specifically for options/scale
+                                if (questionType === 18) {
+                                  if (qData[4] && Array.isArray(qData[4]) && qData[4].length > 0) {
+                                    const innerData = qData[4][0];
+                                    if (innerData && Array.isArray(innerData) && innerData.length > 1) {
+                                      const rawOptions = innerData[1];
+                                      if (Array.isArray(rawOptions)) {
+                                        options = rawOptions.map(o => Array.isArray(o) ? o[0] : o).filter(Boolean);
+                                        const nums = options.map(Number).filter(n => !isNaN(n));
+                                        if (nums.length > 0) {
+                                          nums.sort((a, b) => a - b);
+                                          low = nums[0];
+                                          high = nums[nums.length - 1];
+                                          // Clear labels for "Numeric Ratings"
+                                          lowLabel = "";
+                                          highLabel = "";
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
 
                                 extractedQuestions.push({
                                   title: title.trim(),
@@ -479,6 +504,37 @@ class FormsService {
                                   highLabel: highLabel,
                                 });
                                 questionFound = true;
+                              }
+                            }
+
+                            // --- INFERENCE LOGIC: Detect Scale disguised as Multiple Choice ---
+                            // Check if the filtered question might actually be a scale
+                            if (questionFound) {
+                              const lastQ = extractedQuestions[extractedQuestions.length - 1];
+                              if (
+                                (lastQ.type === 'multiple_choice' || lastQ.type === 'short_answer') &&
+                                lastQ.options &&
+                                lastQ.options.length >= 3 &&
+                                lastQ.options.length <= 11
+                              ) {
+                                const isNumeric = lastQ.options.every(opt => !isNaN(parseInt(opt)) && isFinite(opt));
+                                if (isNumeric) {
+                                  const nums = lastQ.options.map(Number).sort((a, b) => a - b);
+                                  const min = nums[0];
+                                  const max = nums[nums.length - 1];
+
+                                  const isSequential = nums.every((val, i, arr) => i === 0 || (val - arr[i - 1]) === 1);
+
+                                  if (isSequential) {
+                                    // Update the last extracted question
+                                    lastQ.type = 'scale';
+                                    lastQ.low = min;
+                                    lastQ.high = max;
+                                    // Clear labels to force "Numeric Ratings" behavior
+                                    lastQ.lowLabel = "";
+                                    lastQ.highLabel = "";
+                                  }
+                                }
                               }
                             }
 

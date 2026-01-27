@@ -97,12 +97,12 @@ const formSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      maxlength: [200, "Title cannot exceed 200 characters"],
+      maxlength: [1000, "Title cannot exceed 1000 characters"],
     },
     description: {
       type: String,
       trim: true,
-      maxlength: [1000, "Description cannot exceed 1000 characters"],
+      maxlength: [5000, "Description cannot exceed 5000 characters"],
     },
     googleFormId: {
       type: String,

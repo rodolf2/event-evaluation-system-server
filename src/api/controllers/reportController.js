@@ -194,7 +194,7 @@ const getDynamicQuantitativeData = async (req, res) => {
       averageRating:
         filteredScaleResponses.length > 0
           ? filteredScaleResponses.reduce((sum, r) => sum + r.value, 0) /
-            filteredScaleResponses.length
+          filteredScaleResponses.length
           : 0,
       lastUpdated: new Date().toISOString(),
     };
@@ -280,9 +280,8 @@ const getDynamicQualitativeData = async (req, res) => {
 
     // Check cache for live data requests (not snapshot)
     if (req.query.useSnapshot !== "true") {
-      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${
-        startDate || ""
-      }_${endDate || ""}_${limit}`;
+      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${startDate || ""
+        }_${endDate || ""}_${limit}`;
       const cachedData = cache.get(cacheKey);
       if (cachedData) {
         console.log(`[REPORT] Cache HIT for qualitative data: ${reportId}`);
@@ -352,11 +351,22 @@ const getDynamicQualitativeData = async (req, res) => {
       });
     }
 
-    // Extract text responses
-    const textResponses = extractTextResponses(responses);
+    // Build question type map for filtering
+    const questionTypeMap = {};
+    (form.questions || []).forEach((q) => {
+      questionTypeMap[q._id.toString()] = q.type;
+      questionTypeMap[q.title] = q.type;
+    });
 
-    // Perform sentiment analysis
-    const analysis = await AnalysisService.analyzeResponses(responses);
+    // Extract text responses with type filtering
+    const textResponses = extractTextResponses(responses, questionTypeMap);
+
+    // Perform sentiment analysis with type filtering
+    const analysis = await AnalysisService.analyzeResponses(
+      responses,
+      true,
+      questionTypeMap,
+    );
 
     // Filter by sentiment if specified
     let filteredTextResponses = textResponses;
@@ -509,9 +519,9 @@ const getDynamicQualitativeData = async (req, res) => {
         const avgRating =
           responseCount > 0
             ? questionResponses.reduce(
-                (sum, r) => sum + (parseInt(r.answer) || 0),
-                0,
-              ) / responseCount
+              (sum, r) => sum + (parseInt(r.answer) || 0),
+              0,
+            ) / responseCount
             : 0;
 
         questionBreakdown.push({
@@ -690,9 +700,8 @@ const getDynamicQualitativeData = async (req, res) => {
 
     // Cache the qualitative data for 10 minutes (600 seconds)
     if (req.query.useSnapshot !== "true") {
-      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${
-        startDate || ""
-      }_${endDate || ""}_${limit}`;
+      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${startDate || ""
+        }_${endDate || ""}_${limit}`;
       cache.set(cacheKey, responseData, 600);
       console.log(`[REPORT] Cached qualitative data for: ${reportId}`);
     }
@@ -1002,22 +1011,31 @@ const getAllReportsWithLiveData = async (req, res) => {
         const averageRating =
           scaleResponses.length > 0
             ? scaleResponses.reduce((sum, r) => sum + r.value, 0) /
-              scaleResponses.length
+            scaleResponses.length
             : 0;
 
         // Get recent responses (last 7 days)
         const recentResponses = form.responses
           ? form.responses.filter((response) => {
-              const responseDate = new Date(response.submittedAt);
-              return (
-                responseDate >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-              );
-            }).length
+            const responseDate = new Date(response.submittedAt);
+            return (
+              responseDate >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+            );
+          }).length
           : 0;
+
+        // Build question type map for filtering
+        const questionTypeMap = {};
+        (form.questions || []).forEach((q) => {
+          questionTypeMap[q._id.toString()] = q.type;
+          questionTypeMap[q.title] = q.type;
+        });
 
         // Perform sentiment analysis (use Python for consistency)
         const responseAnalysis = await AnalysisService.analyzeResponses(
           form.responses || [],
+          true,
+          questionTypeMap,
         );
         const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
           positive: { count: 0, percentage: 0 },
@@ -1148,8 +1166,16 @@ const generateReport = async (req, res) => {
 
     // Perform analysis and generate report data
     // Perform sentiment analysis (use Python for consistency)
+    const questionTypeMap = {};
+    (form.questions || []).forEach((q) => {
+      questionTypeMap[q._id.toString()] = q.type;
+      questionTypeMap[q.title] = q.type;
+    });
+
     const responseAnalysis = await AnalysisService.analyzeResponses(
       form.responses || [],
+      true,
+      questionTypeMap,
     );
     const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
       positive: { count: 0, percentage: 0 },
@@ -1162,7 +1188,7 @@ const generateReport = async (req, res) => {
     const averageRating =
       scaleResponses.length > 0
         ? scaleResponses.reduce((sum, r) => sum + r.value, 0) /
-          scaleResponses.length
+        scaleResponses.length
         : 0;
 
     // Generate chart data
@@ -1214,7 +1240,7 @@ const generateReport = async (req, res) => {
       dataSnapshot: {
         responses: form.responses || [],
         scaleResponses: scaleResponses,
-        textResponses: extractTextResponses(form.responses || []),
+        textResponses: extractTextResponses(form.responses || [], questionTypeMap),
         analytics: {
           sentimentBreakdown,
           quantitativeData: {
@@ -1302,12 +1328,20 @@ function extractScaleResponses(responses) {
 /**
  * Extract text responses from form responses
  */
-function extractTextResponses(responses) {
+function extractTextResponses(responses, questionTypeMap = null) {
   const textResponses = [];
 
   responses.forEach((response) => {
     if (response.responses) {
       response.responses.forEach((item) => {
+        // Apply question type filter if available
+        if (questionTypeMap) {
+          const qType =
+            questionTypeMap[item.questionId] ||
+            questionTypeMap[item.questionTitle];
+          if (qType !== "paragraph" && qType !== "short_answer") return;
+        }
+
         // Check if this is a text response
         if (typeof item.answer === "string" && item.answer.trim().length > 0) {
           textResponses.push({

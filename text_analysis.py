@@ -54,7 +54,7 @@ class MultilingualSentimentAnalyzer:
             
             # Recommendations
             'recommend': 1.5, 'recommended': 1.5, 'highly recommend': 2,
-            'irecommend ko': 1.5, 'must attend': 2
+            'irecommend ko': 1.5, 'must attend': 2, 'yes': 1, 'oo': 1, 'sige': 0.5
         }
 
         self.tagalog_negative = {
@@ -108,7 +108,8 @@ class MultilingualSentimentAnalyzer:
             # Boredom and tiredness
             'bored': -0.7, 'tired': -0.6, 'exhausted': -0.7,
             'napagod': -0.6, 'naumay': -0.7, 'nagsawa': -0.7,
-            'nakakabore': -0.8, 'nakakaumay': -0.8, 'nakakasawa': -0.7
+            'nakakabore': -0.8, 'nakakaumay': -0.8, 'nakakasawa': -0.7,
+            'no': -1, 'hindi': -1
         }
 
         # Common Filipino phrases for context

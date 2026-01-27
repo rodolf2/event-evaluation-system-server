@@ -23,8 +23,7 @@ const getFormAnalytics = async (req, res) => {
       });
     }
     console.log(
-      `[ANALYTICS] Cache ${
-        forceRefresh ? "SKIPPED (force refresh)" : "MISS"
+      `[ANALYTICS] Cache ${forceRefresh ? "SKIPPED (force refresh)" : "MISS"
       } for form ${formId}`
     );
 
@@ -74,8 +73,17 @@ const getFormAnalytics = async (req, res) => {
     // Analyze responses for sentiment and breakdown
     let responseAnalysis;
     try {
+      // Build question type map for filtering
+      const questionTypeMap = {};
+      (form.questions || []).forEach((q) => {
+        questionTypeMap[q._id.toString()] = q.type;
+        questionTypeMap[q.title] = q.type;
+      });
+
       responseAnalysis = await AnalysisService.analyzeResponses(
-        form.responses || []
+        form.responses || [],
+        true,
+        questionTypeMap,
       );
       console.log(
         `[ANALYTICS] Response analysis completed:`,
@@ -117,8 +125,7 @@ const getFormAnalytics = async (req, res) => {
         form.responses || []
       );
       console.log(
-        `[ANALYTICS] Response overview generated: ${
-          responseOverview.labels?.length || 0
+        `[ANALYTICS] Response overview generated: ${responseOverview.labels?.length || 0
         } data points`
       );
     } catch (overviewError) {
@@ -274,13 +281,13 @@ const getMyFormsAnalytics = async (req, res) => {
         averageResponseRate:
           analyticsSummary.length > 0
             ? Math.round(
-                (analyticsSummary.reduce(
-                  (sum, form) => sum + form.responseRate,
-                  0
-                ) /
-                  analyticsSummary.length) *
-                  100
-              ) / 100
+              (analyticsSummary.reduce(
+                (sum, form) => sum + form.responseRate,
+                0
+              ) /
+                analyticsSummary.length) *
+              100
+            ) / 100
             : 0,
       },
     });

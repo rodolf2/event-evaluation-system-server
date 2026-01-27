@@ -123,6 +123,7 @@ class GoogleFormsExtractorPuppeteer {
           extractionMethod: "FB_PUBLIC_LOAD_DATA",
           errors: [],
           logs: [],
+          rawDump: null // Placeholder for raw data export
         },
       };
 
@@ -139,6 +140,7 @@ class GoogleFormsExtractorPuppeteer {
         8: "section_header", // Section/Page break
         9: "date",
         10: "time",
+        18: "scale",
       };
 
       /**
@@ -170,7 +172,7 @@ class GoogleFormsExtractorPuppeteer {
               potentialTitle.trim().length > 0 &&
               typeof potentialType === "number" &&
               potentialType >= 0 &&
-              potentialType <= 10
+              potentialType <= 100 // Expanded to allow newer types like 18
             ) {
               foundQuestions.push(item);
               continue; // Don't recurse into this item, we've already processed it
@@ -193,7 +195,7 @@ class GoogleFormsExtractorPuppeteer {
         const itemId = q[0];
         const title = q[1];
         const description = q[2] || "";
-        const questionType = q[3] || 0;
+        let questionType = q[3] || 0;
         const optionsData = q[4];
 
         // Extract options
@@ -217,44 +219,124 @@ class GoogleFormsExtractorPuppeteer {
           });
         }
 
-        // Handle scale questions
+        // Handle scale questions (Type 5)
         let low = 1,
           high = 5,
           lowLabel = "Poor",
           highLabel = "Excellent";
-        if (
-          questionType === 5 &&
-          optionsData &&
-          Array.isArray(optionsData) &&
-          optionsData.length >= 2
-        ) {
-          const scaleData = optionsData;
-          if (
-            scaleData[0] &&
-            Array.isArray(scaleData[0]) &&
-            scaleData[0].length >= 2
-          ) {
-            low = scaleData[0][0] || 1;
-            high = scaleData[0][1] || 5;
-          }
-          if (
-            scaleData[1] &&
-            Array.isArray(scaleData[1]) &&
-            scaleData[1].length >= 2
-          ) {
-            lowLabel = scaleData[1][0] || "Poor";
-            highLabel = scaleData[1][1] || "Excellent";
+
+        if (questionType === 5) {
+          // Attempt to extract scale labels and range from optionsData
+          // Even if structure doesn't match perfectly, we identify it as a scale
+          if (optionsData && Array.isArray(optionsData) && optionsData.length >= 1) {
+            const scaleData = optionsData;
+            // Try to find range: often in index 0 e.g. ["1", "5"]
+            if (scaleData[0] && Array.isArray(scaleData[0]) && scaleData[0].length >= 2) {
+              // Sometimes it's strings "1", sometimes numbers
+              low = parseInt(scaleData[0][0]) || 1;
+              high = parseInt(scaleData[0][1]) || 5;
+            }
+
+            // Try to find labels: often in index 1 e.g. ["Low", "High"]
+            // OR sometimes in index 3 for newer forms
+            if (scaleData.length > 1) {
+              // Look for array of strings which indicates labels
+              for (let i = 1; i < scaleData.length; i++) {
+                if (Array.isArray(scaleData[i]) && scaleData[i].length >= 2 && typeof scaleData[i][0] === 'string') {
+                  lowLabel = scaleData[i][0] || "Poor";
+                  highLabel = scaleData[i][scaleData[i].length - 1] || "Excellent";
+                  break;
+                }
+              }
+            }
           }
         }
 
-        // Check if required
-        let isRequired = false;
-        if (optionsData && Array.isArray(optionsData)) {
-          optionsData.forEach((optArr) => {
-            if (Array.isArray(optArr) && optArr.length > 2 && optArr[2] === 1) {
-              isRequired = true;
+        // Handle Type 18 (Likely another form of Scale/Rating)
+        // Structure: q[4][0][1] contains options like [["1"], ["2"], ["3"], ["4"], ["5"]]
+        if (questionType === 18) {
+          questionType = 5; // Treat as scale
+
+          if (optionsData && Array.isArray(optionsData) && optionsData.length > 0) {
+            const innerData = optionsData[0]; // q[4][0]
+            if (innerData && Array.isArray(innerData) && innerData.length > 1) {
+              const rawOptions = innerData[1]; // q[4][0][1]
+              if (Array.isArray(rawOptions)) {
+                // Extract values
+                const extractedOptions = rawOptions.map(o => Array.isArray(o) ? o[0] : o).filter(Boolean);
+
+                // Check if they are numeric
+                const nums = extractedOptions.map(Number).filter(n => !isNaN(n));
+
+                if (nums.length > 0) {
+                  nums.sort((a, b) => a - b);
+                  low = nums[0];
+                  high = nums[nums.length - 1];
+
+                  // CRITICAL: Type 18 (Rating) should map to "Numeric Ratings" in frontend
+                  // "Numeric Ratings" is chosen if labels are missing.
+                  // So we must clear the default "Poor"/"Excellent" labels.
+                  lowLabel = "";
+                  highLabel = "";
+                }
+
+                // Populating options just in case
+                options = extractedOptions;
+              }
             }
-          });
+          }
+        }
+
+        // Check if required - It's often in q[4][0][2]
+        let isRequired = false;
+        if (optionsData && Array.isArray(optionsData) && optionsData.length > 0) {
+          const firstOptionGroup = optionsData[0];
+          if (Array.isArray(firstOptionGroup) && firstOptionGroup.length > 2) {
+            // 1 usually means required in Google's internal format
+            isRequired = firstOptionGroup[2] === 1;
+          }
+        }
+
+        // Check required in the main question array q[2]
+        // q structure: [id, title, description, type, options, ??, ??, ??, ??, ??, required?]
+
+        // --- INFERENCE LOGIC: Detect Scale disguised as Multiple Choice ---
+        // Some "Stars" or "Rating" questions come as Type 2 (Multiple Choice) or Type 4 (Dropdown) 
+        // with pure numeric options like ["1", "2", "3", "4", "5"]
+        if (
+          (questionType === 2 || questionType === 4 || questionType === 0) && // Multiple Match, Dropdown, or even Short Answer acting weird
+          options &&
+          options.length >= 3 && // Must have at least 3 options to be a meaningful scale
+          options.length <= 11 // Rarely scales go beyond 10 or 11
+        ) {
+          const isNumeric = options.every(opt => !isNaN(parseInt(opt)) && isFinite(opt));
+          // Also check if they are sequential integers?
+          // For now, simpler check: if all numeric, assume scale.
+          if (isNumeric) {
+            // infer correct low/high
+            const nums = options.map(Number).sort((a, b) => a - b);
+            const min = nums[0];
+            const max = nums[nums.length - 1];
+
+            // Check if sequential interval is roughly 1
+            const isSequential = nums.every((val, i, arr) => i === 0 || (val - arr[i - 1]) === 1);
+
+            if (isSequential) {
+              questionType = 5; // Override to scale
+              low = min;
+              high = max;
+              // Default labels if not explicitly found
+              lowLabel = lowLabel || "Low";
+              highLabel = highLabel || "High";
+            }
+          }
+        }
+
+        // Let's defer to the standard patterns found in findQuestionsRecursively or just default false
+
+        // Double check options extraction for non-scale
+        if (questionType !== 5 && (!options || options.length === 0)) {
+          // Try enabling options extraction for other types if we missed them
         }
 
         return {
@@ -284,6 +366,7 @@ class GoogleFormsExtractorPuppeteer {
               /FB_PUBLIC_LOAD_DATA_[^=]*=\s*(\[[\s\S]*?\]);/,
               /var\s+FB_PUBLIC_LOAD_DATA_\w+\s*=\s*(\[[\s\S]*?\]);/,
               /FB_PUBLIC_LOAD_DATA_\w+\s*=\s*(\[[\s\S]*?\]);\s*(?:var|function|<)/,
+              /FB_PUBLIC_LOAD_DATA_.*?=\s*(\[[\s\S]*?\]);/,
             ];
 
             let dataMatch = null;
@@ -295,6 +378,10 @@ class GoogleFormsExtractorPuppeteer {
             if (dataMatch && dataMatch[1]) {
               result.debugInfo.foundFBData = true;
               const parsedData = JSON.parse(dataMatch[1]);
+
+              // Assign raw data to result for saving in Node context
+              result.debugInfo.rawDump = parsedData;
+
               result.debugInfo.fbDataLength = Array.isArray(parsedData)
                 ? parsedData.length
                 : 0;
@@ -319,38 +406,13 @@ class GoogleFormsExtractorPuppeteer {
                 ) {
                   const questionsArray = metaData[1];
                   result.debugInfo.questionsDataLength = questionsArray.length;
+
+                  // Always use recursive search to find all questions regardless of nesting
+                  allQuestionItems = findQuestionsRecursively(questionsArray, 0, 10);
+
                   result.debugInfo.logs.push(
-                    `Found ${questionsArray.length} items in parsedData[1][1]`
+                    `Found ${allQuestionItems.length} questions using deep recursive search`
                   );
-
-                  // Try direct extraction from this array
-                  for (const q of questionsArray) {
-                    if (Array.isArray(q) && q.length >= 4) {
-                      const potentialType = q[3];
-                      if (
-                        typeof potentialType === "number" &&
-                        potentialType >= 0 &&
-                        potentialType <= 10
-                      ) {
-                        allQuestionItems.push(q);
-                      }
-                    }
-                  }
-
-                  // If direct extraction didn't find many questions, try recursive search
-                  if (allQuestionItems.length < 2) {
-                    result.debugInfo.logs.push(
-                      `Direct extraction found ${allQuestionItems.length} items, trying recursive search...`
-                    );
-                    allQuestionItems = findQuestionsRecursively(
-                      questionsArray,
-                      0,
-                      5
-                    );
-                    result.debugInfo.logs.push(
-                      `Recursive search found ${allQuestionItems.length} items`
-                    );
-                  }
                 }
 
                 // If still no questions, search the entire parsedData structure
@@ -358,7 +420,7 @@ class GoogleFormsExtractorPuppeteer {
                   result.debugInfo.logs.push(
                     `No questions in standard location, searching entire data structure...`
                   );
-                  allQuestionItems = findQuestionsRecursively(parsedData, 0, 6);
+                  allQuestionItems = findQuestionsRecursively(parsedData, 0, 10);
                   result.debugInfo.logs.push(
                     `Full recursive search found ${allQuestionItems.length} items`
                   );
@@ -585,6 +647,20 @@ class GoogleFormsExtractorPuppeteer {
               }
               if (options.length > 0) break;
             }
+          } else if (
+            element.querySelector('[role="radiogroup"]') ||
+            element.querySelector('.freebirdFormviewerComponentsQuestionScaleRoot') ||
+            element.getAttribute('role') === 'radiogroup'
+          ) {
+            // Explicitly handle Linear Scale / Radiogroup
+            questionType = "scale";
+            // Try to extract min/max labels if possible
+            // Usually first and last labels in the group
+            const labels = Array.from(element.querySelectorAll('label, .freebirdFormviewerComponentsQuestionScaleLabel'));
+            if (labels.length >= 2) {
+              // First label is usually low label, last is high
+            }
+          } else if (element.querySelector("select")) {
           } else if (element.querySelector("select")) {
             questionType = "multiple_choice";
             const selectOptions = element.querySelectorAll("option");
@@ -605,7 +681,7 @@ class GoogleFormsExtractorPuppeteer {
             element.textContent.includes("*") ||
             element.querySelector('[aria-required="true"]') !== null;
 
-          pageQuestions.push({
+          const question = {
             title: questionTitle,
             type: questionType,
             required: isRequired,
@@ -615,7 +691,37 @@ class GoogleFormsExtractorPuppeteer {
             high: 5,
             lowLabel: "Poor",
             highLabel: "Excellent",
-          });
+          };
+
+          // Use inferred type logic
+          if (question.type === "multiple_choice" && question.options.length >= 2) {
+            // Check if options look like a scale (numeric sequence)
+            const isNumericScale = question.options.every(opt => !isNaN(parseInt(opt)));
+            if (isNumericScale) {
+              const values = question.options.map(opt => parseInt(opt)).sort((a, b) => a - b);
+              // Check if sequential
+              let isSequential = true;
+              for (let i = 0; i < values.length - 1; i++) {
+                if (values[i + 1] !== values[i] + 1) isSequential = false;
+              }
+
+              if (isSequential) {
+                question.type = "scale";
+                question.low = values[0];
+                question.high = values[values.length - 1];
+                // Try to find labels like "Poor", "Excellent"
+                // These are often in separate elements near the ends of the radio group
+                // But simplified default is fine for now
+              }
+            }
+          }
+
+          // Force check for specific scale structure if not yet identified
+          if (element.querySelector('[aria-label*="Linear scale"]')) {
+            question.type = "scale";
+          }
+
+          pageQuestions.push(question);
         });
 
         return {
@@ -663,9 +769,9 @@ class GoogleFormsExtractorPuppeteer {
       }
     }
 
-    result.debugInfo.logs.push(`Total pages navigated: ${pageNumber}`);
+    result.debugInfo.logs.push(`Total pages navigated: ${pageNumber} `);
     result.debugInfo.logs.push(
-      `Total questions extracted: ${result.questions.length}`
+      `Total questions extracted: ${result.questions.length} `
     );
 
     return result;

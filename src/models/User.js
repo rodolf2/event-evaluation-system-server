@@ -61,13 +61,9 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
-  country: {
+  position: {
     type: String,
-    default: "Philippines",
-  },
-  timezone: {
-    type: String,
-    default: "Asia/Manila",
+    default: null,
   },
   muteNotifications: {
     type: Boolean,

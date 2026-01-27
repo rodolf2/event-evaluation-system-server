@@ -121,8 +121,6 @@ router.get(
         profilePicture: req.user.profilePicture,
         department: req.user.department,
         position: req.user.position,
-        country: req.user.country,
-        timezone: req.user.timezone,
         muteNotifications: req.user.muteNotifications,
         muteReminders: req.user.muteReminders,
         hasCompletedOnboarding: req.user.hasCompletedOnboarding,
@@ -245,8 +243,6 @@ router.post("/guest", async (req, res) => {
         profilePicture: user.profilePicture,
         department: user.department,
         position: user.position,
-        country: user.country,
-        timezone: user.timezone,
         muteNotifications: user.muteNotifications,
         muteReminders: user.muteReminders,
         hasCompletedOnboarding: user.hasCompletedOnboarding,
@@ -291,8 +287,6 @@ router.post("/guest", async (req, res) => {
           profilePicture: user.profilePicture,
           department: user.department,
           position: user.position,
-          country: user.country,
-          timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
           hasCompletedOnboarding: user.hasCompletedOnboarding,
@@ -332,8 +326,6 @@ router.get("/profile", requireAuth, async (req, res) => {
           profilePicture: user.profilePicture,
           department: user.department,
           position: user.position,
-          country: user.country,
-          timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
           hasCompletedOnboarding: user.hasCompletedOnboarding,
@@ -363,8 +355,6 @@ router.put("/profile", requireAuth, async (req, res) => {
     const {
       department,
       position,
-      country,
-      timezone,
       muteNotifications,
       muteReminders,
       onboardingStep,
@@ -374,8 +364,6 @@ router.put("/profile", requireAuth, async (req, res) => {
 
     if (department !== undefined) user.department = department;
     if (position !== undefined) user.position = position;
-    if (country !== undefined) user.country = country;
-    if (timezone !== undefined) user.timezone = timezone;
     if (muteNotifications !== undefined)
       user.muteNotifications = muteNotifications;
     if (muteReminders !== undefined) user.muteReminders = muteReminders;
@@ -400,8 +388,6 @@ router.put("/profile", requireAuth, async (req, res) => {
           profilePicture: user.profilePicture,
           department: user.department,
           position: user.position,
-          country: user.country,
-          timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
           hasCompletedOnboarding: user.hasCompletedOnboarding,
@@ -471,8 +457,6 @@ router.post("/profile/picture", requireAuth, async (req, res) => {
           profilePicture: user.profilePicture,
           department: user.department,
           position: user.position,
-          country: user.country,
-          timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
           hasCompletedOnboarding: user.hasCompletedOnboarding,
@@ -526,8 +510,6 @@ router.delete("/profile/picture", async (req, res) => {
           profilePicture: user.profilePicture,
           department: user.department,
           position: user.position,
-          country: user.country,
-          timezone: user.timezone,
           muteNotifications: user.muteNotifications,
           muteReminders: user.muteReminders,
           hasCompletedOnboarding: user.hasCompletedOnboarding,

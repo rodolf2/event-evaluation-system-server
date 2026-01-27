@@ -812,7 +812,11 @@ module.exports = {
  * @param {boolean} usePython - Whether to use Python for analysis (default: true)
  * @returns {Object} Analysis results with sentiment breakdown
  */
-async function analyzeResponses(responses, usePython = true) {
+async function analyzeResponses(
+  responses,
+  usePython = true,
+  questionTypeMap = null,
+) {
   if (!responses || responses.length === 0) {
     return {
       sentimentBreakdown: {
@@ -848,7 +852,15 @@ async function analyzeResponses(responses, usePython = true) {
             if (trimmed.length < 3) return;
 
             // This is actual text content
-            textContents.push(trimmed);
+            if (questionTypeMap) {
+              const qType =
+                questionTypeMap[q.questionId] || questionTypeMap[q.questionTitle];
+              if (qType === "paragraph" || qType === "short_answer") {
+                textContents.push(trimmed);
+              }
+            } else {
+              textContents.push(trimmed);
+            }
           }
 
           // Handle array answers (multiple choice selections - skip for sentiment)
@@ -947,14 +959,14 @@ async function analyzeResponses(responses, usePython = true) {
   } catch (error) {
     console.error("Error in analyzeResponses:", error.message);
     // Fallback to simple JavaScript analysis
-    return fallbackAnalyzeResponses(responses);
+    return fallbackAnalyzeResponses(responses, questionTypeMap);
   }
 }
 
 /**
  * Fallback JavaScript analysis for form responses
  */
-function fallbackAnalyzeResponses(responses) {
+function fallbackAnalyzeResponses(responses, questionTypeMap = null) {
   console.log("Using JavaScript fallback for response analysis");
 
   let positiveCount = 0;
@@ -1122,6 +1134,13 @@ function fallbackAnalyzeResponses(responses) {
           if (trimmed.length < 3) return;
 
           const textContent = trimmed.toLowerCase();
+
+          // Apply question type filter if available
+          if (questionTypeMap) {
+            const qType =
+              questionTypeMap[q.questionId] || questionTypeMap[q.questionTitle];
+            if (qType !== "paragraph" && qType !== "short_answer") return;
+          }
 
           // Check for negation patterns
           const hasNegationPattern = negationPatterns.some((pattern) =>
@@ -1349,8 +1368,7 @@ async function analyzeCommentSentiment(text) {
     result = await analyzeSingleWithPython(cleanText, dbLexicon);
   } catch (error) {
     console.log(
-      `[SENTIMENT] Python failed for "${cleanText.substring(0, 30)}...": ${
-        error.message
+      `[SENTIMENT] Python failed for "${cleanText.substring(0, 30)}...": ${error.message
       }`,
     );
     // Fallback to JavaScript

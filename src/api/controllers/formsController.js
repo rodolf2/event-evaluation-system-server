@@ -101,9 +101,9 @@ const getAllForms = async (req, res) => {
     // Build search query
     const searchQuery = search
       ? {
-          createdBy: req.user._id,
-          title: { $regex: search, $options: "i" },
-        }
+        createdBy: req.user._id,
+        title: { $regex: search, $options: "i" },
+      }
       : { createdBy: req.user._id };
 
     const forms = await Form.find(searchQuery)
@@ -127,6 +127,7 @@ const getAllForms = async (req, res) => {
       eventStartDate: form.eventStartDate,
       eventEndDate: form.eventEndDate,
       createdBy: form.createdBy,
+      responseCount: form.responseCount || (form.responses ? form.responses.length : 0),
     }));
 
     res.status(200).json({
@@ -1008,9 +1009,8 @@ const publishForm = async (req, res) => {
     form.publishedAt = new Date();
 
     // Generate shareable link
-    const shareableLink = `${
-      process.env.CLIENT_URL || "http://localhost:3000"
-    }/form/${form._id}`;
+    const shareableLink = `${process.env.CLIENT_URL || "http://localhost:3000"
+      }/form/${form._id}`;
 
     form.shareableLink = shareableLink;
 
@@ -1357,8 +1357,7 @@ const submitFormResponse = async (req, res) => {
           }
         } catch (certError) {
           console.error(
-            `Error generating certificate for ${
-              respondentName || respondentEmail
+            `Error generating certificate for ${respondentName || respondentEmail
             }:`,
             certError,
           );
@@ -1783,8 +1782,7 @@ const getMyEvaluations = async (req, res) => {
         (a) => a.email && a.email.toLowerCase().trim() === userEmail,
       );
       console.log(
-        `  ${i + 1}. "${
-          form.title
+        `  ${i + 1}. "${form.title
         }" - Attendees: ${attendeeCount}, User assigned: ${hasUser}`,
       );
       if (attendeeCount > 0 && attendeeCount <= 3) {
