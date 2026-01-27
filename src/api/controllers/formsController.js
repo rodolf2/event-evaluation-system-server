@@ -1,5 +1,6 @@
 const Form = require("../../models/Form");
 const User = require("../../models/User"); // Import User model
+const Report = require("../../models/Report");
 const formsService = require("../../services/forms/formsService");
 const enhancedFormsExtractor = require("../../services/forms/enhancedFormsExtractor");
 const multer = require("multer");
@@ -744,6 +745,7 @@ const extractFormByUrl = async (req, res) => {
 };
 
 // POST /api/forms/upload-by-url - Upload a Google Forms URL and create a form from it
+// POST /api/forms/upload-by-url - Upload a Google Forms URL and create a form from it
 const uploadFormByUrl = async (req, res) => {
   try {
     const { url, createdBy } = req.body;
@@ -755,16 +757,66 @@ const uploadFormByUrl = async (req, res) => {
       });
     }
 
-    // Create form from Google Forms URL
-    const form = await formsService.createFormFromUrl({
+    // 1. Extract data using Enhanced Extractor (includes response scraping)
+    const extractedData = await enhancedFormsExtractor.extractDataFromUrl({
       url,
       createdBy,
     });
 
+    // 2. Create form from extracted data
+    // Use createFormFromData instead of createFormFromUrl to avoid re-extraction
+    const form = await formsService.createFormFromData({
+      extractedData,
+      createdBy,
+    });
+
+    // 3. If response data was scraped, create a Report
+    let report = null;
+    if (extractedData.scrapedResponseData && extractedData.scrapedResponseData.responseCount > 0) {
+      console.log(`📊 [Controller] Creating report for scraped responses...`);
+      const { responseCount, analytics } = extractedData.scrapedResponseData;
+
+      try {
+        report = new Report({
+          formId: form._id,
+          userId: createdBy,
+          title: `Report: ${form.title}`,
+          status: "published", // Immediately visible
+          isGenerated: true,
+          feedbackCount: responseCount,
+          // Calculate average rating if possible from analytics, otherwise default 0
+          averageRating: 0,
+          analytics: {
+            quantitativeData: {
+              totalResponses: responseCount,
+              totalAttendees: responseCount, // Assume 1:1 for anonymous forms
+              responseRate: 100, // 100% since we only know about responders
+            },
+            // Store raw scraped analytics for potential future processing
+            scrapedData: analytics
+          },
+          dataSnapshot: {
+            source: "google_forms_scrape",
+            scrapedAt: new Date(),
+            raw: analytics
+          }
+        });
+
+        await report.save();
+        console.log(`✅ [Controller] Created report: ${report._id} with ${responseCount} responses`);
+      } catch (reportError) {
+        console.error("❌ [Controller] Failed to create report:", reportError);
+        // Don't fail the request, just log it
+      }
+    }
+
     res.status(201).json({
       success: true,
-      message: "Form created from Google Forms URL",
-      data: { form },
+      message: "Form created from Google Forms URL" + (report ? " and report generated" : ""),
+      data: {
+        form,
+        reportId: report ? report._id : null
+      },
     });
   } catch (error) {
     console.error("Error creating form from URL:", error);

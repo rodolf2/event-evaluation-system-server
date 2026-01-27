@@ -33,3 +33,5 @@ services:
         sync: false
       - key: EMAIL_PASS
         sync: false
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/project/puppeteer

@@ -184,6 +184,32 @@ class FormsService {
     }
   }
 
+  // Create form from pre-extracted data
+  async createFormFromData({ extractedData, createdBy }) {
+    try {
+      // Assign a guaranteed unique googleFormId
+      const googleFormId = extractedData.googleFormId ||
+        "imported__" + new mongoose.Types.ObjectId().toHexString();
+
+      const form = new Form({
+        title: extractedData.title,
+        description: extractedData.description,
+        questions: extractedData.questions,
+        status: "draft",
+        createdBy: createdBy,
+        googleFormId: googleFormId,
+        uploadedLinks: extractedData.uploadedLinks || [],
+        sections: extractedData.sections || [],
+      });
+
+      await form.save();
+      return form;
+    } catch (error) {
+      console.error("Error creating form from data:", error);
+      throw error;
+    }
+  }
+
   // Extract data from Google Forms URL without creating form
   async extractDataFromUrl({ url, createdBy }) {
     try {

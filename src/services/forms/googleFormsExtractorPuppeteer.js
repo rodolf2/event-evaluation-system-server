@@ -27,6 +27,7 @@ class GoogleFormsExtractorPuppeteer {
    */
   async extractForm(url) {
     console.log(`\n🔍 [Puppeteer Extractor] Starting extraction for: ${url}`);
+    console.log(`   PUPPETEER_CACHE_DIR: ${process.env.PUPPETEER_CACHE_DIR || "Not set"}`);
 
     const browser = await puppeteer.launch({
       headless: true,
@@ -833,6 +834,180 @@ class GoogleFormsExtractorPuppeteer {
       return clicked;
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Extract responses from form analytics page
+   * @param {string} url - The Google Forms URL
+   * @returns {Promise<Object>} Extracted response data
+   */
+  async extractResponses(url) {
+    console.log(`\n🔍 [Puppeteer Extractor] Starting response extraction for: ${url}`);
+
+    // Convert viewform URL to viewanalytics
+    // e.g. https://docs.google.com/forms/d/e/.../viewform -> .../viewanalytics
+    let analyticsUrl = url;
+    if (url.includes("/viewform")) {
+      analyticsUrl = url.replace("/viewform", "/viewanalytics");
+    } else if (!url.includes("/viewanalytics")) {
+      // Try appending if it doesn't have either
+      if (url.endsWith("/")) {
+        analyticsUrl = url + "viewanalytics";
+      } else {
+        analyticsUrl = url + "/viewanalytics";
+      }
+    }
+
+    console.log(`🔗 [Puppeteer Extractor] Analytics URL: ${analyticsUrl}`);
+
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--disable-gpu",
+      ],
+    });
+
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1920, height: 1080 });
+      await page.setUserAgent(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      );
+
+      // Navigate to analytics page
+      // We don't block resources here as we might need charts to load (though we scrape text mostly)
+      await page.goto(analyticsUrl, {
+        waitUntil: "networkidle2",
+        timeout: 30000,
+      });
+
+      // Check if we were redirected to a login page or permission denied
+      const currentUrl = page.url();
+      if (currentUrl.includes("accounts.google.com") || currentUrl.includes("ServiceLogin")) {
+        console.warn("⚠️ [Puppeteer Extractor] Redirected to login. Analytics are likely private.");
+        return {
+          responseCount: 0,
+          analytics: {},
+          isPrivate: true
+        };
+      }
+
+      // Check for specific "You need permission" content
+      const content = await page.content();
+      if (content.includes("You need permission") || content.includes("You need access")) {
+        console.warn("⚠️ [Puppeteer Extractor] Access denied. Analytics are private.");
+        return {
+          responseCount: 0,
+          analytics: {},
+          isPrivate: true
+        };
+      }
+
+      // Extract response count
+      const responseCount = await page.evaluate(() => {
+        // Look for the big number at the top
+        // The structure varies, but often it's in a specific class or near "responses" text
+        const countElements = Array.from(document.querySelectorAll('div'));
+        const responseLabel = countElements.find(el => el.textContent.trim().toLowerCase() === 'responses');
+
+        if (responseLabel) {
+          // Usually the number is in a sibling or parent/child relationship
+          // This is a naive heuristic
+          const parent = responseLabel.parentElement;
+          if (parent) {
+            const number = parent.querySelector('.freebirdFormviewerViewAnalyticsAnalyticsPageSummaryCount');
+            if (number) return parseInt(number.textContent.replace(/,/g, '')) || 0;
+          }
+        }
+
+        // Try specific class for count
+        const countEl = document.querySelector('.freebirdFormviewerViewAnalyticsAnalyticsPageSummaryCount');
+        if (countEl) {
+          return parseInt(countEl.textContent.trim().replace(/,/g, '')) || 0;
+        }
+
+        // Try looking for "X responses" text
+        const bodyText = document.body.innerText;
+        const match = bodyText.match(/(\d+)\s+responses/i);
+        if (match) {
+          return parseInt(match[1]) || 0;
+        }
+
+        return 0;
+      });
+
+      console.log(`📊 [Puppeteer Extractor] Found ${responseCount} responses`);
+
+      // Extract basic analytics if available
+      // This is complex as Google Charts are canvas/svg often
+      // We'll try to get text summaries for each question
+      const analyticsData = await page.evaluate(() => {
+        const summaries = {};
+
+        // Find question blocks
+        // This selector is a guess based on common class names, might need adjustment
+        const questionBlocks = document.querySelectorAll('.freebirdFormviewerViewAnalyticsQuestionBaseRoot');
+
+        questionBlocks.forEach(block => {
+          const titleEl = block.querySelector('.freebirdFormviewerViewAnalyticsQuestionBaseTitle');
+          if (!titleEl) return;
+
+          const title = titleEl.textContent.trim();
+          const summaryData = {};
+
+          // Try to find bar chart labels and counts
+          const chartRows = block.querySelectorAll('.freebirdFormviewerViewAnalyticsChartBarRow');
+          if (chartRows.length > 0) {
+            const distribution = [];
+            chartRows.forEach(row => {
+              const label = row.querySelector('.freebirdFormviewerViewAnalyticsChartBarLabel')?.textContent?.trim();
+              const count = row.querySelector('.freebirdFormviewerViewAnalyticsChartBarCount')?.textContent?.trim();
+              if (label) {
+                distribution.push({ label, count: parseInt(count) || 0 });
+              }
+            });
+            summaryData.type = 'chart';
+            summaryData.distribution = distribution;
+          }
+
+          // Try to find text responses (if listed)
+          const text_responses = block.querySelectorAll('.freebirdFormviewerViewAnalyticsTextResponse');
+          if (text_responses.length > 0) {
+            const texts = [];
+            text_responses.forEach(tr => texts.push(tr.textContent.trim()));
+            summaryData.type = 'text';
+            summaryData.sampleResponses = texts.slice(0, 5); // Limit to 5
+          }
+
+          summaries[title] = summaryData;
+        });
+
+        return summaries;
+      });
+
+      return {
+        responseCount,
+        analytics: analyticsData,
+        isPrivate: false
+      };
+
+    } catch (error) {
+      console.error(`❌ [Puppeteer Extractor] Response extraction error: ${error.message}`);
+      // Don't fail the whole process just because analytics failed
+      return {
+        responseCount: 0,
+        analytics: {},
+        error: error.message
+      };
+    } finally {
+      await browser.close();
     }
   }
 }

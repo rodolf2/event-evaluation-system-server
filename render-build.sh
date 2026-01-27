@@ -30,6 +30,9 @@ echo "=== Installing npm dependencies ==="
 npm install
 
 echo "=== Installing Chrome for Puppeteer ==="
+# Ensure the cache directory exists
+export PUPPETEER_CACHE_DIR=/opt/render/project/puppeteer
+mkdir -p $PUPPETEER_CACHE_DIR
 npx puppeteer browsers install chrome
 
 echo "=== Build complete ==="

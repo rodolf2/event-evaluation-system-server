@@ -89,7 +89,7 @@ class EnhancedFormsExtractor {
         }
 
         // Return Puppeteer-extracted data in the expected format
-        return {
+        const result = {
           title: puppeteerData.title || "Imported Google Form",
           description:
             puppeteerData.description || "Form imported from Google Forms",
@@ -105,6 +105,22 @@ class EnhancedFormsExtractor {
             },
           ],
         };
+
+        // Attempt to scrape responses
+        try {
+          console.log(`🚀 [Enhanced Extractor] Attempting to scrape existing responses...`);
+          const responseData = await puppeteerExtractor.extractResponses(url);
+
+          if (responseData && responseData.responseCount > 0) {
+            console.log(`✅ [Enhanced Extractor] Found ${responseData.responseCount} existing responses`);
+            result.scrapedResponseData = responseData;
+          }
+        } catch (responseError) {
+          console.warn(`⚠️ [Enhanced Extractor] Failed to scrape responses: ${responseError.message}`);
+          // Continue without response data
+        }
+
+        return result;
       } else {
         console.log(
           `⚠️ [Enhanced Extractor] Puppeteer extracted 0 questions, falling back...`
@@ -136,8 +152,7 @@ class EnhancedFormsExtractor {
 
       console.log(`✅ [Enhanced Extractor] Axios/Cheerio extraction completed`);
       console.log(
-        `   Questions found: ${
-          originalData.questions ? originalData.questions.length : 0
+        `   Questions found: ${originalData.questions ? originalData.questions.length : 0
         }\n`
       );
 
