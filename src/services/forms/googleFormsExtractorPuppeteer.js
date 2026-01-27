@@ -28,6 +28,21 @@ class GoogleFormsExtractorPuppeteer {
   async extractForm(url) {
     console.log(`\n🔍 [Puppeteer Extractor] Starting extraction for: ${url}`);
     console.log(`   PUPPETEER_CACHE_DIR: ${process.env.PUPPETEER_CACHE_DIR || "Not set"}`);
+    console.log(`   Current working directory: ${process.cwd()}`);
+    console.log(`   __dirname: ${__dirname}`);
+
+    // Check if .puppeteerrc.cjs exists and what it resolves to
+    const path = require('path');
+    const fs = require('fs');
+    const puppeteerConfigPath = path.join(__dirname, '..', '..', '..', '.puppeteerrc.cjs');
+    console.log(`   Looking for .puppeteerrc.cjs at: ${puppeteerConfigPath}`);
+    console.log(`   .puppeteerrc.cjs exists: ${fs.existsSync(puppeteerConfigPath)}`);
+
+    if (fs.existsSync(puppeteerConfigPath)) {
+      const config = require(puppeteerConfigPath);
+      console.log(`   .puppeteerrc.cjs cacheDirectory: ${config.cacheDirectory}`);
+      console.log(`   Resolved cacheDirectory: ${path.resolve(config.cacheDirectory)}`);
+    }
 
     const browser = await puppeteer.launch({
       headless: true,
