@@ -40,7 +40,7 @@ const getRoleActivities = async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
 
     // Validate role
-    const validRoles = ['participant', 'psas', 'club-officer', 'school-admin', 'mis'];
+    const validRoles = ['participant', 'psas', 'club-officer', 'club-adviser', 'school-admin', 'mis'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,

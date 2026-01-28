@@ -46,6 +46,7 @@ router.post("/", async (req, res) => {
       "student",
       "psas",
       "club-officer",
+      "club-adviser",
       "senior-management",
       "mis",
     ];
@@ -105,6 +106,7 @@ router.post("/provision", async (req, res) => {
       "student",
       "psas",
       "club-officer",
+      "club-adviser",
       "senior-management",
       "mis",
     ];
@@ -240,6 +242,7 @@ router.put("/:id", async (req, res) => {
         "student",
         "psas",
         "club-officer",
+        "club-adviser",
         "senior-management",
         "mis",
       ];

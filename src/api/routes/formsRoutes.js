@@ -111,7 +111,11 @@ router.patch(
 );
 
 // DELETE /api/forms/:id - Delete a form (only psas can delete)
-router.delete("/:id", requireRole(["psas"]), formsController.deleteForm);
+router.delete(
+  "/:id",
+  requireRole(["psas", "club-officer"]),
+  formsController.deleteForm,
+);
 
 // POST /api/forms/:id/submit - Submit responses to a form (participants and club-officers can submit)
 router.post(

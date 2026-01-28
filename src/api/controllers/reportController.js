@@ -470,46 +470,92 @@ const getDynamicQualitativeData = async (req, res) => {
     // NEW: Build per-question breakdown
     const questionBreakdown = [];
     const questions = form.questions || [];
+    const allQuestionIds = questions.map((q) => q._id.toString());
+
+    // Initialize buckets for each question
+    const buckets = {};
+    questions.forEach((q) => {
+      buckets[q._id.toString()] = [];
+    });
+
+    // Bucket responses
+    responses.forEach((response) => {
+      // Track which questions have been "filled" by this specific response submission
+      // This prevents multiple "Untitled Question" answers from all dumping into the first "Untitled Question" bucket
+      const usedQuestionIds = new Set();
+
+      if (response.responses && Array.isArray(response.responses)) {
+        response.responses.forEach((ans) => {
+          let targetQuestionId = null;
+
+          // Strategy 1: Strict ID Match
+          if (ans.questionId && buckets[ans.questionId]) {
+            targetQuestionId = ans.questionId;
+          }
+          // Strategy 2: Title Match (Legacy Data Fallback)
+          // Only if strict match failed AND title matches an active question
+          else if (ans.questionTitle) {
+            // Find all questions with matching title
+            const candidates = questions.filter(
+              (q) => q.title === ans.questionTitle,
+            );
+
+            // Find the first candidate that hasn't been used yet by this response
+            const availableCandidate = candidates.find(
+              (q) => !usedQuestionIds.has(q._id.toString()),
+            );
+
+            if (availableCandidate) {
+              targetQuestionId = availableCandidate._id.toString();
+            }
+          }
+
+          // Assign to bucket if a target was found
+          if (targetQuestionId && buckets[targetQuestionId]) {
+            buckets[targetQuestionId].push({
+              answer: ans.answer,
+              respondentName: response.respondentName,
+              submittedAt: response.submittedAt,
+            });
+            // Mark this question as filled for this response
+            usedQuestionIds.add(targetQuestionId);
+          }
+        });
+      }
+    });
 
     questions.forEach((question) => {
       const questionId = question._id.toString();
       const questionTitle = question.title;
       const questionType = question.type;
 
-      // Get all responses for this specific question
-      const questionResponses = [];
-      responses.forEach((response) => {
-        if (response.responses && Array.isArray(response.responses)) {
-          response.responses.forEach((ans) => {
-            if (
-              ans.questionId === questionId ||
-              ans.questionTitle === questionTitle
-            ) {
-              questionResponses.push({
-                answer: ans.answer,
-                respondentName: response.respondentName,
-                submittedAt: response.submittedAt,
-              });
-            }
-          });
-        }
-      });
+      // Get all responses for this specific question from our buckets
+      const questionResponses = buckets[questionId] || [];
 
       const responseCount = questionResponses.length;
 
       if (questionType === "scale") {
         // For scale questions: show rating distribution
-        const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        const min = question.low || 1;
+        const max = question.high || 5;
+        const ratingCounts = {};
+
+        // Initialize counts dynamically
+        for (let i = min; i <= max; i++) {
+          ratingCounts[i] = 0;
+        }
+
         questionResponses.forEach((r) => {
           const rating = parseInt(r.answer) || 0;
-          if (rating >= 1 && rating <= 5) {
+          if (rating >= min && rating <= max) {
             ratingCounts[rating]++;
           }
         });
 
+        // Generate distribution array
         const ratingDistribution = Object.entries(ratingCounts).map(
           ([rating, count]) => ({
-            name: `${rating} Star`,
+            name: `${rating}`,
             value:
               responseCount > 0 ? Math.round((count / responseCount) * 100) : 0,
             count: count,
@@ -531,6 +577,7 @@ const getDynamicQualitativeData = async (req, res) => {
           responseCount,
           ratingDistribution,
           averageRating: Math.round(avgRating * 100) / 100,
+          scaleMax: max, // Include max scale for frontend display
         });
       } else if (
         questionType === "paragraph" ||
