@@ -18,6 +18,7 @@ exports.getSchoolAdmins = async (req, res) => {
               "school-admin",
               "senior-management",
               "club-adviser",
+              "psas",
               "club-officer",
               "evaluator",
               "guest-speaker",
@@ -125,9 +126,14 @@ exports.shareReport = async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const emailPromises = schoolAdmins.map(async (admin) => {
       try {
-        const reportUrl = `${frontendUrl}/${
-          admin.role === "club-adviser" ? "club-adviser" : "senior-management"
-        }/reports/${reportId}`;
+        let reportUrlPath = "senior-management";
+        if (admin.role === "psas") {
+          reportUrlPath = "psas";
+        } else if (admin.role === "club-adviser") {
+          reportUrlPath = "club-adviser";
+        }
+
+        const reportUrl = `${frontendUrl}/${reportUrlPath}/reports/${reportId}`;
         const htmlContent = generateSharedReportEmailHtml({
           recipientName: admin.name || admin.email,
           sharedByName: sharedByUser.name || sharedByUser.email,
@@ -217,9 +223,8 @@ exports.generatePDFReport = async (req, res) => {
     await browser.close();
 
     // Set response headers for file download
-    const filename = `evaluation-report-${
-      new Date().toISOString().split("T")[0]
-    }.pdf`;
+    const filename = `evaluation-report-${new Date().toISOString().split("T")[0]
+      }.pdf`;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Length", pdfBuffer.length);

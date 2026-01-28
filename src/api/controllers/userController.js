@@ -1,5 +1,6 @@
 const User = require("../../models/User");
 const { generateToken } = require("../../middlewares/auth");
+const AuditLog = require("../../models/AuditLog");
 
 // Create new user
 const createUser = async (req, res) => {
@@ -193,6 +194,7 @@ const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    console.log(`[UpdateUser] Updating user ${id} with:`, JSON.stringify(updates, null, 2));
 
     const user = await User.findById(id);
 
@@ -213,6 +215,10 @@ const updateUser = async (req, res) => {
         });
       }
     }
+
+    // Capture old values for logging
+    const oldRole = user.role;
+    const oldStatus = user.isActive;
 
     // Handle role elevation to club-officer with automatic expiration
     if (updates.role === "club-officer" && user.role !== "club-officer") {
@@ -242,12 +248,67 @@ const updateUser = async (req, res) => {
       updates.elevatedBy = null;
     }
 
-    // Update user fields
-    Object.keys(updates).forEach((key) => {
-      user[key] = updates[key];
-    });
+    // Handle permissions Map specifically to ensure persistence
+    if (updates.permissions && typeof updates.permissions === "object") {
+      Object.entries(updates.permissions).forEach(([key, value]) => {
+        user.permissions.set(key, value);
+      });
+      user.markModified("permissions");
+      delete updates.permissions;
+    }
+
+    // Explicitly set fields to ensure they are updated
+    if (updates.position !== undefined) user.position = updates.position;
+    if (updates.elevationDate !== undefined) user.elevationDate = updates.elevationDate;
+    if (updates.program !== undefined) user.program = updates.program;
+    if (updates.role !== undefined) user.role = updates.role;
+    if (updates.isActive !== undefined) user.isActive = updates.isActive;
+
+    // Update other user fields using .set() for any remaining fields
+    user.set(updates);
 
     const savedUser = await user.save();
+    console.log(`[UpdateUser] Saved user:`, JSON.stringify(savedUser.toObject(), null, 2));
+
+    // AUDIT LOGGING
+    // Log Role Change
+    if (updates.role && updates.role !== oldRole) {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "ROLE_CHANGE",
+        category: "user",
+        description: `Changed role of ${user.email} from ${oldRole} to ${updates.role}`,
+        severity: "warning",
+        metadata: {
+          targetId: user._id,
+          targetType: "User",
+          oldValue: oldRole,
+          newValue: updates.role,
+        },
+      });
+    }
+
+    // Log Status Change (Suspend/Activate)
+    if (updates.isActive !== undefined && updates.isActive !== oldStatus) {
+      const isActive = updates.isActive;
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: isActive ? "USER_ACTIVATED" : "USER_SUSPENDED",
+        category: "user",
+        description: `${isActive ? "Activated" : "Suspended"} user ${user.email}`,
+        severity: "warning",
+        metadata: {
+          targetId: user._id,
+          targetType: "User",
+          oldValue: oldStatus,
+          newValue: isActive,
+        },
+      });
+    }
 
     res.json({
       success: true,

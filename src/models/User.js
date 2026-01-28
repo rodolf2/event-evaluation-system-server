@@ -61,10 +61,6 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
-  position: {
-    type: String,
-    default: null,
-  },
   muteNotifications: {
     type: Boolean,
     default: false,
