@@ -10,6 +10,12 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
+# Environment variables for limited resource containers
+ENV OPENBLAS_NUM_THREADS=1
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV NLTK_DATA=/app/nltk_data
+
 # Copy package files first (better caching)
 COPY package*.json ./
 
@@ -24,7 +30,6 @@ RUN python3 -m venv /app/venv
 RUN /app/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # Create NLTK data directory and download data
-ENV NLTK_DATA=/app/nltk_data
 RUN mkdir -p /app/nltk_data
 RUN /app/venv/bin/python -c "import nltk; nltk.download('punkt', download_dir='/app/nltk_data'); nltk.download('punkt_tab', download_dir='/app/nltk_data'); nltk.download('averaged_perceptron_tagger', download_dir='/app/nltk_data'); nltk.download('wordnet', download_dir='/app/nltk_data'); print('NLTK data downloaded successfully')"
 
