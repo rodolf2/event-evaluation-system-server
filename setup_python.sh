@@ -29,9 +29,12 @@ pip install --upgrade pip
 echo "Installing Python dependencies..."
 pip install -r requirements.txt
 
-# Download textblob corpora
-echo "Downloading TextBlob corpora..."
-python3 -c "import nltk; nltk.download('punkt'); nltk.download('wordnet'); from textblob import TextBlob; print('TextBlob setup complete!')"
+# Create local nltk_data directory for persistence on Render
+mkdir -p ./nltk_data
+
+# Download textblob corpora to local directory
+echo "Downloading TextBlob corpora to ./nltk_data..."
+python3 -c "import nltk; nltk.download('punkt', download_dir='./nltk_data'); nltk.download('wordnet', download_dir='./nltk_data'); nltk.download('punkt_tab', download_dir='./nltk_data'); from textblob import TextBlob; print('TextBlob setup complete!')"
 
 echo "Python environment setup complete!"
 echo "To activate the virtual environment in the future, run: source venv/bin/activate"

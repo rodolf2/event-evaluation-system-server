@@ -15,121 +15,60 @@ class MultilingualSentimentAnalyzer:
     def __init__(self, custom_lexicon=None):
         # Enhanced Tagalog sentiment lexicons with phrase patterns
         self.tagalog_positive = {
-            # Basic positive words (weight: 1)
-            'maganda': 1, 'mabuti': 1, 'masaya': 1, 'nakakatuwa': 1, 'galing': 1,
-            'bilib': 1, 'husay': 1, 'magaling': 1, 'astig': 1, 'sulit': 1,
-            
-            # Strong positive (weight: 2)
-            'ang ganda': 2, 'napakaganda': 2, 'sobrang ganda': 2,
-            'napakagaling': 2, 'sobrang galing': 2, 'grabe ang ganda': 2,
-            'sobrang saya': 2, 'napakasaya': 2, 'the best': 2,
-            
-            # Intensifiers (weight: 1.5)
-            'napaka': 1.5, 'sobra': 1.5, 'super': 1.5, 'very': 1.5,
-            'labis': 1.5, 'lubos': 1.5, 'grabe': 1.5,
-            
-            # Gratitude and appreciation
-            'thank you': 1, 'salamat': 1, 'maraming salamat': 2, 'thank you so much': 2,
-            'grateful': 1, 'appreciate': 1, 'appreciated': 1, 'thankful': 1,
-            
-            # Effectiveness indicators
-            'mahusay': 1, 'maayos': 1, 'effective': 1, 'efficient': 1,
-            'successful': 1, 'tagumpay': 1, 'productive': 1, 'organized': 1,
-            'well-planned': 1, 'excellent': 2, 'outstanding': 2, 'perfect': 2,
-            'well-organized': 1.5, 'well-prepared': 1.5, 'well-managed': 1.5,
-            'smooth': 1, 'professional': 1,
-            
-            # Learning and satisfaction
+            # Basic positive words and roots (weight: 1)
+            'maganda': 1, 'ganda': 1, 'mabuti': 1, 'buti': 1,
+            'masaya': 1, 'saya': 1, 'nakakatuwa': 1, 'tuwa': 1,
+            'galing': 1, 'magaling': 1, 'bilib': 1, 'husay': 1,
+            'mahusay': 1, 'astig': 1, 'sulit': 1, 'panalo': 1,
+            'maayos': 1, 'ayos': 1, 'linis': 1, 'malinis': 1,
+            'effective': 1, 'efficient': 1, 'successful': 1, 'tagumpay': 1,
+            'productive': 1, 'organized': 1, 'smooth': 1, 'professional': 1,
             'natuto': 1, 'natutunan': 1, 'nakatulong': 1, 'helpful': 1,
-            'informative': 1.5, 'enlightening': 1, 'satisfied': 1,
-            'enjoy': 1.5, 'enjoyed': 1.5, 'enjoyable': 1, 'fun': 1, 'interesting': 1,
-            'educational': 1, 'insightful': 1.5, 'valuable': 1.5,
-            'useful': 1, 'inspiring': 1.5, 'motivating': 1,
-            'engaging': 1, 'memorable': 1.5, 'unforgettable': 2,
-            
-            # Filipino slang positive
-            'solid': 1, 'swabe': 1, 'oks': 0.5, 'goods': 1, 'nice': 1,
-            'lupet': 1.5, 'bet ko': 1, 'love it': 1.5, 'loved it': 1.5,
-            'worth it': 1.5, 'sulit sa oras': 1.5,
-            
-            # Recommendations
-            'recommend': 1.5, 'recommended': 1.5, 'highly recommend': 2,
-            'irecommend ko': 1.5, 'must attend': 2, 'yes': 1, 'oo': 1, 'sige': 0.5
+            'satisfied': 1, 'fun': 1, 'interesting': 1, 'educational': 1,
+            'useful': 1, 'motivating': 1, 'solid': 1, 'swabe': 1,
+            'oks': 0.5, 'goods': 1, 'nice': 1, 'yes': 1, 'oo': 1,
+            'sige': 0.5, 'salamat': 1, 'grateful': 1, 'appreciate': 1,
+            'appreciated': 1, 'thankful': 1
         }
 
         self.tagalog_negative = {
-            # Basic negative words (weight: -1)
-            'masama': -1, 'pangit': -1, 'nakakaasar': -1, 'nakakainis': -1,
+            # Basic negative words and roots (weight: -1)
+            'masama': -1, 'sama': -1, 'pangit': -1, 'panget': -1,
+            'nakakaasar': -1, 'asar': -1, 'nakakainis': -1, 'inis': -1,
             'galit': -1, 'ayaw': -1, 'badtrip': -1, 'nakakagalit': -1,
-            'boring': -1, 'nakakaantok': -1, 'walang kwenta': -2,
-
-            # Strong negative (weight: -2)
-            'napakapangit': -2, 'sobrang pangit': -2, 'napakamasama': -2,
-            'sobrang masama': -2, 'napakagalit': -2, 'waste of time': -2,
-            'sayang': -1, 'hindi maganda': -1.5,
-
-            # Disappointment
+            'boring': -1, 'nakakaantok': -1, 'sayang': -1,
             'disappointed': -1, 'disappointing': -1, 'nakakadismaya': -1,
-            'dismayado': -1, 'nabigo': -1, 'failed': -1,
-
-            # Problems and issues
-            'problem': -0.7, 'issue': -0.7, 'problema': -0.7, 'mali': -0.8,
-            'fail': -1.2, 'failed': -1.5, 'failure': -1.5, 'nag-fail': -1.2,
+            'dismaya': -1, 'dismayado': -1, 'nabigo': -1, 'failed': -1,
+            'problem': -0.7, 'problema': -0.7, 'mali': -0.8,
             'kulang': -0.7, 'kakulangan': -0.8, 'incomplete': -0.7, 'poor': -1,
-            'crowded': -0.8, 'difficult': -0.8, 'nahirapan': -0.8, 'hard': -0.7, 'challenging': -0.6,
-
-            # Frustration and anger
+            'crowded': -0.8, 'difficult': -0.8, 'nahirapan': -0.8, 'hard': -0.7,
             'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
-            'bad': -1, 'terrible': -1.5, 'awful': -1.5, 'worst': -2,
-            'horrible': -1.5, 'pathetic': -1.5, 'nakakaasar': -1,
-
-            # Organization issues
-            'disorganized': -1, 'chaotic': -1, 'confusing': -0.8, 'unclear': -0.7,
-            'messy': -0.8, 'magulo': -0.8, 'noisy': -0.6, 'uncomfortable': -0.7,
-            
-            # Event-specific negative (NEW)
-            'rushed': -0.8, 'rushing': -0.8, 'nagmamadali': -0.7,
-            'overcrowded': -0.8, 'masikip': -0.7, 'mainit': -0.6,
-            'late': -0.7, 'delayed': -0.7, 'matagal': -0.6,
-            'long': -0.5, 'short': -0.5, 'maikli': -0.5,
-            'too fast': -0.7, 'too slow': -0.7, 'mabagal': -0.6,
-            'unprepared': -0.8, 'unprofessional': -1, 'hindi prepared': -0.8,
-            'lacking': -0.7, 'inadequate': -0.8, 'insufficient': -0.7,
-            'mediocre': -0.6, 'average': -0.4, 'meh': -0.5,
-            'underwhelming': -0.7, 'unimpressive': -0.6,
-            'forgettable': -0.6, 'nothing special': -0.5,
-            
-            # Mild criticism
-            'could be better': -0.5, 'needs improvement': -0.5,
-            'room for improvement': -0.5, 'pwede pa': -0.4,
-            'not well': -0.6, 'not good': -0.7, 'not great': -0.6,
-            'hindi okay': -0.6, 'hindi ayos': -0.6, 'hindi maayos': -0.7,
-            
-            # Boredom and tiredness
-            'bored': -0.7, 'tired': -0.6, 'exhausted': -0.7,
-            'napagod': -0.6, 'naumay': -0.7, 'nagsawa': -0.7,
-            'nakakabore': -0.8, 'nakakaumay': -0.8, 'nakakasawa': -0.7,
-            'no': -1, 'hindi': -1
+            'bad': -1, 'worst': -2, 'disorganized': -1, 'chaotic': -1,
+            'magulo': -0.8, 'noisy': -0.6, 'late': -0.7, 'delayed': -0.7,
+            'matagal': -0.6, 'mabagal': -0.6, 'unprepared': -0.8,
+            'unprofessional': -1, 'mediocre': -0.6, 'meh': -0.5,
+            'reklamo': -1, 'bagsak': -1.5, 'lungkot': -1, 'nakakalungkot': -1
         }
 
         # Common Filipino phrases for context
         self.positive_phrases = [
-            'very good', 'ang ganda', 'sobrang ganda', 'ang galing',
+            'very good', 'ang ganda', 'sobrang ganda', 'sobra ganda', 'ang galing',
             'maraming salamat', 'thank you so much', 'napakaganda',
             'napakagaling', 'the best', 'well done', 'job well done',
             'great job', 'excellent work', 'love it', 'loved it',
-            'masaya', 'napakasaya', 'sobrang saya', 'ang saya',
-            'maayos', 'napakaayos', 'sobrang ayos'
+            'napakasaya', 'sobrang saya', 'sobra saya', 'ang saya',
+            'napakaayos', 'sobrang ayos', 'ang husay', 'napakatahimik',
+            'well-organized', 'well-prepared', 'well-managed', 'well-planned'
         ]
 
         self.negative_phrases = [
             'not good', 'not great', 'hindi maganda', 'walang kwenta',
             'waste of time', 'sayang lang', 'hindi ako satisfied',
             'bad experience', 'poor quality', 'very bad', 'so bad',
-            'masama', 'napakamasama', 'sobrang masama', 'ang sama',
-            'pangit', 'napakapangit', 'sobrang pangit',
+            'napakamasama', 'sobrang masama', 'ang sama',
+            'napakapangit', 'sobrang pangit', 'hindi prepared',
             'hindi naging maayos', 'hindi maayos', 'hindi okay',
-            'hindi ayos', 'di maayos', 'di maganda'
+            'hindi ayos', 'di maayos', 'di maganda', 'waste of energy'
         ]
 
         # Neutral words that might indicate mixed sentiment
@@ -149,13 +88,13 @@ class MultilingualSentimentAnalyzer:
         
         # Negation words
         self.negations = [
-            'not', 'no', 'never', 'hindi', 'wala', 'walang', 'di', 'di ko'
+            'not', 'no', 'never', 'hindi', 'wala', 'walang', 'di', 'di ko', 'hinde'
         ]
         
         # Intensifiers and diminishers
         self.intensifiers = [
             'very', 'really', 'extremely', 'super', 'sobra', 'sobrang',
-            'napaka', 'labis', 'grabe', 'talaga', 'so', 'too'
+            'napaka', 'labis', 'grabe', 'talaga', 'so', 'too', 'ganado', 'masyado'
         ]
         
         self.diminishers = [
@@ -342,9 +281,9 @@ class MultilingualSentimentAnalyzer:
             negative_score = 0
             neutral_count = 0
             constructive_criticism_count = 0
+            emoticon_score = 0
 
             # Check for emoticons first
-            emoticon_score = 0
             for emoticon in self.positive_emoticons:
                 if emoticon in text:
                     emoticon_score += 0.5
@@ -352,48 +291,96 @@ class MultilingualSentimentAnalyzer:
                 if emoticon in text:
                     emoticon_score -= 0.5
 
-            # Check for positive and negative phrases first (higher weight)
-            for phrase in self.positive_phrases:
-                if phrase in text_lower:
-                    positive_score += 2.5
-
-            for phrase in self.negative_phrases:
-                if phrase in text_lower:
-                    negative_score += 2.5
-
             # Check for neutral indicators
             for neutral in self.neutral_indicators:
                 if neutral in text_lower:
                     neutral_count += 1
 
-            # Sentence-level analysis for mixed sentiments
+            # Helper for phrase/word negation check
+            def is_negated_context(text, start_idx):
+                if start_idx <= 0: return False
+                # Check preceding 20 characters for negation words
+                context = text[max(0, start_idx-20):start_idx].lower()
+                context_words = re.findall(r"\w+", context)
+                return any(neg in context_words for neg in self.negations)
+
+            # Check for positive and negative phrases (higher weight)
+            # Sort phrases by length (descending) to match longest phrases first
+            sorted_pos_phrases = sorted(self.positive_phrases, key=len, reverse=True)
+            sorted_neg_phrases = sorted(self.negative_phrases, key=len, reverse=True)
+            
+            used_phrase_ranges = []
+
+            for phrase in sorted_pos_phrases:
+                if phrase in text_lower:
+                    # Use word boundaries for phrase matching to avoid partial matches
+                    pattern = r'\b' + re.escape(phrase) + r'\b'
+                    for m in re.finditer(pattern, text_lower):
+                        start_idx = m.start()
+                        phrase_range = range(start_idx, m.end())
+                        
+                        # Skip if this range is already covered by a longer phrase
+                        if any(start_idx in r for r in used_phrase_ranges):
+                            continue
+                            
+                        if is_negated_context(text_lower, start_idx):
+                            negative_score += 2.0
+                        else:
+                            positive_score += 2.5
+                        used_phrase_ranges.append(phrase_range)
+
+            for phrase in sorted_neg_phrases:
+                if phrase in text_lower:
+                    pattern = r'\b' + re.escape(phrase) + r'\b'
+                    for m in re.finditer(pattern, text_lower):
+                        start_idx = m.start()
+                        phrase_range = range(start_idx, m.end())
+                        
+                        if any(start_idx in r for r in used_phrase_ranges):
+                            continue
+                            
+                        if is_negated_context(text_lower, start_idx):
+                            positive_score += 2.0
+                        else:
+                            negative_score += 2.5
+                        used_phrase_ranges.append(phrase_range)
+
+            # Word-by-word analysis with context
+            words_data = list(re.finditer(r"[\w']+", text_lower))
+            words = [m.group() for m in words_data]
+            
+            # Sentence-level analysis (moved up to avoid NameError if used later)
             sentences = [s.strip() for s in text.replace('!', '.').replace('?', '.').split('.') if s.strip()]
             sentence_sentiments = []
 
             for sentence in sentences:
                 sent_analysis = self.analyze_sentence_sentiment(sentence)
                 sentence_sentiments.append(sent_analysis)
-
                 if sent_analysis['is_constructive']:
                     constructive_criticism_count += 1
 
-            # Word-by-word analysis with context
-            words = text_lower.split()
-            for i, word in enumerate(words):
+            # Word-level loop
+            for i, match in enumerate(words_data):
+                word = match.group()
+                word_start = match.start()
+
+                # Skip if this word is part of an already analyzed phrase
+                if any(word_start in r for r in used_phrase_ranges):
+                    continue
+
                 # Check for negation before the word
-                is_negated = False
-                # Check for negation within previous 2 words
-                for j in range(max(0, i-2), i):
-                    if words[j] in self.negations:
-                        is_negated = True
-                        break
+                is_negated = is_negated_context(text_lower, word_start)
 
                 # Check for intensifiers before the word
                 multiplier = 1.0
-                if i > 0 and words[i-1] in self.intensifiers:
-                    multiplier = 1.5
-                elif i > 0 and words[i-1] in self.diminishers:
-                    multiplier = 0.5
+                # Check previous 2 words for intensifiers/diminishers
+                for j in range(max(0, i-2), i):
+                    if words[j] in self.intensifiers:
+                        multiplier = 2.0 # Stronger boost
+                        break
+                    elif words[j] in self.diminishers:
+                        multiplier = 0.5
+                        break
 
                 # Stemming
                 stemmed = self.stem_tagalog(word)
@@ -402,14 +389,14 @@ class MultilingualSentimentAnalyzer:
                 if word in self.tagalog_positive or stemmed in self.tagalog_positive:
                     score = (self.tagalog_positive.get(word) or self.tagalog_positive.get(stemmed)) * multiplier
                     if is_negated:
-                        negative_score += score  # Flip to negative
+                        negative_score += score
                     else:
                         positive_score += score
 
                 elif word in self.tagalog_negative or stemmed in self.tagalog_negative:
                     score = abs(self.tagalog_negative.get(word) or self.tagalog_negative.get(stemmed)) * multiplier
                     if is_negated:
-                        positive_score += score  # Flip to positive (double negative)
+                        positive_score += score
                     else:
                         negative_score += score
 
@@ -419,39 +406,32 @@ class MultilingualSentimentAnalyzer:
             elif emoticon_score < 0:
                 negative_score += abs(emoticon_score)
 
-            # Analyze sentence balance for mixed sentiment detection
+            # Analyze sentence balance
             positive_sentences = sum(1 for s in sentence_sentiments if s['balance'] > 0.5)
             negative_sentences = sum(1 for s in sentence_sentiments if s['balance'] < -0.5)
             neutral_sentences = len(sentence_sentiments) - positive_sentences - negative_sentences
 
-            # Calculate final sentiment with improved mixed sentiment logic
+            # Calculate final sentiment
             total_score = positive_score - negative_score
 
-            # Enhanced sentiment determination
+            # Sentiment determination
             has_mixed_sentiment = (positive_sentences > 0 and negative_sentences > 0) or constructive_criticism_count > 0
             has_significant_negative = negative_score >= 1.0
             score_ratio = abs(total_score) / max(positive_score + negative_score, 1)
 
-            if neutral_count >= 1 and positive_score < 1.5 and negative_score < 1.0:
-                # Neutral indicators present with low positive/negative scores
-                sentiment = "neutral"
-                confidence = 0.7
-            elif has_mixed_sentiment and (constructive_criticism_count >= 2 or has_significant_negative):
-                # Mixed sentiment with constructive criticism or significant negatives
+            if neutral_count >= 1 and positive_score < 1.0 and negative_score < 1.0:
                 sentiment = "neutral"
                 confidence = 0.75
-            elif has_mixed_sentiment and score_ratio < 0.6:
-                # Close scores with mixed elements
+            elif has_mixed_sentiment and (constructive_criticism_count >= 2 or has_significant_negative):
                 sentiment = "neutral"
-                confidence = 0.7
-            elif total_score >= 0.8:
+                confidence = 0.8
+            elif total_score >= 0.7: # Lowered threshold slightly for Tagalog
                 sentiment = "positive"
-                confidence = min(0.5 + (total_score / 5), 0.95)
-            elif total_score <= -0.8:
+                confidence = min(0.6 + (total_score / 10), 0.95)
+            elif total_score <= -0.7:
                 sentiment = "negative"
-                confidence = min(0.5 + (abs(total_score) / 5), 0.95)
+                confidence = min(0.6 + (abs(total_score) / 10), 0.95)
             else:
-                # Close scores
                 sentiment = "neutral"
                 confidence = 0.65
 
@@ -578,14 +558,23 @@ class MultilingualSentimentAnalyzer:
 
         # Detect language
         lang_info = self.detect_language(cleaned_text)
+        text_lower = cleaned_text.lower()
+
+        # Custom check for strong Tagalog indicators
+        has_strong_tagalog = any(phrase in text_lower for phrase in self.positive_phrases + self.negative_phrases)
+        if not has_strong_tagalog:
+            # Check for words (with boundaries to avoid partial matches)
+            words = re.findall(r"\w+", text_lower)
+            has_strong_tagalog = any(word in self.tagalog_positive or word in self.tagalog_negative for word in words)
 
         # Choose analysis method based on language
-        if lang_info['language'] == 'en' and lang_info['is_reliable']:
+        # Be more skeptical of English detection for Tagalog words that might be misclassified
+        if lang_info['language'] == 'en' and lang_info['is_reliable'] and not has_strong_tagalog:
             result = self.analyze_english_sentiment(cleaned_text)
-        elif lang_info['language'] == 'tl' and lang_info['is_reliable']:
+        elif lang_info['language'] == 'tl':
             result = self.analyze_tagalog_sentiment(cleaned_text)
         else:
-            # Mixed or uncertain language
+            # Mixed, uncertain, or English with Tagalog tokens
             result = self.analyze_mixed_sentiment(cleaned_text)
 
         # Add language info and emoji removal info to result

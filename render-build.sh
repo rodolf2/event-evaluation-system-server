@@ -29,9 +29,12 @@ fi
 echo "=== Installing npm dependencies ==="
 npm install
 
-echo "=== Chrome installation skipped (Puppeteer disabled) ==="
-# Chrome installation is skipped because Puppeteer is disabled on Render
-# To enable Puppeteer, set ENABLE_PUPPETEER=true in render.yaml and uncomment below:
-# npx puppeteer browsers install chrome
+echo "=== Setting up Python environment ==="
+chmod +x setup_python.sh
+./setup_python.sh
+
+echo "=== Installing Chrome for Puppeteer ==="
+# Chrome installation for Puppeteer extraction
+npx puppeteer browsers install chrome
 
 echo "=== Build complete ==="

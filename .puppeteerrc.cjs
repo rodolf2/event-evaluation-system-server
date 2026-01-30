@@ -5,6 +5,6 @@ const path = require('path');
  */
 module.exports = {
     // Changes the cache location for Puppeteer.
-    // Use absolute path to match where Chrome is installed in render-build.sh
-    cacheDirectory: '/opt/render/project/puppeteer',
+    // Use environment variable if set (Render), otherwise use default local path
+    cacheDirectory: process.env.PUPPETEER_CACHE_DIR || path.join(__dirname, '.puppeteer_cache'),
 };

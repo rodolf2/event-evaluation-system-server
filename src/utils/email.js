@@ -71,9 +71,12 @@ const createSmtpTransporter = () => {
     tls: {
       rejectUnauthorized: false, // Helpful for local dev with self-signed certs
     },
-    connectionTimeout: 10000,
-    greetingTimeout: 5000,
-    socketTimeout: 10000,
+    pool: true, // Use connection pooling
+    maxConnections: 5,
+    maxMessages: 10,
+    connectionTimeout: 20000, // Increased from 10s
+    greetingTimeout: 20000, // Increased from 5s
+    socketTimeout: 30000, // Increased from 10s
   });
 };
 

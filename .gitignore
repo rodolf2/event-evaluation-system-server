@@ -9,3 +9,11 @@
 # Secrets/tokens
 /tokens
 .cache/
+.puppeteer_cache/
+/uploads
+/public/thumbnails
+/logs
+/venv
+__pycache__/
+*.log
+/src/uploads

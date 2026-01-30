@@ -32,7 +32,8 @@ class EnhancedFormsExtractor {
 
     // NOTE: Puppeteer is disabled on Render due to Chrome installation issues
     // Using axios/cheerio as the primary extraction method
-    const usePuppeteer = process.env.ENABLE_PUPPETEER === 'true';
+    // Use Puppeteer by default unless explicitly disabled
+    const usePuppeteer = process.env.ENABLE_PUPPETEER !== 'false';
 
     if (usePuppeteer) {
       // Strategy 1: Try Puppeteer extraction (only if explicitly enabled)

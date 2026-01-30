@@ -1,4 +1,5 @@
 const reminderService = require('../../services/reminder/reminderService');
+const { emitUpdate } = require("../../utils/socket");
 
 // @desc    Get all reminders for the logged-in user
 // @route   GET /api/reminders
@@ -30,6 +31,9 @@ const createReminder = async (req, res) => {
 
     const createdReminder = await reminderService.createReminder(reminderData);
     res.status(201).json(createdReminder);
+
+    // Emit socket event for real-time reminders
+    emitUpdate("reminder-updated", { action: "created", userId: req.user._id }, req.user._id);
   } catch (error) {
     console.error('Error creating reminder:', error);
     res.status(500).json({ message: 'Server Error' });
@@ -43,6 +47,9 @@ const deleteReminder = async (req, res) => {
   try {
     await reminderService.deleteReminder(req.params.id, req.user._id);
     res.json({ message: 'Reminder removed' });
+
+    // Emit socket event for real-time reminders
+    emitUpdate("reminder-updated", { action: "deleted", userId: req.user._id }, req.user._id);
   } catch (error) {
     console.error('Error deleting reminder:', error);
     if (error.message === 'Reminder not found or unauthorized') {

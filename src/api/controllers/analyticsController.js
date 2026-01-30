@@ -107,7 +107,6 @@ const getFormAnalytics = async (req, res) => {
 
       responseAnalysis = await AnalysisService.analyzeResponses(
         form.responses || [],
-        true,
         questionTypeMap,
       );
       console.log(
@@ -123,23 +122,23 @@ const getFormAnalytics = async (req, res) => {
         !responseAnalysis.sentimentBreakdown.neutral ||
         !responseAnalysis.sentimentBreakdown.negative
       ) {
-        console.warn(
-          `[ANALYTICS] Invalid response analysis structure, using fallback`
-        );
-        throw new Error("Invalid analysis response structure");
+        throw new Error("Invalid Python analysis response structure");
       }
     } catch (analysisError) {
       console.error(
-        `[ANALYTICS] Response analysis failed:`,
+        `[ANALYTICS] Python analysis failed:`,
         analysisError.message
       );
-      // Fallback to empty analysis
+      // Initialize with empty breakdown if Python fails
+      // This ensures the page still loads but with 0s if Python is unavailable
       responseAnalysis = {
         sentimentBreakdown: {
           positive: { count: 0, percentage: 0 },
           neutral: { count: 0, percentage: 0 },
           negative: { count: 0, percentage: 0 },
         },
+        method: "fallback_empty",
+        error: analysisError.message
       };
     }
 

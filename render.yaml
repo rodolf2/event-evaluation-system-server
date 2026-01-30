@@ -35,7 +35,10 @@ services:
         sync: false
       # Puppeteer configuration - disabled on Render due to Chrome installation issues
       - key: ENABLE_PUPPETEER
-        value: "false"
+        value: "true"
       # Puppeteer cache directory - must match .puppeteerrc.cjs configuration
       - key: PUPPETEER_CACHE_DIR
         value: /opt/render/project/puppeteer
+      # NLTK data directory for sentiment analysis
+      - key: NLTK_DATA
+        value: ./nltk_data

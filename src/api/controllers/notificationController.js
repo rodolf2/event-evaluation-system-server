@@ -1,6 +1,7 @@
 const Notification = require("../../models/Notification");
 const NotificationRead = require("../../models/NotificationRead");
 const User = require("../../models/User");
+const { emitUpdate } = require("../../utils/socket");
 
 // Helper function to build visibility filter
 const buildVisibilityFilter = (userId, userRole) => {
@@ -274,6 +275,21 @@ const createNotification = async (req, res) => {
       message: "Notification created successfully",
       data: notification,
     });
+
+    // Emit socket event for real-time notifications
+    // Notify specific users if provided
+    if (targetUsers && targetUsers.length > 0) {
+      targetUsers.forEach(userId => {
+        emitUpdate("notification-received", notification, userId);
+      });
+    }
+
+    // Notify roles
+    if (targetRoles && targetRoles.length > 0) {
+      // In a real production app, you might want to emit to specific role rooms
+      // For now, we'll broadcast it and let clients filter or handle it
+      emitUpdate("notification-received", notification);
+    }
   } catch (error) {
     console.error("Error creating notification:", error);
     res.status(500).json({

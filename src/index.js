@@ -15,6 +15,7 @@ const compression = require("compression");
 const { v4: uuidv4 } = require("uuid");
 const connectDB = require("./utils/db");
 const mongoose = require("mongoose");
+const { init: initSocket } = require("./utils/socket");
 const { requireAuth } = require("./middlewares/auth");
 const User = require("./models/User");
 const {
@@ -377,6 +378,9 @@ const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+
+  // Initialize Socket.io
+  initSocket(server);
 
   // Initialize cron jobs after server starts
   try {

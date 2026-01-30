@@ -1,4 +1,5 @@
 const User = require("../../models/User");
+const { emitUpdate } = require("../../utils/socket");
 const { generateToken } = require("../../middlewares/auth");
 const AuditLog = require("../../models/AuditLog");
 
@@ -317,6 +318,9 @@ const updateUser = async (req, res) => {
         user: savedUser.toObject({ virtuals: false, versionKey: false }),
       },
     });
+
+    // Emit socket event for real-time updates
+    emitUpdate("user-updated", { userId: user._id });
   } catch (error) {
     res.status(500).json({
       success: false,

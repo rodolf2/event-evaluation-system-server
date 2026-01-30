@@ -6,7 +6,10 @@ const enhancedFormsExtractor = require("../../services/forms/enhancedFormsExtrac
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const { emitUpdate } = require("../../utils/socket");
 const { invalidateCache } = require("../../utils/cache");
+const { sendEmail } = require("../../utils/email");
+const { generateFormAssignmentEmailHtml } = require("../../utils/formAssignmentEmailTemplate");
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -1448,6 +1451,9 @@ const submitFormResponse = async (req, res) => {
         downloadUrl: certificateResult?.downloadUrl,
       },
     });
+
+    // Emit socket event for real-time response tracking
+    emitUpdate("response-received", { formId: id });
   } catch (error) {
     console.error("Error submitting response:", error);
     res.status(500).json({
@@ -1616,6 +1622,29 @@ const uploadAttendeeList = [
 
       await form.save();
 
+      // Send email notifications to attendees if the form is published
+      if (form.status === "published" && form.shareableLink) {
+        console.log(`[FORM-ASSIGN] Sending emails to ${processedAttendees.length} attendees for form: ${form.title}`);
+
+        // Send emails asynchronously to not block the response
+        processedAttendees.forEach(async (attendee) => {
+          try {
+            await sendEmail({
+              to: attendee.email,
+              subject: `New Evaluation Assigned: ${form.title}`,
+              html: generateFormAssignmentEmailHtml({
+                name: attendee.name,
+                formTitle: form.title,
+                shareableLink: form.shareableLink,
+                eventDate: form.eventStartDate
+              })
+            });
+          } catch (emailError) {
+            console.error(`[FORM-ASSIGN] Failed to send email to ${attendee.email}:`, emailError.message);
+          }
+        });
+      }
+
       // Invalidate analytics cache for this form
       try {
         const { invalidateCache } = require("../../utils/cache");
@@ -1753,6 +1782,28 @@ const updateAttendeeListJson = async (req, res) => {
     form.attendeeList = processedAttendees;
 
     await form.save();
+
+    // Send email notifications to attendees if the form is published
+    if (form.status === "published" && form.shareableLink) {
+      console.log(`[FORM-ASSIGN-JSON] Sending emails to ${processedAttendees.length} attendees for form: ${form.title}`);
+
+      processedAttendees.forEach(async (attendee) => {
+        try {
+          await sendEmail({
+            to: attendee.email,
+            subject: `New Evaluation Assigned: ${form.title}`,
+            html: generateFormAssignmentEmailHtml({
+              name: attendee.name,
+              formTitle: form.title,
+              shareableLink: form.shareableLink,
+              eventDate: form.eventStartDate
+            })
+          });
+        } catch (emailError) {
+          console.error(`[FORM-ASSIGN-JSON] Failed to send email to ${attendee.email}:`, emailError.message);
+        }
+      });
+    }
 
     res.status(200).json({
       success: true,

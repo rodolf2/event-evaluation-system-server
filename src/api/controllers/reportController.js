@@ -7,6 +7,7 @@ const ThumbnailService = require("../../services/thumbnail/thumbnailService");
 const SharedReport = require("../../models/SharedReport");
 const mongoose = require("mongoose");
 const { cache, invalidateCache } = require("../../utils/cache");
+const { emitUpdate } = require("../../utils/socket");
 
 /**
  * Helper to check if a user has access to a shared report
@@ -364,7 +365,6 @@ const getDynamicQualitativeData = async (req, res) => {
     // Perform sentiment analysis with type filtering
     const analysis = await AnalysisService.analyzeResponses(
       responses,
-      true,
       questionTypeMap,
     );
 
@@ -524,14 +524,13 @@ const getDynamicQualitativeData = async (req, res) => {
       }
     });
 
-    questions.forEach((question) => {
+    for (const question of questions) {
       const questionId = question._id.toString();
       const questionTitle = question.title;
       const questionType = question.type;
 
       // Get all responses for this specific question from our buckets
       const questionResponses = buckets[questionId] || [];
-
       const responseCount = questionResponses.length;
 
       if (questionType === "scale") {
@@ -577,78 +576,36 @@ const getDynamicQualitativeData = async (req, res) => {
           responseCount,
           ratingDistribution,
           averageRating: Math.round(avgRating * 100) / 100,
-          scaleMax: max, // Include max scale for frontend display
+          scaleMax: max,
         });
       } else if (
         questionType === "paragraph" ||
         questionType === "short_answer"
       ) {
-        // For text questions: show sentiment breakdown
+        // For text questions: show sentiment breakdown using AnalysisService (PYTHON)
         let positiveCount = 0;
         let neutralCount = 0;
         let negativeCount = 0;
         const sampleResponses = [];
 
-        questionResponses.forEach((r, idx) => {
-          const text = (r.answer || "").toLowerCase();
-          const positiveKeywords = [
-            "good",
-            "great",
-            "excellent",
-            "amazing",
-            "wonderful",
-            "fantastic",
-            "love",
-            "like",
-            "best",
-            "awesome",
-            "perfect",
-            "satisfied",
-            "happy",
-            "pleased",
-            "informative",
-            "helpful",
-          ];
-          const negativeKeywords = [
-            "bad",
-            "terrible",
-            "awful",
-            "horrible",
-            "hate",
-            "dislike",
-            "worst",
-            "disappointed",
-            "unsatisfied",
-            "frustrated",
-            "poor",
-            "boring",
-            "rushed",
-            "confusing",
-          ];
+        // Use Promise.all if there are many responses, but careful with rate limits/performance
+        // Given the cache in analyzeCommentSentiment, this should be efficient
+        for (let i = 0; i < questionResponses.length; i++) {
+          const r = questionResponses[i];
+          const answer = r.answer || "";
 
-          const posMatches = positiveKeywords.filter((k) =>
-            text.includes(k),
-          ).length;
-          const negMatches = negativeKeywords.filter((k) =>
-            text.includes(k),
-          ).length;
+          if (!answer.trim()) continue;
 
-          let sentiment = "neutral";
-          if (posMatches > 0 && negMatches > 0) {
-            sentiment = "neutral"; // Mixed
-            neutralCount++;
-          } else if (posMatches > negMatches && posMatches > 0) {
-            sentiment = "positive";
-            positiveCount++;
-          } else if (negMatches > posMatches && negMatches > 0) {
-            sentiment = "negative";
-            negativeCount++;
-          } else {
-            neutralCount++;
-          }
+          // USE ADVANCED SENTIMENT ANALYSIS (PYTHON)
+          const sentimentResult = await AnalysisService.analyzeCommentSentiment(answer);
+          const sentiment = sentimentResult.sentiment;
 
-          // Keep sample of responses (max 3 per sentiment)
-          if (idx < 9) {
+          if (sentiment === "positive") positiveCount++;
+          else if (sentiment === "negative") negativeCount++;
+          else neutralCount++;
+
+          // Keep sample of responses
+          if (sampleResponses.length < 6) {
             const identity = processRespondentIdentity(
               r.respondentName,
               r.respondentEmail,
@@ -659,24 +616,21 @@ const getDynamicQualitativeData = async (req, res) => {
               respondentName: identity.name,
             });
           }
-        });
+        }
 
         const total = positiveCount + neutralCount + negativeCount;
         const sentimentBreakdown = {
           positive: {
             count: positiveCount,
-            percentage:
-              total > 0 ? Math.round((positiveCount / total) * 100) : 0,
+            percentage: total > 0 ? Math.round((positiveCount / total) * 100) : 0,
           },
           neutral: {
             count: neutralCount,
-            percentage:
-              total > 0 ? Math.round((neutralCount / total) * 100) : 0,
+            percentage: total > 0 ? Math.round((neutralCount / total) * 100) : 0,
           },
           negative: {
             count: negativeCount,
-            percentage:
-              total > 0 ? Math.round((negativeCount / total) * 100) : 0,
+            percentage: total > 0 ? Math.round((negativeCount / total) * 100) : 0,
           },
         };
 
@@ -686,7 +640,7 @@ const getDynamicQualitativeData = async (req, res) => {
           questionType,
           responseCount,
           sentimentBreakdown,
-          sampleResponses: sampleResponses.slice(0, 6),
+          sampleResponses,
         });
       } else if (questionType === "multiple_choice") {
         // For multiple choice: show option distribution
@@ -723,7 +677,7 @@ const getDynamicQualitativeData = async (req, res) => {
           optionDistribution,
         });
       }
-    });
+    }
 
     const responseData = {
       sentimentBreakdown: analysis.sentimentBreakdown,
@@ -1081,7 +1035,6 @@ const getAllReportsWithLiveData = async (req, res) => {
         // Perform sentiment analysis (use Python for consistency)
         const responseAnalysis = await AnalysisService.analyzeResponses(
           form.responses || [],
-          true,
           questionTypeMap,
         );
         const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
@@ -1221,7 +1174,6 @@ const generateReport = async (req, res) => {
 
     const responseAnalysis = await AnalysisService.analyzeResponses(
       form.responses || [],
-      true,
       questionTypeMap,
     );
     const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
@@ -1323,6 +1275,16 @@ const generateReport = async (req, res) => {
       report = new Report(reportData);
       await report.save();
     }
+
+    // Emit socket event for real-time updates
+    emitUpdate("report-generated", {
+      reportId: report._id,
+      formId: form._id,
+      userId: userId,
+      title: form.title,
+      status: "generated",
+      createdAt: new Date()
+    }, userId);
 
     res.status(200).json({
       success: true,
