@@ -62,11 +62,13 @@ const generateQualitativeReport = async (eventId) => {
     const pythonResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
       const options = getPythonOptions(scriptPath);
+      const scriptName = path.basename(scriptPath);
 
-      console.log("Calling Python script for sentiment analysis:", scriptPath);
+      console.log("Calling Python script for sentiment analysis:", scriptName);
+      console.log("Script Directory:", options.scriptPath);
       console.log("Number of comments to analyze:", comments.length);
       
-      const pyshell = new PythonShell(scriptPath, options);
+      const pyshell = new PythonShell(scriptName, options);
 
       // Send data to Python script
       pyshell.send(
@@ -178,8 +180,9 @@ const generateQuantitativeReport = async (eventId) => {
     const quantitativeResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
       const options = getPythonOptions(scriptPath);
+      const scriptName = path.basename(scriptPath);
       
-      const pyshell = new PythonShell(scriptPath, options);
+      const pyshell = new PythonShell(scriptName, options);
 
       pyshell.send(
         JSON.stringify({
@@ -390,8 +393,9 @@ async function analyzeResponses(responses, questionTypeMap = null) {
     const pythonResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
       const options = getPythonOptions(scriptPath);
+      const scriptName = path.basename(scriptPath);
 
-      const pyshell = new PythonShell(scriptPath, options);
+      const pyshell = new PythonShell(scriptName, options);
 
       pyshell.send(
         JSON.stringify({
@@ -539,32 +543,35 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
  */
 /**
  * Get Python path/command for sentiment analysis
- * Now simplified to use system python, relying on PYTHONPATH env var
+ * Prioritizes standard venv for local dev, falls back to system python + PYTHONPATH for Render
  */
 function getPythonPath() {
   const fs = require("fs");
   const path = require("path");
-  console.log("🔍 Detect Python Environment (PYTHONPATH Mode)");
+  console.log("🔍 Detect Python Environment");
   
-  const rootDir = "/opt/render/project/src";
-  const pythonLibs = path.resolve(__dirname, "../../../python_libs");
-  
-  // DIAGNOSTIC: Check if python_libs exists
-  if (fs.existsSync(pythonLibs)) {
-    console.log(`✅ CHECK: Found python_libs at: ${pythonLibs}`);
-    try {
-      console.log(`📁 Listing python_libs:`, fs.readdirSync(pythonLibs).slice(0, 10));
-    } catch (e) { console.error("Error listing python_libs:", e.message); }
-  } else {
-    console.log(`❌ CHECK: python_libs NOT found at: ${pythonLibs}`);
-    // Fallback check for Render root
-    const renderLibs = "/opt/render/project/src/python_libs";
-    if (fs.existsSync(renderLibs)) {
-        console.log(`✅ CHECK: Found python_libs at Render path: ${renderLibs}`);
-    }
+  // 1. Check for local venv (Standard for local development)
+  const cwdVenvPathWin = path.join(process.cwd(), "venv", "Scripts", "python.exe");
+  const cwdVenvPathUnix = path.join(process.cwd(), "venv", "bin", "python");
+
+  if (process.platform === "win32" && fs.existsSync(cwdVenvPathWin)) {
+    console.log("✅ CHECK: Found Local venv (Win) at:", cwdVenvPathWin);
+    return cwdVenvPathWin;
+  }
+  if (process.platform !== "win32" && fs.existsSync(cwdVenvPathUnix)) {
+    console.log("✅ CHECK: Found Local venv (Unix) at:", cwdVenvPathUnix);
+    return cwdVenvPathUnix;
   }
 
-  // Use 'python3' as default for Linux/Render, 'python' for Windows if needed
+  // 2. Check for Render venv (Explicit path)
+  const renderVenvPath = "/opt/render/project/src/venv/bin/python";
+  if (fs.existsSync(renderVenvPath)) {
+    console.log("✅ CHECK: Found Render venv at:", renderVenvPath);
+    return renderVenvPath;
+  }
+
+  // 3. Fallback to system python (relies on PYTHONPATH for libraries)
+  console.log("⚠️ No virtual environment found. Using system python with PYTHONPATH.");
   if (process.platform === "win32") return "python";
   return "python3";
 }
@@ -574,34 +581,40 @@ function getPythonPath() {
  */
 function getPythonOptions(scriptPath) {
     const pythonPath = getPythonPath();
-    const pythonLibs = path.resolve(__dirname, "../../../python_libs");
-    const renderLibs = "/opt/render/project/src/python_libs";
+    const env = { ...process.env };
     
-    // Construct PYTHONPATH
-    // We add the local python_libs directory to the existing PYTHONPATH
-    let pythonPathEnv = process.env.PYTHONPATH || "";
-    if (require("fs").existsSync(pythonLibs)) {
-        pythonPathEnv = `${pythonLibs}${path.delimiter}${pythonPathEnv}`;
-    } else if (require("fs").existsSync(renderLibs)) {
-        pythonPathEnv = `${renderLibs}${path.delimiter}${pythonPathEnv}`;
+    // Only inject PYTHONPATH if we are NOT using a venv
+    // (If using venv, libraries are already in path)
+    const isVenv = pythonPath.includes("venv");
+    
+    if (!isVenv) {
+        const pythonLibs = path.resolve(__dirname, "../../../python_libs");
+        const renderLibs = "/opt/render/project/src/python_libs";
+        
+        let pythonPathEnv = process.env.PYTHONPATH || "";
+        if (require("fs").existsSync(pythonLibs)) {
+            pythonPathEnv = `${pythonLibs}${path.delimiter}${pythonPathEnv}`;
+            console.log(`🔧 Injecting PYTHONPATH (Local libs): ${pythonLibs}`);
+        } else if (require("fs").existsSync(renderLibs)) {
+            pythonPathEnv = `${renderLibs}${path.delimiter}${pythonPathEnv}`;
+             console.log(`🔧 Injecting PYTHONPATH (Render libs): ${renderLibs}`);
+        }
+        env.PYTHONPATH = pythonPathEnv;
     }
 
-    // Also ensure NLTK_DATA is set
+    // Ensure NLTK_DATA is set
     const nltkData = path.resolve(__dirname, "../../../nltk_data");
-    const env = { 
-        ...process.env, 
-        PYTHONPATH: pythonPathEnv,
-        NLTK_DATA: nltkData
-    };
+    env.NLTK_DATA = nltkData;
 
-    console.log(`🔧 Configuring PythonShell with PYTHONPATH: ${pythonPathEnv}`);
-    console.log(`🔧 Configuring PythonShell with NLTK_DATA: ${nltkData}`);
+
+    const scriptDir = path.dirname(scriptPath);
+    console.log(`🔧 Python Options - Script Dir: ${scriptDir}`);
 
     return {
         mode: 'text',
         pythonPath: pythonPath,
         pythonOptions: ['-u'],
-        scriptPath: path.dirname(scriptPath),
+        scriptPath: scriptDir, // Explicitly set directory
         env: env
     };
 }
@@ -655,8 +668,9 @@ async function analyzeSingleWithPython(text, lexicon = []) {
   return new Promise((resolve, reject) => {
     const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
     const options = getPythonOptions(scriptPath);
+    const scriptName = path.basename(scriptPath);
 
-    const pyshell = new PythonShell(scriptPath, options);
+    const pyshell = new PythonShell(scriptName, options);
 
     pyshell.send(
       JSON.stringify({
