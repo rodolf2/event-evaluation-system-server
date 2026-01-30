@@ -1,0 +1,19 @@
+# Nixpacks configuration for Railway
+# This tells Railway how to build and run the application
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "python311", "python311Packages.pip"]
+
+[phases.install]
+cmds = [
+    "npm install",
+    "pip install -r requirements.txt"
+]
+
+[phases.build]
+cmds = [
+    "python3 -c \"import nltk; nltk.download('punkt'); nltk.download('averaged_perceptron_tagger'); nltk.download('wordnet')\""
+]
+
+[start]
+cmd = "npm start"
