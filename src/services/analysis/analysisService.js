@@ -61,18 +61,12 @@ const generateQualitativeReport = async (eventId) => {
     // Call Python script for advanced multilingual sentiment analysis
     const pythonResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
-
-      // Try to find the python executable in venv, otherwise fall back to system python
-      const pythonPath = getPythonPath();
+      const options = getPythonOptions(scriptPath);
 
       console.log("Calling Python script for sentiment analysis:", scriptPath);
-      console.log("Python path:", pythonPath);
       console.log("Number of comments to analyze:", comments.length);
-
-      const pyshell = new PythonShell(scriptPath, {
-        pythonPath,
-        pythonOptions: ["-u"], // Unbuffered output
-      });
+      
+      const pyshell = new PythonShell(scriptPath, options);
 
       // Send data to Python script
       pyshell.send(
@@ -183,10 +177,9 @@ const generateQuantitativeReport = async (eventId) => {
     // Use Python for statistical analysis
     const quantitativeResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
-
-      // Try to find the python executable in venv, otherwise fall back to system python
-      const pythonPath = getPythonPath();
-      const pyshell = new PythonShell(scriptPath, { pythonPath });
+      const options = getPythonOptions(scriptPath);
+      
+      const pyshell = new PythonShell(scriptPath, options);
 
       pyshell.send(
         JSON.stringify({
@@ -396,14 +389,9 @@ async function analyzeResponses(responses, questionTypeMap = null) {
     // Call Python script for advanced sentiment analysis
     const pythonResult = await new Promise((resolve, reject) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
+      const options = getPythonOptions(scriptPath);
 
-      // Try to find the python executable in venv, otherwise fall back to system python
-      const pythonPath = getPythonPath();
-
-      const pyshell = new PythonShell(scriptPath, {
-        pythonPath,
-        pythonOptions: ["-u"],
-      });
+      const pyshell = new PythonShell(scriptPath, options);
 
       pyshell.send(
         JSON.stringify({
@@ -550,55 +538,72 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
  * Get Python path for sentiment analysis
  */
 /**
- * Get Python path for sentiment analysis
+ * Get Python path/command for sentiment analysis
+ * Now simplified to use system python, relying on PYTHONPATH env var
  */
 function getPythonPath() {
   const fs = require("fs");
   const path = require("path");
-  console.log("🔍 Detect Python Environment (Debug Mode)");
+  console.log("🔍 Detect Python Environment (PYTHONPATH Mode)");
   
   const rootDir = "/opt/render/project/src";
+  const pythonLibs = path.resolve(__dirname, "../../../python_libs");
   
-  // DIAGNOSTIC PROBE: List root directory on Render
-  try {
-    if (fs.existsSync(rootDir)) {
-      console.log(`📁 Listing ${rootDir}:`, fs.readdirSync(rootDir));
-      const venvBin = path.join(rootDir, "venv", "bin");
-      if (fs.existsSync(venvBin)) {
-         console.log(`📁 Listing ${venvBin}:`, fs.readdirSync(venvBin));
-      } else {
-         console.log(`❌ ${venvBin} does not exist.`);
-      }
-    }
-  } catch (err) {
-    console.error("Diagnostic listing failed:", err.message);
-  }
-
-  // 1. Explicit Render Path
-  const renderVenvPath = "/opt/render/project/src/venv/bin/python";
-  if (fs.existsSync(renderVenvPath)) {
-    console.log("✅ CHECK: Found Render venv at:", renderVenvPath);
-    return renderVenvPath;
+  // DIAGNOSTIC: Check if python_libs exists
+  if (fs.existsSync(pythonLibs)) {
+    console.log(`✅ CHECK: Found python_libs at: ${pythonLibs}`);
+    try {
+      console.log(`📁 Listing python_libs:`, fs.readdirSync(pythonLibs).slice(0, 10));
+    } catch (e) { console.error("Error listing python_libs:", e.message); }
   } else {
-    console.log("❌ CHECK: Render venv NOT found at:", renderVenvPath);
+    console.log(`❌ CHECK: python_libs NOT found at: ${pythonLibs}`);
+    // Fallback check for Render root
+    const renderLibs = "/opt/render/project/src/python_libs";
+    if (fs.existsSync(renderLibs)) {
+        console.log(`✅ CHECK: Found python_libs at Render path: ${renderLibs}`);
+    }
   }
 
-  // 2. CWD-based venv
-  const cwdVenvPathWin = path.join(process.cwd(), "venv", "Scripts", "python.exe");
-  const cwdVenvPathUnix = path.join(process.cwd(), "venv", "bin", "python");
+  // Use 'python3' as default for Linux/Render, 'python' for Windows if needed
+  if (process.platform === "win32") return "python";
+  return "python3";
+}
 
-  if (process.platform === "win32" && fs.existsSync(cwdVenvPathWin)) {
-    console.log("✅ CHECK: Found CWD venv (Win) at:", cwdVenvPathWin);
-    return cwdVenvPathWin;
-  }
-  if (process.platform !== "win32" && fs.existsSync(cwdVenvPathUnix)) {
-    console.log("✅ CHECK: Found CWD venv (Unix) at:", cwdVenvPathUnix);
-    return cwdVenvPathUnix;
-  }
+/**
+ * Configure PythonShell options with custom PYTHONPATH
+ */
+function getPythonOptions(scriptPath) {
+    const pythonPath = getPythonPath();
+    const pythonLibs = path.resolve(__dirname, "../../../python_libs");
+    const renderLibs = "/opt/render/project/src/python_libs";
+    
+    // Construct PYTHONPATH
+    // We add the local python_libs directory to the existing PYTHONPATH
+    let pythonPathEnv = process.env.PYTHONPATH || "";
+    if (require("fs").existsSync(pythonLibs)) {
+        pythonPathEnv = `${pythonLibs}${path.delimiter}${pythonPathEnv}`;
+    } else if (require("fs").existsSync(renderLibs)) {
+        pythonPathEnv = `${renderLibs}${path.delimiter}${pythonPathEnv}`;
+    }
 
-  // 3. Fallback
-  console.warn("⚠️ No virtual environment found. Falling back to system 'python3'.");
-  return "python3"; 
+    // Also ensure NLTK_DATA is set
+    const nltkData = path.resolve(__dirname, "../../../nltk_data");
+    const env = { 
+        ...process.env, 
+        PYTHONPATH: pythonPathEnv,
+        NLTK_DATA: nltkData
+    };
+
+    console.log(`🔧 Configuring PythonShell with PYTHONPATH: ${pythonPathEnv}`);
+    console.log(`🔧 Configuring PythonShell with NLTK_DATA: ${nltkData}`);
+
+    return {
+        mode: 'text',
+        pythonPath: pythonPath,
+        pythonOptions: ['-u'],
+        scriptPath: path.dirname(scriptPath),
+        env: env
+    };
 }
 
 /**
@@ -649,12 +654,9 @@ async function analyzeCommentSentiment(text) {
 async function analyzeSingleWithPython(text, lexicon = []) {
   return new Promise((resolve, reject) => {
     const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
-    const pythonPath = getPythonPath();
+    const options = getPythonOptions(scriptPath);
 
-    const pyshell = new PythonShell(scriptPath, {
-      pythonPath,
-      pythonOptions: ["-u"],
-    });
+    const pyshell = new PythonShell(scriptPath, options);
 
     pyshell.send(
       JSON.stringify({

@@ -11,30 +11,21 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv venv
-fi
+# Create directory for Python libraries
+mkdir -p python_libs
 
-# Activate virtual environment
-echo "Activating virtual environment..."
-source venv/bin/activate
-
-# Upgrade pip
-echo "Upgrading pip..."
-pip install --upgrade pip
-
-# Install required packages
-echo "Installing Python dependencies..."
-pip install -r requirements.txt
+# Install required packages to local directory
+echo "Installing Python dependencies to ./python_libs..."
+pip install -r requirements.txt -t python_libs --no-cache-dir
 
 # Create local nltk_data directory for persistence on Render
 mkdir -p ./nltk_data
 
 # Download textblob corpora to local directory
+# We need to add python_libs to PYTHONPATH for this to work
 echo "Downloading TextBlob corpora to ./nltk_data..."
-python3 -c "import nltk; nltk.download('punkt', download_dir='./nltk_data'); nltk.download('wordnet', download_dir='./nltk_data'); nltk.download('punkt_tab', download_dir='./nltk_data'); from textblob import TextBlob; print('TextBlob setup complete!')"
+export PYTHONPATH=$PYTHONPATH:$(pwd)/python_libs
+python3 -c "import sys; sys.path.append('./python_libs'); import nltk; nltk.download('punkt', download_dir='./nltk_data'); nltk.download('wordnet', download_dir='./nltk_data'); nltk.download('punkt_tab', download_dir='./nltk_data'); from textblob import TextBlob; print('TextBlob setup complete!')"
 
 echo "Python environment setup complete!"
-echo "To activate the virtual environment in the future, run: source venv/bin/activate"
+echo "Libraries installed in: python_libs"
