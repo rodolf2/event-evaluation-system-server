@@ -156,7 +156,10 @@ const generateQualitativeReport = async (eventId) => {
       throw new Error(pythonResult.error || "Python analysis failed");
     }
   } catch (error) {
-    console.error("Error calling Python script for qualitative analysis:", error);
+    console.error(
+      "Error calling Python script for qualitative analysis:",
+      error,
+    );
     throw error;
   }
 };
@@ -379,10 +382,6 @@ function generateRecommendations(analysisResult) {
   return recommendations.join(" ");
 }
 
-
-
-
-
 /**
  * Analyzes form responses for sentiment and breakdown using Python
  * @param {Array} responses - Form responses
@@ -422,7 +421,8 @@ async function analyzeResponses(responses, questionTypeMap = null) {
             // This is actual text content
             if (questionTypeMap) {
               const qType =
-                questionTypeMap[q.questionId] || questionTypeMap[q.questionTitle];
+                questionTypeMap[q.questionId] ||
+                questionTypeMap[q.questionTitle];
               if (qType === "paragraph" || qType === "short_answer") {
                 textContents.push(trimmed);
               }
@@ -630,26 +630,70 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 /**
  * Get Python path for sentiment analysis
  */
+/**
+ * Get Python path for sentiment analysis
+ */
 function getPythonPath() {
   const fs = require("fs");
-  const venvPathWin = path.resolve(
+  const path = require("path");
+  console.log("Detecting Python environment...");
+  console.log("Current working directory:", process.cwd());
+  console.log("__dirname:", __dirname);
+
+  // 1. Explicit Render Path (Most reliable for Render)
+  // Render root is typically /opt/render/project/src
+  // So venv should be at /opt/render/project/src/venv
+  const renderVenvPath = "/opt/render/project/src/venv/bin/python";
+  if (fs.existsSync(renderVenvPath)) {
+    console.log("✅ Found Render venv at:", renderVenvPath);
+    return renderVenvPath;
+  }
+
+  // 2. CWD-based venv (Standard local/server usage)
+  const cwdVenvPathWin = path.join(
+    process.cwd(),
+    "venv",
+    "Scripts",
+    "python.exe",
+  );
+  const cwdVenvPathUnix = path.join(process.cwd(), "venv", "bin", "python");
+
+  if (process.platform === "win32" && fs.existsSync(cwdVenvPathWin)) {
+    console.log("✅ Found CWD venv (Windows) at:", cwdVenvPathWin);
+    return cwdVenvPathWin;
+  }
+  if (process.platform !== "win32" && fs.existsSync(cwdVenvPathUnix)) {
+    console.log("✅ Found CWD venv (Unix) at:", cwdVenvPathUnix);
+    return cwdVenvPathUnix;
+  }
+
+  // 3. Relative path fallback (Legacy check)
+  const relativeVenvPathWin = path.resolve(
     __dirname,
     "../../../venv",
     "Scripts",
     "python.exe",
   );
-  const venvPathUnix = path.resolve(
+  const relativeVenvPathUnix = path.resolve(
     __dirname,
     "../../../venv",
     "bin",
     "python",
   );
 
-  if (process.platform === "win32" && fs.existsSync(venvPathWin)) {
-    return venvPathWin;
-  } else if (process.platform !== "win32" && fs.existsSync(venvPathUnix)) {
-    return venvPathUnix;
+  if (process.platform === "win32" && fs.existsSync(relativeVenvPathWin)) {
+    console.log("✅ Found relative venv (Windows) at:", relativeVenvPathWin);
+    return relativeVenvPathWin;
   }
+  if (process.platform !== "win32" && fs.existsSync(relativeVenvPathUnix)) {
+    console.log("✅ Found relative venv (Unix) at:", relativeVenvPathUnix);
+    return relativeVenvPathUnix;
+  }
+
+  // 4. Fallback to system python
+  console.warn(
+    "⚠️ No virtual environment found. Falling back to system 'python'.",
+  );
   return "python";
 }
 
@@ -756,5 +800,3 @@ module.exports = {
   generateResponseOverview,
   analyzeCommentSentiment,
 };
-
-
