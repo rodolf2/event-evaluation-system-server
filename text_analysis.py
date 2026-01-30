@@ -10,17 +10,6 @@ import json
 import traceback
 import re
 
-# ROBUST PATH INJECTION: Look for python_libs in script directory
-# This fixes ModuleNotFoundError on Render where PYTHONPATH might be lost
-script_dir = os.path.dirname(os.path.abspath(__file__))
-python_libs_dir = os.path.join(script_dir, 'python_libs')
-if os.path.isdir(python_libs_dir):
-    sys.path.append(python_libs_dir)
-# Also check Render-specific path just in case
-render_libs = '/opt/render/project/src/python_libs'
-if os.path.isdir(render_libs) and render_libs not in sys.path:
-    sys.path.append(render_libs)
-
 from textblob import TextBlob
 import langid
 
