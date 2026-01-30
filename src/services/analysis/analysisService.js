@@ -830,24 +830,34 @@ async function analyzeCommentSentiment(text) {
 
   let result;
 
-  try {
-    // Fetch lexicon to pass to Python for custom word support
-    const dbLexicon = await Lexicon.find().lean();
-    
-    // Try Python analysis with timeout
-    const pythonPromise = analyzeSingleWithPython(cleanText, dbLexicon);
-    
-    // 5 second timeout for Python
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Python analysis timed out")), 5000)
-    );
-    
-    result = await Promise.race([pythonPromise, timeoutPromise]);
-    
-  } catch (error) {
-    console.error(`⚠️ Python analysis failed (${error.message}). Using JS fallback.`);
-    // Fallback to JavaScript analysis
+  // In production (Render), skip Python entirely to avoid slow cold starts
+  // Use Python only in local development
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isProduction) {
+    // Use JavaScript analyzer directly in production (fast, no cold start)
     result = analyzeWithJS(cleanText);
+  } else {
+    // Local development: try Python first with JS fallback
+    try {
+      // Fetch lexicon to pass to Python for custom word support
+      const dbLexicon = await Lexicon.find().lean();
+      
+      // Try Python analysis with timeout
+      const pythonPromise = analyzeSingleWithPython(cleanText, dbLexicon);
+      
+      // 5 second timeout for Python
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Python analysis timed out")), 5000)
+      );
+      
+      result = await Promise.race([pythonPromise, timeoutPromise]);
+      
+    } catch (error) {
+      console.error(`⚠️ Python analysis failed (${error.message}). Using JS fallback.`);
+      // Fallback to JavaScript analysis
+      result = analyzeWithJS(cleanText);
+    }
   }
 
   // Cache the result
