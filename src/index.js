@@ -29,6 +29,12 @@ require("./config/passport");
 
 const app = express();
 
+// Trust proxy for production environments (Railway, Render, etc.)
+// This is required for express-rate-limit to work correctly behind a proxy
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Middleware
 const allowedOrigins = (
   process.env.CLIENT_URLS ||
