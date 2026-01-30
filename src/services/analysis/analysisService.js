@@ -63,34 +63,7 @@ const generateQualitativeReport = async (eventId) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
 
       // Try to find the python executable in venv, otherwise fall back to system python
-      let pythonPath;
-      const venvPathWin = path.resolve(
-        __dirname,
-        "../../../venv",
-        "Scripts",
-        "python.exe",
-      );
-      const venvPathUnix = path.resolve(
-        __dirname,
-        "../../../venv",
-        "bin",
-        "python",
-      );
-
-      if (
-        process.platform === "win32" &&
-        require("fs").existsSync(venvPathWin)
-      ) {
-        pythonPath = venvPathWin;
-      } else if (
-        process.platform !== "win32" &&
-        require("fs").existsSync(venvPathUnix)
-      ) {
-        pythonPath = venvPathUnix;
-      } else {
-        // Fallback to system python
-        pythonPath = "python";
-      }
+      const pythonPath = getPythonPath();
 
       console.log("Calling Python script for sentiment analysis:", scriptPath);
       console.log("Python path:", pythonPath);
@@ -212,34 +185,7 @@ const generateQuantitativeReport = async (eventId) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
 
       // Try to find the python executable in venv, otherwise fall back to system python
-      let pythonPath;
-      const venvPathWin = path.resolve(
-        __dirname,
-        "../../../venv",
-        "Scripts",
-        "python.exe",
-      );
-      const venvPathUnix = path.resolve(
-        __dirname,
-        "../../../venv",
-        "bin",
-        "python",
-      );
-
-      if (
-        process.platform === "win32" &&
-        require("fs").existsSync(venvPathWin)
-      ) {
-        pythonPath = venvPathWin;
-      } else if (
-        process.platform !== "win32" &&
-        require("fs").existsSync(venvPathUnix)
-      ) {
-        pythonPath = venvPathUnix;
-      } else {
-        // Fallback to system python
-        pythonPath = "python";
-      }
+      const pythonPath = getPythonPath();
       const pyshell = new PythonShell(scriptPath, { pythonPath });
 
       pyshell.send(
@@ -452,34 +398,7 @@ async function analyzeResponses(responses, questionTypeMap = null) {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
 
       // Try to find the python executable in venv, otherwise fall back to system python
-      let pythonPath;
-      const venvPathWin = path.resolve(
-        __dirname,
-        "../../../venv",
-        "Scripts",
-        "python.exe",
-      );
-      const venvPathUnix = path.resolve(
-        __dirname,
-        "../../../venv",
-        "bin",
-        "python",
-      );
-
-      if (
-        process.platform === "win32" &&
-        require("fs").existsSync(venvPathWin)
-      ) {
-        pythonPath = venvPathWin;
-      } else if (
-        process.platform !== "win32" &&
-        require("fs").existsSync(venvPathUnix)
-      ) {
-        pythonPath = venvPathUnix;
-      } else {
-        // Fallback to system python
-        pythonPath = "python";
-      }
+      const pythonPath = getPythonPath();
 
       const pyshell = new PythonShell(scriptPath, {
         pythonPath,
