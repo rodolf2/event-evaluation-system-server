@@ -555,65 +555,50 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 function getPythonPath() {
   const fs = require("fs");
   const path = require("path");
-  console.log("Detecting Python environment...");
-  console.log("Current working directory:", process.cwd());
-  console.log("__dirname:", __dirname);
-
-  // 1. Explicit Render Path (Most reliable for Render)
-  // Render root is typically /opt/render/project/src
-  // So venv should be at /opt/render/project/src/venv
-  const renderVenvPath = "/opt/render/project/src/venv/bin/python";
-  if (fs.existsSync(renderVenvPath)) {
-    console.log("✅ Found Render venv at:", renderVenvPath);
-    return renderVenvPath;
+  console.log("🔍 Detect Python Environment (Debug Mode)");
+  
+  const rootDir = "/opt/render/project/src";
+  
+  // DIAGNOSTIC PROBE: List root directory on Render
+  try {
+    if (fs.existsSync(rootDir)) {
+      console.log(`📁 Listing ${rootDir}:`, fs.readdirSync(rootDir));
+      const venvBin = path.join(rootDir, "venv", "bin");
+      if (fs.existsSync(venvBin)) {
+         console.log(`📁 Listing ${venvBin}:`, fs.readdirSync(venvBin));
+      } else {
+         console.log(`❌ ${venvBin} does not exist.`);
+      }
+    }
+  } catch (err) {
+    console.error("Diagnostic listing failed:", err.message);
   }
 
-  // 2. CWD-based venv (Standard local/server usage)
-  const cwdVenvPathWin = path.join(
-    process.cwd(),
-    "venv",
-    "Scripts",
-    "python.exe",
-  );
+  // 1. Explicit Render Path
+  const renderVenvPath = "/opt/render/project/src/venv/bin/python";
+  if (fs.existsSync(renderVenvPath)) {
+    console.log("✅ CHECK: Found Render venv at:", renderVenvPath);
+    return renderVenvPath;
+  } else {
+    console.log("❌ CHECK: Render venv NOT found at:", renderVenvPath);
+  }
+
+  // 2. CWD-based venv
+  const cwdVenvPathWin = path.join(process.cwd(), "venv", "Scripts", "python.exe");
   const cwdVenvPathUnix = path.join(process.cwd(), "venv", "bin", "python");
 
   if (process.platform === "win32" && fs.existsSync(cwdVenvPathWin)) {
-    console.log("✅ Found CWD venv (Windows) at:", cwdVenvPathWin);
+    console.log("✅ CHECK: Found CWD venv (Win) at:", cwdVenvPathWin);
     return cwdVenvPathWin;
   }
   if (process.platform !== "win32" && fs.existsSync(cwdVenvPathUnix)) {
-    console.log("✅ Found CWD venv (Unix) at:", cwdVenvPathUnix);
+    console.log("✅ CHECK: Found CWD venv (Unix) at:", cwdVenvPathUnix);
     return cwdVenvPathUnix;
   }
 
-  // 3. Relative path fallback (Legacy check)
-  const relativeVenvPathWin = path.resolve(
-    __dirname,
-    "../../../venv",
-    "Scripts",
-    "python.exe",
-  );
-  const relativeVenvPathUnix = path.resolve(
-    __dirname,
-    "../../../venv",
-    "bin",
-    "python",
-  );
-
-  if (process.platform === "win32" && fs.existsSync(relativeVenvPathWin)) {
-    console.log("✅ Found relative venv (Windows) at:", relativeVenvPathWin);
-    return relativeVenvPathWin;
-  }
-  if (process.platform !== "win32" && fs.existsSync(relativeVenvPathUnix)) {
-    console.log("✅ Found relative venv (Unix) at:", relativeVenvPathUnix);
-    return relativeVenvPathUnix;
-  }
-
-  // 4. Fallback to system python
-  console.warn(
-    "⚠️ No virtual environment found. Falling back to system 'python'.",
-  );
-  return "python";
+  // 3. Fallback
+  console.warn("⚠️ No virtual environment found. Falling back to system 'python3'.");
+  return "python3"; 
 }
 
 /**
