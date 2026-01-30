@@ -6,42 +6,184 @@ const mongoose = require("mongoose");
 const path = require("path");
 const { PythonShell } = require("python-shell");
 const Sentiment = require("sentiment");
-const sentiment = new Sentiment();
+const sentimentLib = new Sentiment();
 
-// Register Tagalog language with custom lexicon (Same as Python version)
-const tagalogLanguage = {
-  labels: {
-    // Positive
-    'maganda': 1, 'ganda': 1, 'mabuti': 1, 'buti': 1,
-    'masaya': 1, 'saya': 1, 'nakakatuwa': 1, 'tuwa': 1,
-    'galing': 1, 'magaling': 1, 'bilib': 1, 'husay': 1,
-    'mahusay': 1, 'astig': 1, 'sulit': 1, 'panalo': 1,
-    'maayos': 1, 'ayos': 1, 'linis': 1, 'malinis': 1,
-    'effective': 1, 'efficient': 1, 'successful': 1, 'tagumpay': 1,
-    'productive': 1, 'organized': 1, 'smooth': 1, 'professional': 1,
-    'natuto': 1, 'natutunan': 1, 'nakatulong': 1, 'helpful': 1,
-    'satisfied': 1, 'fun': 1, 'interesting': 1, 'educational': 1,
-    'useful': 1, 'motivating': 1, 'solid': 1, 'swabe': 1,
-    'oks': 0.5, 'goods': 1, 'nice': 1, 'yes': 1, 'oo': 1,
-    'sige': 0.5, 'salamat': 1, 'grateful': 1, 'appreciate': 1,
-    'appreciated': 1, 'thankful': 1,
-    // Negative
-    'masama': -1, 'sama': -1, 'pangit': -1, 'panget': -1,
-    'nakakaasar': -1, 'asar': -1, 'nakakainis': -1, 'inis': -1,
-    'galit': -1, 'ayaw': -1, 'badtrip': -1, 'nakakagalit': -1,
-    'boring': -1, 'nakakaantok': -1, 'sayang': -1,
-    'disappointed': -1, 'disappointing': -1, 'nakakadismaya': -1,
-    'dismaya': -1, 'dismayado': -1, 'nabigo': -1, 'failed': -1,
-    'problem': -0.7, 'problema': -0.7, 'mali': -0.8,
-    'kulang': -0.7, 'kakulangan': -0.8, 'incomplete': -0.7, 'poor': -1,
-    'crowded': -0.8, 'difficult': -0.8, 'nahirapan': -0.8, 'hard': -0.7,
-    'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
-    'bad': -1, 'worst': -2, 'disorganized': -1, 'chaotic': -1,
-    'magulo': -0.8, 'noisy': -0.6, 'late': -0.7, 'delayed': -0.7,
-    'matagal': -0.6, 'mabagal': -0.6, 'unprepared': -0.8
-  }
+// ============================================================================
+// COMPREHENSIVE SENTIMENT ANALYSIS CONFIGURATION (Mirrors Python text_analysis.py)
+// ============================================================================
+
+// Tagalog positive words with weights
+const tagalogPositive = {
+  // Basic positive words and roots (weight: 1)
+  'maganda': 1, 'ganda': 1, 'mabuti': 1, 'buti': 1,
+  'masaya': 1, 'saya': 1, 'nakakatuwa': 1, 'tuwa': 1,
+  'galing': 1, 'magaling': 1, 'bilib': 1, 'husay': 1,
+  'mahusay': 1, 'astig': 1, 'sulit': 1, 'panalo': 1,
+  'maayos': 1, 'ayos': 1, 'linis': 1, 'malinis': 1,
+  'effective': 1, 'efficient': 1, 'successful': 1, 'tagumpay': 1,
+  'productive': 1, 'organized': 1, 'smooth': 1, 'professional': 1,
+  'natuto': 1, 'natutunan': 1, 'nakatulong': 1, 'helpful': 1,
+  'satisfied': 1, 'fun': 1, 'interesting': 1, 'educational': 1,
+  'useful': 1, 'motivating': 1, 'solid': 1, 'swabe': 1,
+  'oks': 0.5, 'goods': 1, 'nice': 1, 'yes': 1, 'oo': 1,
+  'sige': 0.5, 'salamat': 1, 'grateful': 1, 'appreciate': 1,
+  'appreciated': 1, 'thankful': 1, 'enjoy': 1, 'enjoyed': 1,
+  'amazing': 1.5, 'awesome': 1.5, 'excellent': 1.5, 'outstanding': 1.5,
+  'perfect': 1.5, 'fantastic': 1.5, 'wonderful': 1.5, 'great': 1,
+  'good': 1, 'best': 1.5, 'love': 1.5, 'loved': 1.5, 'like': 0.8,
+  'happy': 1, 'glad': 1, 'pleased': 1, 'delighted': 1.2,
+  'impressive': 1.2, 'recommend': 1, 'recommended': 1
 };
-sentiment.registerLanguage('tl', tagalogLanguage);
+
+// Tagalog negative words with weights
+const tagalogNegative = {
+  // Basic negative words and roots (weight: -1)
+  'masama': -1, 'sama': -1, 'pangit': -1, 'panget': -1,
+  'nakakaasar': -1, 'asar': -1, 'nakakainis': -1, 'inis': -1,
+  'galit': -1, 'ayaw': -1, 'badtrip': -1, 'nakakagalit': -1,
+  'boring': -1, 'nakakaantok': -1, 'sayang': -1,
+  'disappointed': -1, 'disappointing': -1, 'nakakadismaya': -1,
+  'dismaya': -1, 'dismayado': -1, 'nabigo': -1, 'failed': -1,
+  'problem': -0.7, 'problema': -0.7, 'mali': -0.8,
+  'kulang': -0.7, 'kakulangan': -0.8, 'incomplete': -0.7, 'poor': -1,
+  'crowded': -0.8, 'difficult': -0.8, 'nahirapan': -0.8, 'hard': -0.7,
+  'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
+  'bad': -1, 'worst': -2, 'disorganized': -1, 'chaotic': -1,
+  'magulo': -0.8, 'noisy': -0.6, 'late': -0.7, 'delayed': -0.7,
+  'matagal': -0.6, 'mabagal': -0.6, 'unprepared': -0.8,
+  'unprofessional': -1, 'mediocre': -0.6, 'meh': -0.5,
+  'reklamo': -1, 'bagsak': -1.5, 'lungkot': -1, 'nakakalungkot': -1,
+  'terrible': -1.5, 'horrible': -1.5, 'awful': -1.5, 'hate': -1.5,
+  'hated': -1.5, 'dislike': -1, 'annoying': -1, 'annoyed': -1,
+  'waste': -1, 'wasted': -1, 'useless': -1.2, 'pointless': -1
+};
+
+// Positive phrases (higher weight)
+const positivePhrases = [
+  'very good', 'ang ganda', 'sobrang ganda', 'sobra ganda', 'ang galing',
+  'maraming salamat', 'thank you so much', 'napakaganda',
+  'napakagaling', 'the best', 'well done', 'job well done',
+  'great job', 'excellent work', 'love it', 'loved it',
+  'napakasaya', 'sobrang saya', 'sobra saya', 'ang saya',
+  'napakaayos', 'sobrang ayos', 'ang husay', 'napakatahimik',
+  'well-organized', 'well-prepared', 'well-managed', 'well-planned',
+  'highly recommend', 'best experience', 'really enjoyed', 'so happy',
+  'panalo to', 'solid to', 'goods to', 'swabe lang', 'walang hassle',
+  'okay na okay', 'ayos na ayos', 'sarap ng', 'ang sarap'
+];
+
+// Negative phrases (higher weight)
+const negativePhrases = [
+  'not good', 'not great', 'hindi maganda', 'walang kwenta',
+  'waste of time', 'sayang lang', 'hindi ako satisfied',
+  'bad experience', 'poor quality', 'very bad', 'so bad',
+  'napakamasama', 'sobrang masama', 'ang sama',
+  'napakapangit', 'sobrang pangit', 'hindi prepared',
+  'hindi naging maayos', 'hindi maayos', 'hindi okay',
+  'hindi ayos', 'di maayos', 'di maganda', 'waste of energy',
+  'sayang oras', 'sayang pera', 'nakakadismaya', 'nakaka-bored',
+  'ang gulo', 'sobrang gulo', 'walang silbi', 'basura',
+  'worst experience', 'not satisfied', 'needs improvement',
+  'could be better', 'room for improvement'
+];
+
+// Neutral indicators
+const neutralIndicators = [
+  'okay', 'ok', 'alright', 'fine', 'so-so', 'average', 'normal',
+  'ordinary', 'fair', 'decent', 'not bad', 'moderate',
+  'acceptable', 'passable', 'adequate', 'sufficient', 'however',
+  'okay lang', 'ok lang', 'oks lang', 'ayos lang', 'pwede na',
+  'pwede naman', 'ganon lang', 'ganun lang', 'sige lang',
+  'lang naman', 'naman', 'typical', 'karaniwan', 'normal lang',
+  'pwede', 'maaari', 'maybe', 'perhaps', 'siguro',
+  'may improvement', 'pwede pang', 'pero okay', 'pero ayos'
+];
+
+// Negation words
+const negations = [
+  'not', 'no', 'never', "don't", "doesn't", "didn't", "won't", "can't", "cannot",
+  'hindi', 'wala', 'walang', 'di', 'hinde', 'ayaw', "di ko", "hindi ko"
+];
+
+// Intensifiers and diminishers
+const intensifiers = [
+  'very', 'really', 'extremely', 'super', 'sobra', 'sobrang',
+  'napaka', 'labis', 'grabe', 'talaga', 'so', 'too', 'ganado', 'masyado',
+  'absolutely', 'incredibly', 'highly', 'totally', 'completely'
+];
+
+const diminishers = [
+  'slightly', 'somewhat', 'a bit', 'a little', 'medyo', 'konti',
+  'kaunti', 'bahagya', 'kind of', 'kinda', 'sort of'
+];
+
+// Contrast words (indicates mixed sentiment)
+const contrastWords = ['but', 'however', 'although', 'pero', 'ngunit', 'subalit', 'kaso', 'though'];
+
+// Constructive criticism patterns
+const constructivePatterns = [
+  'could be improved', 'could still be improved', 'room for improvement',
+  'with a few adjustments', 'next time', 'believe the next', 'can be even better',
+  'some areas', 'however', 'but', 'although',
+  'maaaring pagbutihin', 'maaaring mapabuti', 'may mga areas na maaaring',
+  'sa susunod', 'pwede pang mapabuti', 'sana ay maayos',
+  'pero', 'ngunit', 'subalit', 'gayunpaman'
+];
+
+// Emoticons and emoji with scores
+const emojiScores = {
+  '😊': 0.5, '😀': 0.5, '😄': 0.5, '😍': 0.7, '👍': 0.5, '🙌': 0.5, '🎉': 0.7,
+  '❤️': 0.7, '🔥': 0.5, '💯': 0.5, '⭐': 0.5, '🌟': 0.5, ':)': 0.3, ':D': 0.3,
+  '😞': -0.5, '😢': -0.5, '😠': -0.7, '😡': -0.7, '👎': -0.5, '😕': -0.5,
+  '😔': -0.5, '💔': -0.7, '🤢': -0.7, ':(': -0.3, 'D:': -0.3
+};
+
+// Tagalog affixes for stemming
+const tagalogPrefixes = ['nag-', 'nag', 'mag-', 'mag', 'na-', 'na', 'ma-', 'ma', 'naka-', 'naka', 'ipinag-', 'ipinag', 'pag-', 'pag', 'nakaka-', 'nakaka'];
+const tagalogSuffixes = ['-an', 'an', '-in', 'in', '-nan', 'nan', '-hin', 'hin'];
+
+/**
+ * Simple rule-based stemming for Tagalog/Taglish
+ */
+function stemTagalog(word) {
+  if (word.length <= 4) return word;
+  
+  let stemmed = word;
+  
+  // Handle prefixes (sorted by length, longest first)
+  const sortedPrefixes = [...tagalogPrefixes].sort((a, b) => b.length - a.length);
+  for (const prefix of sortedPrefixes) {
+    if (stemmed.startsWith(prefix)) {
+      stemmed = stemmed.slice(prefix.length);
+      if (stemmed.startsWith('-')) stemmed = stemmed.slice(1);
+      break;
+    }
+  }
+  
+  // Handle suffixes
+  if (stemmed.length > 4) {
+    const sortedSuffixes = [...tagalogSuffixes].sort((a, b) => b.length - a.length);
+    for (const suffix of sortedSuffixes) {
+      if (stemmed.endsWith(suffix)) {
+        stemmed = stemmed.slice(0, -suffix.length);
+        if (stemmed.endsWith('-')) stemmed = stemmed.slice(0, -1);
+        break;
+      }
+    }
+  }
+  
+  return stemmed.length >= 3 ? stemmed : word;
+}
+
+// Register Tagalog language with sentiment library
+const tagalogLanguage = {
+  labels: { ...tagalogPositive }
+};
+// Add negative words (sentiment library expects positive numbers, we'll handle negation ourselves)
+Object.keys(tagalogNegative).forEach(word => {
+  tagalogLanguage.labels[word] = tagalogNegative[word];
+});
+sentimentLib.registerLanguage('tl', tagalogLanguage);
 
 /**
  * Calculates the average rating for a given event.
@@ -719,159 +861,271 @@ async function analyzeCommentSentiment(text) {
   return result;
 }
 
-
 /**
- * JavaScript-based sentiment analysis (High-fidelity fallback)
- * Matches Python accuracy including Tagalog negation and intensifiers
+ * JavaScript-based sentiment analysis (Python-Equivalent Implementation)
+ * Mirrors text_analysis.py MultilingualSentimentAnalyzer exactly
  */
 function analyzeWithJS(text) {
-  if (!text || !text.trim()) return { sentiment: "neutral", confidence: 0, method: "javascript_fallback" };
-  
-  const cleanText = text.toLowerCase();
-  
-  // 1. Check for Phrases first (Higher priority)
-  const phrases = {
-      positive: [
-          'very good', 'ang ganda', 'sobrang ganda', 'sobra ganda', 'ang galing',
-          'maraming salamat', 'thank you so much', 'napakaganda',
-          'napakagaling', 'the best', 'well done', 'job well done',
-          'great job', 'excellent work', 'love it', 'loved it',
-          'napakasaya', 'sobrang saya', 'sobra saya', 'ang saya',
-          'napakaayos', 'sobrang ayos', 'ang husay', 'napakatahimik',
-          'well-organized', 'well-prepared', 'well-managed', 'well-planned'
-      ],
-      negative: [
-          'not good', 'not great', 'hindi maganda', 'walang kwenta',
-          'waste of time', 'sayang lang', 'hindi ako satisfied',
-          'bad experience', 'poor quality', 'very bad', 'so bad',
-          'napakamasama', 'sobrang masama', 'ang sama',
-          'napakapangit', 'sobrang pangit', 'hindi prepared',
-          'hindi naging maayos', 'hindi maayos', 'hindi okay',
-          'hindi ayos', 'di maayos', 'di maganda', 'waste of energy'
-      ]
-  };
-  
-  for (const phrase of phrases.positive) {
-      if (cleanText.includes(phrase)) return { sentiment: "positive", confidence: 0.9, method: "javascript_phrase_match" };
+  if (!text || !text.trim()) {
+    return { sentiment: "neutral", confidence: 0, method: "js_empty_text" };
   }
-  for (const phrase of phrases.negative) {
-      if (cleanText.includes(phrase)) return { sentiment: "negative", confidence: 0.9, method: "javascript_phrase_match" };
+
+  const textLower = text.toLowerCase();
+
+  // Initialize scores
+  let positiveScore = 0;
+  let negativeScore = 0;
+  let neutralCount = 0;
+  let constructiveCriticismCount = 0;
+  let emoticonScore = 0;
+
+  // ========================================
+  // 1. EMOTICON/EMOJI ANALYSIS
+  // ========================================
+  for (const emoji in emojiScores) {
+    if (text.includes(emoji)) {
+      emoticonScore += emojiScores[emoji];
+    }
   }
-  
-  // 2. Tokenize
-  const words = cleanText.split(/\s+/);
-  
-  // 3. Negation & Intensifier Logic
-  const negations = ['not', 'no', 'never', 'hindi', 'wala', 'walang', 'di', 'di ko', 'hinde'];
-  const intensifiers = ['very', 'really', 'extremely', 'super', 'sobra', 'sobrang', 'napaka', 'labis', 'grabe', 'talaga', 'masyado'];
-  
-  // Custom Tagalog scoring calculation
-  let score = 0;
-  let wordCount = 0;
-  
-  // Use sentiment library as base
-  const sentimentResult = sentiment.analyze(text);
-  score += sentimentResult.score;
-  
-  // Manual word processing for custom Tagalog logic
-  for (let i = 0; i < words.length; i++) {
+
+  // ========================================
+  // 2. NEUTRAL INDICATOR CHECK
+  // ========================================
+  for (const neutral of neutralIndicators) {
+    if (textLower.includes(neutral)) {
+      neutralCount++;
+    }
+  }
+
+  // ========================================
+  // 3. HELPER: Check negation context (previous 20 chars)
+  // ========================================
+  function isNegatedContext(text, startIdx) {
+    if (startIdx <= 0) return false;
+    const context = text.substring(Math.max(0, startIdx - 20), startIdx).toLowerCase();
+    const contextWords = context.match(/\w+/g) || [];
+    return contextWords.some(w => negations.includes(w));
+  }
+
+  // ========================================
+  // 4. PHRASE MATCHING (Higher weight, with negation context)
+  // ========================================
+  const usedPhraseRanges = [];
+
+  // Sort phrases by length (longest first) to avoid partial matches
+  const sortedPosPhrases = [...positivePhrases].sort((a, b) => b.length - a.length);
+  const sortedNegPhrases = [...negativePhrases].sort((a, b) => b.length - a.length);
+
+  for (const phrase of sortedPosPhrases) {
+    const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    let match;
+    while ((match = regex.exec(textLower)) !== null) {
+      const startIdx = match.index;
+      const phraseRange = { start: startIdx, end: match.index + match[0].length };
+      
+      // Skip if already covered by longer phrase
+      if (usedPhraseRanges.some(r => startIdx >= r.start && startIdx < r.end)) continue;
+
+      if (isNegatedContext(textLower, startIdx)) {
+        negativeScore += 2.0;
+      } else {
+        positiveScore += 2.5;
+      }
+      usedPhraseRanges.push(phraseRange);
+    }
+  }
+
+  for (const phrase of sortedNegPhrases) {
+    const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    let match;
+    while ((match = regex.exec(textLower)) !== null) {
+      const startIdx = match.index;
+      const phraseRange = { start: startIdx, end: match.index + match[0].length };
+      
+      if (usedPhraseRanges.some(r => startIdx >= r.start && startIdx < r.end)) continue;
+
+      if (isNegatedContext(textLower, startIdx)) {
+        positiveScore += 2.0;
+      } else {
+        negativeScore += 2.5;
+      }
+      usedPhraseRanges.push(phraseRange);
+    }
+  }
+
+  // ========================================
+  // 5. SENTENCE-LEVEL ANALYSIS
+  // ========================================
+  const sentences = text.replace(/!/g, '.').replace(/\?/g, '.').split('.').filter(s => s.trim());
+  const sentenceSentiments = [];
+
+  for (const sentence of sentences) {
+    const sentLower = sentence.toLowerCase();
+    let sentPosScore = 0;
+    let sentNegScore = 0;
+    let isConstructive = constructivePatterns.some(p => sentLower.includes(p));
+
+    const words = sentLower.match(/[\w']+/g) || [];
+    for (let i = 0; i < words.length; i++) {
       const word = words[i];
-      const prevWord = i > 0 ? words[i-1] : "";
-      const prevPrevWord = i > 1 ? words[i-2] : "";
+      const isNegated = i > 0 && negations.includes(words[i - 1]);
+      let multiplier = 1.0;
       
-      // Check for negation context (previous 1-2 words)
-      const isNegated = negations.includes(prevWord) || negations.includes(prevPrevWord);
-      
-      // Check for intensifier
-      const isIntensified = intensifiers.includes(prevWord);
-      
-      // Look up in Tagalog lexicon
-      if (tagalogLanguage.labels[word]) {
-          let wordScore = tagalogLanguage.labels[word];
-          
-          if (isNegated) {
-              // Flip score for negation
-              wordScore = -wordScore;
-          }
-          
-          if (isIntensified) {
-              // Boost score
-              wordScore = wordScore * 1.5;
-          }
-          
-          // If the word was NOT in the sentiment library (score 0 change), add it manually
-          // Note: sentiment library already accounts for registered keys, but doesn't handle negation/intensifiers well for custom langs
-          // So we might be double counting if we are not careful.
-          // Correct approach: The sentiment library handled the basic score. We need to ADJUST it.
-          // But `sentiment` library doesn't support context-aware modification easily.
-          // Better approach for JS fallback: Use manual scoring + lexicon.
-          
-          // Re-calculate simplistic score to be safe and accurate
+      // Check intensifiers/diminishers in previous 2 words
+      for (let j = Math.max(0, i - 2); j < i; j++) {
+        if (intensifiers.includes(words[j])) {
+          multiplier = 2.0;
+          break;
+        } else if (diminishers.includes(words[j])) {
+          multiplier = 0.5;
+          break;
+        }
       }
+
+      const stemmed = stemTagalog(word);
+
+      // Check Tagalog positive
+      if (tagalogPositive[word] || tagalogPositive[stemmed]) {
+        const score = (tagalogPositive[word] || tagalogPositive[stemmed]) * multiplier;
+        if (isNegated) sentNegScore += score;
+        else sentPosScore += score;
+      }
+      // Check Tagalog negative
+      else if (tagalogNegative[word] || tagalogNegative[stemmed]) {
+        const score = Math.abs(tagalogNegative[word] || tagalogNegative[stemmed]) * multiplier;
+        if (isNegated) sentPosScore += score;
+        else sentNegScore += score;
+      }
+      // Check English (via sentiment library)
+      else {
+        const engResult = sentimentLib.analyze(word);
+        if (engResult.score !== 0) {
+          const score = Math.abs(engResult.score) * multiplier;
+          if (engResult.score > 0) {
+            if (isNegated) sentNegScore += score;
+            else sentPosScore += score;
+          } else {
+            if (isNegated) sentPosScore += score;
+            else sentNegScore += score;
+          }
+        }
+      }
+    }
+
+    if (isConstructive) constructiveCriticismCount++;
+    sentenceSentiments.push({
+      positive: sentPosScore,
+      negative: sentNegScore,
+      isConstructive,
+      balance: sentPosScore - sentNegScore
+    });
   }
+
+  // ========================================
+  // 6. WORD-BY-WORD ANALYSIS (outside phrases)
+  // ========================================
+  const wordsData = [...textLower.matchAll(/[\w']+/g)];
   
-  // RE-IMPLEMENTATION: Simplified Context-Aware Scoring
-  // Ignore library score, build own score using library's words + custom labels
-  let manualScore = 0;
-  let meaningfulWords = 0;
-  
-  for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      let wordScore = 0;
-      
-      // 1. Get Base Score (Library + Custom)
-      if (tagalogLanguage.labels[word]) {
-          wordScore = tagalogLanguage.labels[word];
-      } else if (sentimentResult.calculation.some(item => Object.keys(item)[0] === word)) {
-          // If recognized by English dictionary
-          // sentimentResult.calculation is array of objects {word: score}
-           const match = sentimentResult.calculation.find(item => Object.keys(item)[0] === word);
-           if (match) wordScore = match[Object.keys(match)[0]];
+  for (const match of wordsData) {
+    const word = match[0];
+    const wordStart = match.index;
+
+    // Skip if part of already-analyzed phrase
+    if (usedPhraseRanges.some(r => wordStart >= r.start && wordStart < r.end)) continue;
+
+    // Check negation context
+    const isNegated = isNegatedContext(textLower, wordStart);
+
+    // Check intensifiers/diminishers in previous words
+    let multiplier = 1.0;
+    const prevContext = textLower.substring(Math.max(0, wordStart - 15), wordStart);
+    const prevWords = prevContext.match(/\w+/g) || [];
+    for (const pw of prevWords.slice(-2)) {
+      if (intensifiers.includes(pw)) {
+        multiplier = 2.0;
+        break;
+      } else if (diminishers.includes(pw)) {
+        multiplier = 0.5;
+        break;
       }
-      
-      if (wordScore !== 0) {
-          // 2. Check Negation (last 2 words)
-          const prevWord = i > 0 ? words[i-1] : "";
-          const prevPrevWord = i > 1 ? words[i-2] : "";
-          
-          if (negations.includes(prevWord) || negations.includes(prevPrevWord)) {
-              if (wordScore > 0) wordScore = -1; // "Not good" -> negative
-              else if (wordScore < 0) wordScore = 0.5; // "Not bad" -> slightly positive
-          }
-          
-          // 3. Check Intensifier (last word)
-          if (intensifiers.includes(prevWord)) {
-              wordScore *= 1.5;
-          }
-          
-          manualScore += wordScore;
-          meaningfulWords++;
+    }
+
+    const stemmed = stemTagalog(word);
+
+    // Score the word
+    if (tagalogPositive[word] || tagalogPositive[stemmed]) {
+      const score = (tagalogPositive[word] || tagalogPositive[stemmed]) * multiplier;
+      if (isNegated) negativeScore += score;
+      else positiveScore += score;
+    }
+    else if (tagalogNegative[word] || tagalogNegative[stemmed]) {
+      const score = Math.abs(tagalogNegative[word] || tagalogNegative[stemmed]) * multiplier;
+      if (isNegated) positiveScore += score;
+      else negativeScore += score;
+    }
+    else {
+      const engResult = sentimentLib.analyze(word);
+      if (engResult.score !== 0) {
+        const score = Math.abs(engResult.score) * multiplier;
+        if (engResult.score > 0) {
+          if (isNegated) negativeScore += score;
+          else positiveScore += score;
+        } else {
+          if (isNegated) positiveScore += score;
+          else negativeScore += score;
+        }
       }
+    }
   }
-  
-  // 4. Emoji Analysis
-  const happyEmojis = ['😊', '😀', '😄', '😍', '👍', '🙌', '🎉', ':)', ':-)', ':D'];
-  const sadEmojis = ['😞', '😢', '😠', '😡', '👎', '😕', '😔', ':(', ':-(', 'D:'];
-  
-  for (const emoji of happyEmojis) if (text.includes(emoji)) manualScore += 1;
-  for (const emoji of sadEmojis) if (text.includes(emoji)) manualScore -= 1;
-  
-  // Normalize
-  let normalizedScore = 0;
-  if (manualScore > 0) normalizedScore = Math.min(1, manualScore / 3); // Normalize slightly faster
-  if (manualScore < 0) normalizedScore = Math.max(-1, manualScore / 3);
-  
-  // Determine Label
-  let label = "neutral";
-  if (normalizedScore > 0.1) label = "positive";
-  if (normalizedScore < -0.1) label = "negative";
-  
-  const confidence = Math.min(1, Math.abs(normalizedScore) + 0.3);
-  
+
+  // Add emoticon score
+  if (emoticonScore > 0) positiveScore += emoticonScore;
+  else if (emoticonScore < 0) negativeScore += Math.abs(emoticonScore);
+
+  // ========================================
+  // 7. CALCULATE FINAL SENTIMENT
+  // ========================================
+  const positiveSentences = sentenceSentiments.filter(s => s.balance > 0.5).length;
+  const negativeSentences = sentenceSentiments.filter(s => s.balance < -0.5).length;
+  const totalScore = positiveScore - negativeScore;
+
+  const hasMixedSentiment = (positiveSentences > 0 && negativeSentences > 0) || constructiveCriticismCount > 0;
+  const hasSignificantNegative = negativeScore >= 1.0;
+  const hasContrast = contrastWords.some(w => textLower.includes(` ${w} `) || textLower.includes(`${w} `));
+
+  let sentiment = "neutral";
+  let confidence = 0.65;
+
+  // Neutral overrides (like Python)
+  if (neutralCount >= 1 && positiveScore < 1.0 && negativeScore < 1.0) {
+    sentiment = "neutral";
+    confidence = 0.75;
+  }
+  else if (hasMixedSentiment && (constructiveCriticismCount >= 2 || hasSignificantNegative)) {
+    sentiment = "neutral";
+    confidence = 0.8;
+  }
+  else if (hasContrast && (positiveScore > 0 || negativeScore > 0)) {
+    // Mixed sentiment due to contrast words
+    sentiment = "neutral";
+    confidence = 0.75;
+  }
+  else if (totalScore >= 0.7) {
+    sentiment = "positive";
+    confidence = Math.min(0.6 + (totalScore / 10), 0.95);
+  }
+  else if (totalScore <= -0.7) {
+    sentiment = "negative";
+    confidence = Math.min(0.6 + (Math.abs(totalScore) / 10), 0.95);
+  }
+
   return {
-      sentiment: label,
-      confidence: parseFloat(confidence.toFixed(2)),
-      method: "javascript_enhanced"
+    sentiment,
+    confidence: parseFloat(confidence.toFixed(2)),
+    positiveScore: parseFloat(positiveScore.toFixed(2)),
+    negativeScore: parseFloat(negativeScore.toFixed(2)),
+    totalScore: parseFloat(totalScore.toFixed(2)),
+    method: "javascript_python_equivalent"
   };
 }
 
