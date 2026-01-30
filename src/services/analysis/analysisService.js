@@ -563,14 +563,21 @@ function getPythonPath() {
     return cwdVenvPathUnix;
   }
 
-  // 2. Check for Render venv (Explicit path)
+  // 2. Check for Railway venv (Explicit path)
+  const railwayVenvPath = "/app/venv/bin/python";
+  if (fs.existsSync(railwayVenvPath)) {
+    console.log("✅ CHECK: Found Railway venv at:", railwayVenvPath);
+    return railwayVenvPath;
+  }
+
+  // 3. Check for Render venv (Explicit path)
   const renderVenvPath = "/opt/render/project/src/venv/bin/python";
   if (fs.existsSync(renderVenvPath)) {
     console.log("✅ CHECK: Found Render venv at:", renderVenvPath);
     return renderVenvPath;
   }
 
-  // 3. Fallback to system python (relies on PYTHONPATH for libraries)
+  // 4. Fallback to system python (relies on PYTHONPATH for libraries)
   console.log("⚠️ No virtual environment found. Using system python with PYTHONPATH.");
   if (process.platform === "win32") return "python";
   return "python3";
