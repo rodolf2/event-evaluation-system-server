@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: chmod +x render-build.sh && ./render-build.sh
-    startCommand: npm start
+    startCommand: pip3 install --user -r requirements.txt && npm start
     envVars:
       - key: NODE_ENV
         value: production
