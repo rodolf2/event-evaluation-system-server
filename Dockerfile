@@ -23,8 +23,10 @@ COPY requirements.txt ./
 RUN python3 -m venv /app/venv
 RUN /app/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-# Download NLTK data
-RUN /app/venv/bin/python -c "import nltk; nltk.download('punkt'); nltk.download('averaged_perceptron_tagger'); nltk.download('wordnet')"
+# Create NLTK data directory and download data
+ENV NLTK_DATA=/app/nltk_data
+RUN mkdir -p /app/nltk_data
+RUN /app/venv/bin/python -c "import nltk; nltk.download('punkt', download_dir='/app/nltk_data'); nltk.download('punkt_tab', download_dir='/app/nltk_data'); nltk.download('averaged_perceptron_tagger', download_dir='/app/nltk_data'); nltk.download('wordnet', download_dir='/app/nltk_data'); print('NLTK data downloaded successfully')"
 
 # Copy the rest of the application
 COPY . .

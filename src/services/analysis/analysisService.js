@@ -688,19 +688,29 @@ async function analyzeSingleWithPython(text, lexicon = []) {
     );
 
     let result = "";
+    let stderrOutput = "";
+    
     pyshell.on("message", (message) => {
       result += message;
     });
 
     pyshell.on("stderr", (stderr) => {
-      // Ignore debug output
+      stderrOutput += stderr;
+      console.log("Python stderr (analyzeSingle):", stderr);
     });
 
     pyshell.end((err) => {
       if (err) {
+        console.error("Python error:", err);
+        console.error("Python stderr:", stderrOutput);
         reject(err);
       } else {
         try {
+          if (!result || result.trim() === "") {
+            console.error("Python returned empty result. Stderr:", stderrOutput);
+            reject(new Error("Python returned empty result"));
+            return;
+          }
           const parsed = JSON.parse(result);
           if (parsed.success) {
             resolve({
@@ -712,6 +722,8 @@ async function analyzeSingleWithPython(text, lexicon = []) {
             reject(new Error(parsed.error || "Python analysis failed"));
           }
         } catch (parseErr) {
+          console.error("Failed to parse Python output:", result);
+          console.error("Stderr:", stderrOutput);
           reject(parseErr);
         }
       }
