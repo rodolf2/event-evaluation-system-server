@@ -11,7 +11,7 @@ import traceback
 import re
 
 from textblob import TextBlob
-import langid
+# Note: langid removed - using fast heuristic language detection instead
 
 class MultilingualSentimentAnalyzer:
     def __init__(self, custom_lexicon=None):
