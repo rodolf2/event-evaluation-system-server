@@ -1286,23 +1286,35 @@ const submitFormResponse = async (req, res) => {
     // Check if form is within event date range (if dates are set)
     if (form.eventStartDate || form.eventEndDate) {
       const now = new Date();
-      const startDate = form.eventStartDate
-        ? new Date(form.eventStartDate)
-        : null;
-      const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
-
-      if (startDate && now < startDate) {
-        return res.status(400).json({
-          success: false,
-          message: `This form will be available starting from ${startDate.toLocaleDateString()}`,
-        });
+      
+      if (form.eventStartDate) {
+        const startDate = new Date(form.eventStartDate);
+        // Set start date to beginning of the day (00:00:00)
+        startDate.setHours(0, 0, 0, 0);
+        
+        // Use a comparison date for "now" that respects the day
+        // We want to allow submission ANY time on the start day
+        const checkDate = new Date(now);
+        
+        if (checkDate < startDate) {
+           return res.status(400).json({
+            success: false,
+            message: `This form will be available starting from ${startDate.toLocaleDateString()}`,
+          });
+        }
       }
 
-      if (endDate && now > endDate) {
-        return res.status(400).json({
-          success: false,
-          message: `This form is no longer available. It was available until ${endDate.toLocaleDateString()}`,
-        });
+      if (form.eventEndDate) {
+        const endDate = new Date(form.eventEndDate);
+        // Set end date to end of the day (23:59:59)
+        endDate.setHours(23, 59, 59, 999);
+        
+        if (now > endDate) {
+          return res.status(400).json({
+            success: false,
+            message: `This form is no longer available. It was available until ${endDate.toLocaleDateString()}`,
+          });
+        }
       }
     }
 
