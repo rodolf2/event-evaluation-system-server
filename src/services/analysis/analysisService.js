@@ -15,180 +15,493 @@ const sentimentLib = new Sentiment();
 // Tagalog positive words with weights
 const tagalogPositive = {
   // Basic positive words and roots (weight: 1)
-  'maganda': 1, 'ganda': 1, 'mabuti': 1, 'buti': 1,
-  'masaya': 1, 'saya': 1, 'nakakatuwa': 1, 'tuwa': 1,
-  'galing': 1, 'magaling': 1, 'bilib': 1, 'husay': 1,
-  'mahusay': 1, 'astig': 1, 'sulit': 1, 'panalo': 1,
-  'maayos': 1, 'ayos': 1, 'linis': 1, 'malinis': 1,
-  'effective': 1, 'efficient': 1, 'successful': 1, 'tagumpay': 1,
-  'productive': 1, 'organized': 1, 'smooth': 1, 'professional': 1,
-  'natuto': 1, 'natutunan': 1, 'nakatulong': 1, 'helpful': 1,
-  'satisfied': 1, 'fun': 1, 'interesting': 1, 'educational': 1,
-  'useful': 1, 'motivating': 1, 'solid': 1, 'swabe': 1,
-  'oks': 0.5, 'goods': 1, 'nice': 1, 'yes': 1, 'oo': 1,
-  'sige': 0.5, 'salamat': 1, 'grateful': 1, 'appreciate': 1,
-  'appreciated': 1, 'thankful': 1, 'enjoy': 1, 'enjoyed': 1,
-  'amazing': 1.5, 'awesome': 1.5, 'excellent': 1.5, 'outstanding': 1.5,
-  'perfect': 1.5, 'fantastic': 1.5, 'wonderful': 1.5, 'great': 1,
-  'good': 1, 'best': 1.5, 'love': 1.5, 'loved': 1.5, 'like': 0.8,
-  'happy': 1, 'glad': 1, 'pleased': 1, 'delighted': 1.2,
-  'impressive': 1.2, 'recommend': 1, 'recommended': 1
+  maganda: 1,
+  ganda: 1,
+  mabuti: 1,
+  buti: 1,
+  masaya: 1,
+  saya: 1,
+  nakakatuwa: 1,
+  tuwa: 1,
+  galing: 1,
+  magaling: 1,
+  bilib: 1,
+  husay: 1,
+  mahusay: 1,
+  astig: 1,
+  sulit: 1,
+  panalo: 1,
+  maayos: 1,
+  ayos: 1,
+  linis: 1,
+  malinis: 1,
+  effective: 1,
+  efficient: 1,
+  successful: 1,
+  tagumpay: 1,
+  productive: 1,
+  organized: 1,
+  smooth: 1,
+  professional: 1,
+  natuto: 1,
+  natutunan: 1,
+  nakatulong: 1,
+  helpful: 1,
+  satisfied: 1,
+  fun: 1,
+  interesting: 1,
+  educational: 1,
+  useful: 1,
+  motivating: 1,
+  solid: 1,
+  swabe: 1,
+  oks: 0.5,
+  goods: 1,
+  nice: 1,
+  yes: 1,
+  oo: 1,
+  sige: 0.5,
+  salamat: 1,
+  grateful: 1,
+  appreciate: 1,
+  appreciated: 1,
+  thankful: 1,
+  enjoy: 1,
+  enjoyed: 1,
+  amazing: 1.5,
+  awesome: 1.5,
+  excellent: 1.5,
+  outstanding: 1.5,
+  perfect: 1.5,
+  fantastic: 1.5,
+  wonderful: 1.5,
+  great: 1,
+  good: 1,
+  best: 1.5,
+  love: 1.5,
+  loved: 1.5,
+  like: 0.8,
+  happy: 1,
+  glad: 1,
+  pleased: 1,
+  delighted: 1.2,
+  impressive: 1.2,
+  recommend: 1,
+  recommended: 1,
 };
 
 // Tagalog negative words with weights
 const tagalogNegative = {
   // Basic negative words and roots (weight: -1)
-  'masama': -1, 'sama': -1, 'pangit': -1, 'panget': -1,
-  'nakakaasar': -1, 'asar': -1, 'nakakainis': -1, 'inis': -1,
-  'galit': -1, 'ayaw': -1, 'badtrip': -1, 'nakakagalit': -1,
-  'boring': -1, 'nakakaantok': -1, 'sayang': -1,
-  'disappointed': -1, 'disappointing': -1, 'nakakadismaya': -1,
-  'dismaya': -1, 'dismayado': -1, 'nabigo': -1, 'failed': -1,
-  'problem': -0.7, 'problema': -0.7, 'mali': -0.8,
-  'kulang': -0.7, 'kakulangan': -0.8, 'incomplete': -0.7, 'poor': -1,
-  'crowded': -0.8, 'difficult': -0.8, 'nahirapan': -0.8, 'hard': -0.7,
-  'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
-  'bad': -1, 'worst': -2, 'disorganized': -1, 'chaotic': -1,
-  'magulo': -0.8, 'noisy': -0.6, 'late': -0.7, 'delayed': -0.7,
-  'matagal': -0.6, 'mabagal': -0.6, 'unprepared': -0.8,
-  'unprofessional': -1, 'mediocre': -0.6, 'meh': -0.5,
-  'reklamo': -1, 'bagsak': -1.5, 'lungkot': -1, 'nakakalungkot': -1,
-  'terrible': -1.5, 'horrible': -1.5, 'awful': -1.5, 'hate': -1.5,
-  'hated': -1.5, 'dislike': -1, 'annoying': -1, 'annoyed': -1,
-  'waste': -1, 'wasted': -1, 'useless': -1.2, 'pointless': -1
+  masama: -1,
+  sama: -1,
+  pangit: -1,
+  panget: -1,
+  nakakaasar: -1,
+  asar: -1,
+  nakakainis: -1,
+  inis: -1,
+  galit: -1,
+  ayaw: -1,
+  badtrip: -1,
+  nakakagalit: -1,
+  boring: -1,
+  nakakaantok: -1,
+  sayang: -1,
+  disappointed: -1,
+  disappointing: -1,
+  nakakadismaya: -1,
+  dismaya: -1,
+  dismayado: -1,
+  nabigo: -1,
+  failed: -1,
+  problem: -0.7,
+  problema: -0.7,
+  mali: -0.8,
+  kulang: -0.7,
+  kakulangan: -0.8,
+  incomplete: -0.7,
+  poor: -1,
+  crowded: -0.8,
+  difficult: -0.8,
+  nahirapan: -0.8,
+  hard: -0.7,
+  frustrated: -1,
+  frustrating: -1,
+  nakakafrustrate: -1,
+  bad: -1,
+  worst: -2,
+  disorganized: -1,
+  chaotic: -1,
+  magulo: -0.8,
+  noisy: -0.6,
+  late: -0.7,
+  delayed: -0.7,
+  matagal: -0.6,
+  mabagal: -0.6,
+  unprepared: -0.8,
+  unprofessional: -1,
+  mediocre: -0.6,
+  meh: -0.5,
+  reklamo: -1,
+  bagsak: -1.5,
+  lungkot: -1,
+  nakakalungkot: -1,
+  terrible: -1.5,
+  horrible: -1.5,
+  awful: -1.5,
+  hate: -1.5,
+  hated: -1.5,
+  dislike: -1,
+  annoying: -1,
+  annoyed: -1,
+  waste: -1,
+  wasted: -1,
+  useless: -1.2,
+  pointless: -1,
 };
 
 // Positive phrases (higher weight)
 const positivePhrases = [
-  'very good', 'ang ganda', 'sobrang ganda', 'sobra ganda', 'ang galing',
-  'maraming salamat', 'thank you so much', 'napakaganda',
-  'napakagaling', 'the best', 'well done', 'job well done',
-  'great job', 'excellent work', 'love it', 'loved it',
-  'napakasaya', 'sobrang saya', 'sobra saya', 'ang saya',
-  'napakaayos', 'sobrang ayos', 'ang husay', 'napakatahimik',
-  'well-organized', 'well-prepared', 'well-managed', 'well-planned',
-  'highly recommend', 'best experience', 'really enjoyed', 'so happy',
-  'panalo to', 'solid to', 'goods to', 'swabe lang', 'walang hassle',
-  'okay na okay', 'ayos na ayos', 'sarap ng', 'ang sarap'
+  "very good",
+  "ang ganda",
+  "sobrang ganda",
+  "sobra ganda",
+  "ang galing",
+  "maraming salamat",
+  "thank you so much",
+  "napakaganda",
+  "napakagaling",
+  "the best",
+  "well done",
+  "job well done",
+  "great job",
+  "excellent work",
+  "love it",
+  "loved it",
+  "napakasaya",
+  "sobrang saya",
+  "sobra saya",
+  "ang saya",
+  "napakaayos",
+  "sobrang ayos",
+  "ang husay",
+  "napakatahimik",
+  "well-organized",
+  "well-prepared",
+  "well-managed",
+  "well-planned",
+  "highly recommend",
+  "best experience",
+  "really enjoyed",
+  "so happy",
+  "panalo to",
+  "solid to",
+  "goods to",
+  "swabe lang",
+  "walang hassle",
+  "okay na okay",
+  "ayos na ayos",
+  "sarap ng",
+  "ang sarap",
 ];
 
 // Negative phrases (higher weight)
 const negativePhrases = [
-  'not good', 'not great', 'hindi maganda', 'walang kwenta',
-  'waste of time', 'sayang lang', 'hindi ako satisfied',
-  'bad experience', 'poor quality', 'very bad', 'so bad',
-  'napakamasama', 'sobrang masama', 'ang sama',
-  'napakapangit', 'sobrang pangit', 'hindi prepared',
-  'hindi naging maayos', 'hindi maayos', 'hindi okay',
-  'hindi ayos', 'di maayos', 'di maganda', 'waste of energy',
-  'sayang oras', 'sayang pera', 'nakakadismaya', 'nakaka-bored',
-  'ang gulo', 'sobrang gulo', 'walang silbi', 'basura',
-  'worst experience', 'not satisfied', 'needs improvement',
-  'could be better', 'room for improvement'
+  "not good",
+  "not great",
+  "hindi maganda",
+  "walang kwenta",
+  "waste of time",
+  "sayang lang",
+  "hindi ako satisfied",
+  "bad experience",
+  "poor quality",
+  "very bad",
+  "so bad",
+  "napakamasama",
+  "sobrang masama",
+  "ang sama",
+  "napakapangit",
+  "sobrang pangit",
+  "hindi prepared",
+  "hindi naging maayos",
+  "hindi maayos",
+  "hindi okay",
+  "hindi ayos",
+  "di maayos",
+  "di maganda",
+  "waste of energy",
+  "sayang oras",
+  "sayang pera",
+  "nakakadismaya",
+  "nakaka-bored",
+  "ang gulo",
+  "sobrang gulo",
+  "walang silbi",
+  "basura",
+  "worst experience",
+  "not satisfied",
+  "needs improvement",
+  "could be better",
+  "room for improvement",
 ];
 
 // Neutral indicators
 const neutralIndicators = [
-  'okay', 'ok', 'alright', 'fine', 'so-so', 'average', 'normal',
-  'ordinary', 'fair', 'decent', 'not bad', 'moderate',
-  'acceptable', 'passable', 'adequate', 'sufficient', 'however',
+  "okay",
+  "ok",
+  "alright",
+  "fine",
+  "so-so",
+  "average",
+  "normal",
+  "ordinary",
+  "fair",
+  "decent",
+  "not bad",
+  "moderate",
+  "acceptable",
+  "passable",
+  "adequate",
+  "sufficient",
+  "however",
   // Tagalog neutral - common expressions (prioritized patterns)
-  'okay lang', 'ok lang', 'oks lang', 'ayos lang', 'pwede na',
-  'pwede naman', 'ganon lang', 'ganun lang', 'sige lang',
-  'lang naman', 'naman', 'typical', 'karaniwan', 'normal lang',
-  'pwede', 'maaari', 'maybe', 'perhaps', 'siguro',
+  "okay lang",
+  "ok lang",
+  "oks lang",
+  "ayos lang",
+  "pwede na",
+  "pwede naman",
+  "ganon lang",
+  "ganun lang",
+  "sige lang",
+  "lang naman",
+  "naman",
+  "typical",
+  "karaniwan",
+  "normal lang",
+  "pwede",
+  "maaari",
+  "maybe",
+  "perhaps",
+  "siguro",
   // Key neutral Tagalog expressions with "lang" (just/only) modifier
-  'sakto lang', 'sakto', 'tama lang', 'kaya lang', 'medyo',
-  'walang masyadong', 'walang special', 'walang espesyal',
+  "sakto lang",
+  "sakto",
+  "tama lang",
+  "kaya lang",
+  "medyo",
+  "walang masyadong",
+  "walang special",
+  "walang espesyal",
   // Mixed/hesitant expressions
-  'may improvement', 'pwede pang', 'pero okay', 'pero ayos'
+  "may improvement",
+  "pwede pang",
+  "pero okay",
+  "pero ayos",
 ];
 
 // Negation words
 const negations = [
-  'not', 'no', 'never', "don't", "doesn't", "didn't", "won't", "can't", "cannot",
-  'hindi', 'wala', 'walang', 'di', 'hinde', 'ayaw', "di ko", "hindi ko"
+  "not",
+  "no",
+  "never",
+  "don't",
+  "doesn't",
+  "didn't",
+  "won't",
+  "can't",
+  "cannot",
+  "hindi",
+  "wala",
+  "walang",
+  "di",
+  "hinde",
+  "ayaw",
+  "di ko",
+  "hindi ko",
 ];
 
 // Intensifiers and diminishers
 const intensifiers = [
-  'very', 'really', 'extremely', 'super', 'sobra', 'sobrang',
-  'napaka', 'labis', 'grabe', 'talaga', 'so', 'too', 'ganado', 'masyado',
-  'absolutely', 'incredibly', 'highly', 'totally', 'completely'
+  "very",
+  "really",
+  "extremely",
+  "super",
+  "sobra",
+  "sobrang",
+  "napaka",
+  "labis",
+  "grabe",
+  "talaga",
+  "so",
+  "too",
+  "ganado",
+  "masyado",
+  "absolutely",
+  "incredibly",
+  "highly",
+  "totally",
+  "completely",
 ];
 
 const diminishers = [
-  'slightly', 'somewhat', 'a bit', 'a little', 'medyo', 'konti',
-  'kaunti', 'bahagya', 'kind of', 'kinda', 'sort of'
+  "slightly",
+  "somewhat",
+  "a bit",
+  "a little",
+  "medyo",
+  "konti",
+  "kaunti",
+  "bahagya",
+  "kind of",
+  "kinda",
+  "sort of",
 ];
 
 // Contrast words (indicates mixed sentiment)
-const contrastWords = ['but', 'however', 'although', 'pero', 'ngunit', 'subalit', 'kaso', 'though'];
+const contrastWords = [
+  "but",
+  "however",
+  "although",
+  "pero",
+  "ngunit",
+  "subalit",
+  "kaso",
+  "though",
+];
 
 // Constructive criticism patterns
 const constructivePatterns = [
-  'could be improved', 'could still be improved', 'room for improvement',
-  'with a few adjustments', 'next time', 'believe the next', 'can be even better',
-  'some areas', 'however', 'but', 'although',
-  'maaaring pagbutihin', 'maaaring mapabuti', 'may mga areas na maaaring',
-  'sa susunod', 'pwede pang mapabuti', 'sana ay maayos',
-  'pero', 'ngunit', 'subalit', 'gayunpaman'
+  "could be improved",
+  "could still be improved",
+  "room for improvement",
+  "with a few adjustments",
+  "next time",
+  "believe the next",
+  "can be even better",
+  "some areas",
+  "however",
+  "but",
+  "although",
+  "maaaring pagbutihin",
+  "maaaring mapabuti",
+  "may mga areas na maaaring",
+  "sa susunod",
+  "pwede pang mapabuti",
+  "sana ay maayos",
+  "pero",
+  "ngunit",
+  "subalit",
+  "gayunpaman",
 ];
 
 // Emoticons and emoji with scores
 const emojiScores = {
-  '😊': 0.5, '😀': 0.5, '😄': 0.5, '😍': 0.7, '👍': 0.5, '🙌': 0.5, '🎉': 0.7,
-  '❤️': 0.7, '🔥': 0.5, '💯': 0.5, '⭐': 0.5, '🌟': 0.5, ':)': 0.3, ':D': 0.3,
-  '😞': -0.5, '😢': -0.5, '😠': -0.7, '😡': -0.7, '👎': -0.5, '😕': -0.5,
-  '😔': -0.5, '💔': -0.7, '🤢': -0.7, ':(': -0.3, 'D:': -0.3
+  "😊": 0.5,
+  "😀": 0.5,
+  "😄": 0.5,
+  "😍": 0.7,
+  "👍": 0.5,
+  "🙌": 0.5,
+  "🎉": 0.7,
+  "❤️": 0.7,
+  "🔥": 0.5,
+  "💯": 0.5,
+  "⭐": 0.5,
+  "🌟": 0.5,
+  ":)": 0.3,
+  ":D": 0.3,
+  "😞": -0.5,
+  "😢": -0.5,
+  "😠": -0.7,
+  "😡": -0.7,
+  "👎": -0.5,
+  "😕": -0.5,
+  "😔": -0.5,
+  "💔": -0.7,
+  "🤢": -0.7,
+  ":(": -0.3,
+  "D:": -0.3,
 };
 
 // Tagalog affixes for stemming
-const tagalogPrefixes = ['nag-', 'nag', 'mag-', 'mag', 'na-', 'na', 'ma-', 'ma', 'naka-', 'naka', 'ipinag-', 'ipinag', 'pag-', 'pag', 'nakaka-', 'nakaka'];
-const tagalogSuffixes = ['-an', 'an', '-in', 'in', '-nan', 'nan', '-hin', 'hin'];
+const tagalogPrefixes = [
+  "nag-",
+  "nag",
+  "mag-",
+  "mag",
+  "na-",
+  "na",
+  "ma-",
+  "ma",
+  "naka-",
+  "naka",
+  "ipinag-",
+  "ipinag",
+  "pag-",
+  "pag",
+  "nakaka-",
+  "nakaka",
+];
+const tagalogSuffixes = [
+  "-an",
+  "an",
+  "-in",
+  "in",
+  "-nan",
+  "nan",
+  "-hin",
+  "hin",
+];
 
 /**
  * Simple rule-based stemming for Tagalog/Taglish
  */
 function stemTagalog(word) {
   if (word.length <= 4) return word;
-  
+
   let stemmed = word;
-  
+
   // Handle prefixes (sorted by length, longest first)
-  const sortedPrefixes = [...tagalogPrefixes].sort((a, b) => b.length - a.length);
+  const sortedPrefixes = [...tagalogPrefixes].sort(
+    (a, b) => b.length - a.length,
+  );
   for (const prefix of sortedPrefixes) {
     if (stemmed.startsWith(prefix)) {
       stemmed = stemmed.slice(prefix.length);
-      if (stemmed.startsWith('-')) stemmed = stemmed.slice(1);
+      if (stemmed.startsWith("-")) stemmed = stemmed.slice(1);
       break;
     }
   }
-  
+
   // Handle suffixes
   if (stemmed.length > 4) {
-    const sortedSuffixes = [...tagalogSuffixes].sort((a, b) => b.length - a.length);
+    const sortedSuffixes = [...tagalogSuffixes].sort(
+      (a, b) => b.length - a.length,
+    );
     for (const suffix of sortedSuffixes) {
       if (stemmed.endsWith(suffix)) {
         stemmed = stemmed.slice(0, -suffix.length);
-        if (stemmed.endsWith('-')) stemmed = stemmed.slice(0, -1);
+        if (stemmed.endsWith("-")) stemmed = stemmed.slice(0, -1);
         break;
       }
     }
   }
-  
+
   return stemmed.length >= 3 ? stemmed : word;
 }
 
 // Register Tagalog language with sentiment library
 const tagalogLanguage = {
-  labels: { ...tagalogPositive }
+  labels: { ...tagalogPositive },
 };
 // Add negative words (sentiment library expects positive numbers, we'll handle negation ourselves)
-Object.keys(tagalogNegative).forEach(word => {
+Object.keys(tagalogNegative).forEach((word) => {
   tagalogLanguage.labels[word] = tagalogNegative[word];
 });
-sentimentLib.registerLanguage('tl', tagalogLanguage);
+sentimentLib.registerLanguage("tl", tagalogLanguage);
 
 /**
  * Calculates the average rating for a given event.
@@ -251,7 +564,7 @@ const generateQualitativeReport = async (eventId) => {
       console.log("Calling Python script for sentiment analysis:", scriptName);
       console.log("Script Directory:", options.scriptPath);
       console.log("Number of comments to analyze:", comments.length);
-      
+
       const pyshell = new PythonShell(scriptName, options);
 
       // Send data to Python script
@@ -365,7 +678,7 @@ const generateQuantitativeReport = async (eventId) => {
       const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
       const options = getPythonOptions(scriptPath);
       const scriptName = path.basename(scriptPath);
-      
+
       const pyshell = new PythonShell(scriptName, options);
 
       pyshell.send(
@@ -733,9 +1046,14 @@ function getPythonPath() {
   const fs = require("fs");
   const path = require("path");
   console.log("🔍 Detect Python Environment");
-  
+
   // 1. Check for local venv (Standard for local development)
-  const cwdVenvPathWin = path.join(process.cwd(), "venv", "Scripts", "python.exe");
+  const cwdVenvPathWin = path.join(
+    process.cwd(),
+    "venv",
+    "Scripts",
+    "python.exe",
+  );
   const cwdVenvPathUnix = path.join(process.cwd(), "venv", "bin", "python");
 
   if (process.platform === "win32" && fs.existsSync(cwdVenvPathWin)) {
@@ -762,7 +1080,9 @@ function getPythonPath() {
   }
 
   // 4. Fallback to system python (relies on PYTHONPATH for libraries)
-  console.log("⚠️ No virtual environment found. Using system python with PYTHONPATH.");
+  console.log(
+    "⚠️ No virtual environment found. Using system python with PYTHONPATH.",
+  );
   if (process.platform === "win32") return "python";
   return "python3";
 }
@@ -771,43 +1091,42 @@ function getPythonPath() {
  * Configure PythonShell options with custom PYTHONPATH
  */
 function getPythonOptions(scriptPath) {
-    const pythonPath = getPythonPath();
-    const env = { ...process.env };
-    
-    // Only inject PYTHONPATH if we are NOT using a venv
-    // (If using venv, libraries are already in path)
-    const isVenv = pythonPath.includes("venv");
-    
-    if (!isVenv) {
-        const pythonLibs = path.resolve(__dirname, "../../../python_libs");
-        const renderLibs = "/opt/render/project/src/python_libs";
-        
-        let pythonPathEnv = process.env.PYTHONPATH || "";
-        if (require("fs").existsSync(pythonLibs)) {
-            pythonPathEnv = `${pythonLibs}${path.delimiter}${pythonPathEnv}`;
-            console.log(`🔧 Injecting PYTHONPATH (Local libs): ${pythonLibs}`);
-        } else if (require("fs").existsSync(renderLibs)) {
-            pythonPathEnv = `${renderLibs}${path.delimiter}${pythonPathEnv}`;
-             console.log(`🔧 Injecting PYTHONPATH (Render libs): ${renderLibs}`);
-        }
-        env.PYTHONPATH = pythonPathEnv;
+  const pythonPath = getPythonPath();
+  const env = { ...process.env };
+
+  // Only inject PYTHONPATH if we are NOT using a venv
+  // (If using venv, libraries are already in path)
+  const isVenv = pythonPath.includes("venv");
+
+  if (!isVenv) {
+    const pythonLibs = path.resolve(__dirname, "../../../python_libs");
+    const renderLibs = "/opt/render/project/src/python_libs";
+
+    let pythonPathEnv = process.env.PYTHONPATH || "";
+    if (require("fs").existsSync(pythonLibs)) {
+      pythonPathEnv = `${pythonLibs}${path.delimiter}${pythonPathEnv}`;
+      console.log(`🔧 Injecting PYTHONPATH (Local libs): ${pythonLibs}`);
+    } else if (require("fs").existsSync(renderLibs)) {
+      pythonPathEnv = `${renderLibs}${path.delimiter}${pythonPathEnv}`;
+      console.log(`🔧 Injecting PYTHONPATH (Render libs): ${renderLibs}`);
     }
+    env.PYTHONPATH = pythonPathEnv;
+  }
 
-    // Ensure NLTK_DATA is set
-    const nltkData = path.resolve(__dirname, "../../../nltk_data");
-    env.NLTK_DATA = nltkData;
+  // Ensure NLTK_DATA is set
+  const nltkData = path.resolve(__dirname, "../../../nltk_data");
+  env.NLTK_DATA = nltkData;
 
+  const scriptDir = path.dirname(scriptPath);
+  console.log(`🔧 Python Options - Script Dir: ${scriptDir}`);
 
-    const scriptDir = path.dirname(scriptPath);
-    console.log(`🔧 Python Options - Script Dir: ${scriptDir}`);
-
-    return {
-        mode: 'text',
-        pythonPath: pythonPath,
-        pythonOptions: ['-u'],
-        scriptPath: scriptDir, // Explicitly set directory
-        env: env
-    };
+  return {
+    mode: "text",
+    pythonPath: pythonPath,
+    pythonOptions: ["-u"],
+    scriptPath: scriptDir, // Explicitly set directory
+    env: env,
+  };
 }
 
 /**
@@ -835,34 +1154,23 @@ async function analyzeCommentSentiment(text) {
 
   let result;
 
-  // In production (Render), skip Python entirely to avoid slow cold starts
-  // Use Python only in local development
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  if (isProduction) {
-    // Use JavaScript analyzer directly in production (fast, no cold start)
-    result = analyzeWithJS(cleanText);
-  } else {
-    // Local development: try Python first with JS fallback
-    try {
-      // Fetch lexicon to pass to Python for custom word support
-      const dbLexicon = await Lexicon.find().lean();
-      
-      // Try Python analysis with timeout
-      const pythonPromise = analyzeSingleWithPython(cleanText, dbLexicon);
-      
-      // 5 second timeout for Python
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Python analysis timed out")), 5000)
-      );
-      
-      result = await Promise.race([pythonPromise, timeoutPromise]);
-      
-    } catch (error) {
-      console.error(`⚠️ Python analysis failed (${error.message}). Using JS fallback.`);
-      // Fallback to JavaScript analysis
-      result = analyzeWithJS(cleanText);
-    }
+  // Always use Python for sentiment analysis (upgraded Render plan)
+  try {
+    // Fetch lexicon to pass to Python for custom word support
+    const dbLexicon = await Lexicon.find().lean();
+
+    // Try Python analysis with timeout
+    const pythonPromise = analyzeSingleWithPython(cleanText, dbLexicon);
+
+    // 10 second timeout for Python (increased for production)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Python analysis timed out")), 10000),
+    );
+
+    result = await Promise.race([pythonPromise, timeoutPromise]);
+  } catch (error) {
+    console.error(`❌ Python analysis failed: ${error.message}`);
+    throw error; // No JS fallback - fully Python-based
   }
 
   // Cache the result
@@ -874,311 +1182,6 @@ async function analyzeCommentSentiment(text) {
   sentimentCache.set(cacheKey, { result, timestamp: Date.now() });
 
   return result;
-}
-
-/**
- * JavaScript-based sentiment analysis (Python-Equivalent Implementation)
- * Mirrors text_analysis.py MultilingualSentimentAnalyzer exactly
- */
-function analyzeWithJS(text) {
-  if (!text || !text.trim()) {
-    return { sentiment: "neutral", confidence: 0, method: "js_empty_text" };
-  }
-
-  const textLower = text.toLowerCase();
-
-  // Initialize scores
-  let positiveScore = 0;
-  let negativeScore = 0;
-  let neutralCount = 0;
-  let constructiveCriticismCount = 0;
-  let emoticonScore = 0;
-
-  // ========================================
-  // 1. EMOTICON/EMOJI ANALYSIS
-  // ========================================
-  for (const emoji in emojiScores) {
-    if (text.includes(emoji)) {
-      emoticonScore += emojiScores[emoji];
-    }
-  }
-
-  // ========================================
-  // 2. NEUTRAL INDICATOR CHECK (track positions)
-  // ========================================
-  const neutralPhraseRanges = [];
-  for (const neutral of neutralIndicators) {
-    if (textLower.includes(neutral)) {
-      neutralCount++;
-      // Track the range of this neutral phrase so we can skip word-level scoring
-      const regex = new RegExp(neutral.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-      let match;
-      while ((match = regex.exec(textLower)) !== null) {
-        neutralPhraseRanges.push({ start: match.index, end: match.index + match[0].length });
-      }
-    }
-  }
-
-  // ========================================
-  // 3. HELPER: Check negation context (previous 20 chars)
-  // ========================================
-  function isNegatedContext(text, startIdx) {
-    if (startIdx <= 0) return false;
-    const context = text.substring(Math.max(0, startIdx - 20), startIdx).toLowerCase();
-    const contextWords = context.match(/\w+/g) || [];
-    return contextWords.some(w => negations.includes(w));
-  }
-
-  // ========================================
-  // 4. PHRASE MATCHING (Higher weight, with negation context)
-  // ========================================
-  const usedPhraseRanges = [];
-
-  // Sort phrases by length (longest first) to avoid partial matches
-  const sortedPosPhrases = [...positivePhrases].sort((a, b) => b.length - a.length);
-  const sortedNegPhrases = [...negativePhrases].sort((a, b) => b.length - a.length);
-
-  for (const phrase of sortedPosPhrases) {
-    const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-    let match;
-    while ((match = regex.exec(textLower)) !== null) {
-      const startIdx = match.index;
-      const phraseRange = { start: startIdx, end: match.index + match[0].length };
-      
-      // Skip if already covered by longer phrase
-      if (usedPhraseRanges.some(r => startIdx >= r.start && startIdx < r.end)) continue;
-
-      if (isNegatedContext(textLower, startIdx)) {
-        negativeScore += 2.0;
-      } else {
-        positiveScore += 2.5;
-      }
-      usedPhraseRanges.push(phraseRange);
-    }
-  }
-
-  for (const phrase of sortedNegPhrases) {
-    const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-    let match;
-    while ((match = regex.exec(textLower)) !== null) {
-      const startIdx = match.index;
-      const phraseRange = { start: startIdx, end: match.index + match[0].length };
-      
-      if (usedPhraseRanges.some(r => startIdx >= r.start && startIdx < r.end)) continue;
-
-      if (isNegatedContext(textLower, startIdx)) {
-        positiveScore += 2.0;
-      } else {
-        negativeScore += 2.5;
-      }
-      usedPhraseRanges.push(phraseRange);
-    }
-  }
-
-  // ========================================
-  // 5. SENTENCE-LEVEL ANALYSIS
-  // ========================================
-  const sentences = text.replace(/!/g, '.').replace(/\?/g, '.').split('.').filter(s => s.trim());
-  const sentenceSentiments = [];
-
-  for (const sentence of sentences) {
-    const sentLower = sentence.toLowerCase();
-    let sentPosScore = 0;
-    let sentNegScore = 0;
-    let isConstructive = constructivePatterns.some(p => sentLower.includes(p));
-
-    const words = sentLower.match(/[\w']+/g) || [];
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      const isNegated = i > 0 && negations.includes(words[i - 1]);
-      let multiplier = 1.0;
-      
-      // Check intensifiers/diminishers in previous 2 words
-      for (let j = Math.max(0, i - 2); j < i; j++) {
-        if (intensifiers.includes(words[j])) {
-          multiplier = 2.0;
-          break;
-        } else if (diminishers.includes(words[j])) {
-          multiplier = 0.5;
-          break;
-        }
-      }
-
-      const stemmed = stemTagalog(word);
-
-      // Check Tagalog positive
-      if (tagalogPositive[word] || tagalogPositive[stemmed]) {
-        const score = (tagalogPositive[word] || tagalogPositive[stemmed]) * multiplier;
-        if (isNegated) sentNegScore += score;
-        else sentPosScore += score;
-      }
-      // Check Tagalog negative
-      else if (tagalogNegative[word] || tagalogNegative[stemmed]) {
-        const score = Math.abs(tagalogNegative[word] || tagalogNegative[stemmed]) * multiplier;
-        if (isNegated) sentPosScore += score;
-        else sentNegScore += score;
-      }
-      // Check English (via sentiment library)
-      else {
-        const engResult = sentimentLib.analyze(word);
-        if (engResult.score !== 0) {
-          const score = Math.abs(engResult.score) * multiplier;
-          if (engResult.score > 0) {
-            if (isNegated) sentNegScore += score;
-            else sentPosScore += score;
-          } else {
-            if (isNegated) sentPosScore += score;
-            else sentNegScore += score;
-          }
-        }
-      }
-    }
-
-    if (isConstructive) constructiveCriticismCount++;
-    sentenceSentiments.push({
-      positive: sentPosScore,
-      negative: sentNegScore,
-      isConstructive,
-      balance: sentPosScore - sentNegScore
-    });
-  }
-
-  // ========================================
-  // 6. WORD-BY-WORD ANALYSIS (outside phrases)
-  // ========================================
-  const wordsData = [...textLower.matchAll(/[\w']+/g)];
-  
-  for (const match of wordsData) {
-    const word = match[0];
-    const wordStart = match.index;
-
-    // Skip if part of already-analyzed phrase
-    if (usedPhraseRanges.some(r => wordStart >= r.start && wordStart < r.end)) continue;
-    
-    // Skip if part of neutral phrase (e.g., "ayos" in "ayos lang")
-    if (neutralPhraseRanges.some(r => wordStart >= r.start && wordStart < r.end)) continue;
-
-    // Check negation context
-    const isNegated = isNegatedContext(textLower, wordStart);
-
-    // Check intensifiers/diminishers in previous words
-    let multiplier = 1.0;
-    const prevContext = textLower.substring(Math.max(0, wordStart - 15), wordStart);
-    const prevWords = prevContext.match(/\w+/g) || [];
-    for (const pw of prevWords.slice(-2)) {
-      if (intensifiers.includes(pw)) {
-        multiplier = 2.0;
-        break;
-      } else if (diminishers.includes(pw)) {
-        multiplier = 0.5;
-        break;
-      }
-    }
-
-    const stemmed = stemTagalog(word);
-
-    // Score the word
-    if (tagalogPositive[word] || tagalogPositive[stemmed]) {
-      const score = (tagalogPositive[word] || tagalogPositive[stemmed]) * multiplier;
-      if (isNegated) negativeScore += score;
-      else positiveScore += score;
-    }
-    else if (tagalogNegative[word] || tagalogNegative[stemmed]) {
-      const score = Math.abs(tagalogNegative[word] || tagalogNegative[stemmed]) * multiplier;
-      if (isNegated) positiveScore += score;
-      else negativeScore += score;
-    }
-    else {
-      // Custom English word scoring (matches Python enhancement)
-      const englishNegativeWords = {
-        'poor': -0.4, 'crowded': -0.4, 'uncomfortable': -0.5, 'bad': -0.5,
-        'terrible': -0.7, 'horrible': -0.7, 'awful': -0.6, 'worst': -0.8,
-        'disappointing': -0.5, 'disappointed': -0.5, 'frustrating': -0.5,
-        'boring': -0.4, 'waste': -0.5, 'useless': -0.5, 'disorganized': -0.5,
-        'chaotic': -0.5, 'noisy': -0.3, 'late': -0.3, 'delayed': -0.3,
-        'unprofessional': -0.5, 'rude': -0.5, 'slow': -0.3, 'confusing': -0.4
-      };
-      const englishPositiveWords = {
-        'great': 0.5, 'excellent': 0.6, 'amazing': 0.6, 'wonderful': 0.6,
-        'fantastic': 0.6, 'awesome': 0.5, 'perfect': 0.7, 'outstanding': 0.6,
-        'love': 0.5, 'loved': 0.5, 'enjoy': 0.4, 'enjoyed': 0.4,
-        'helpful': 0.4, 'informative': 0.4, 'organized': 0.4, 'smooth': 0.4
-      };
-      
-      if (englishNegativeWords[word]) {
-        const score = Math.abs(englishNegativeWords[word]) * multiplier;
-        if (isNegated) positiveScore += score;
-        else negativeScore += score;
-      } else if (englishPositiveWords[word]) {
-        const score = englishPositiveWords[word] * multiplier;
-        if (isNegated) negativeScore += score;
-        else positiveScore += score;
-      } else {
-        // Fall back to sentiment library
-        const engResult = sentimentLib.analyze(word);
-        if (engResult.score !== 0) {
-          const score = Math.abs(engResult.score) * multiplier;
-          if (engResult.score > 0) {
-            if (isNegated) negativeScore += score;
-            else positiveScore += score;
-          } else {
-            if (isNegated) positiveScore += score;
-            else negativeScore += score;
-          }
-        }
-      }
-    }
-  }
-
-  // Add emoticon score
-  if (emoticonScore > 0) positiveScore += emoticonScore;
-  else if (emoticonScore < 0) negativeScore += Math.abs(emoticonScore);
-
-  // ========================================
-  // 7. CALCULATE FINAL SENTIMENT
-  // ========================================
-  const positiveSentences = sentenceSentiments.filter(s => s.balance > 0.5).length;
-  const negativeSentences = sentenceSentiments.filter(s => s.balance < -0.5).length;
-  const totalScore = positiveScore - negativeScore;
-
-  const hasMixedSentiment = (positiveSentences > 0 && negativeSentences > 0) || constructiveCriticismCount > 0;
-  const hasSignificantNegative = negativeScore >= 1.0;
-  const hasContrast = contrastWords.some(w => textLower.includes(` ${w} `) || textLower.includes(`${w} `));
-
-  let sentiment = "neutral";
-  let confidence = 0.65;
-
-  // Neutral overrides (like Python)
-  if (neutralCount >= 1 && positiveScore < 1.0 && negativeScore < 1.0) {
-    sentiment = "neutral";
-    confidence = 0.75;
-  }
-  else if (hasMixedSentiment && (constructiveCriticismCount >= 2 || hasSignificantNegative)) {
-    sentiment = "neutral";
-    confidence = 0.8;
-  }
-  else if (hasContrast && (positiveScore > 0 || negativeScore > 0)) {
-    // Mixed sentiment due to contrast words
-    sentiment = "neutral";
-    confidence = 0.75;
-  }
-  else if (totalScore >= 0.7) {
-    sentiment = "positive";
-    confidence = Math.min(0.6 + (totalScore / 10), 0.95);
-  }
-  else if (totalScore <= -0.7) {
-    sentiment = "negative";
-    confidence = Math.min(0.6 + (Math.abs(totalScore) / 10), 0.95);
-  }
-
-  return {
-    sentiment,
-    confidence: parseFloat(confidence.toFixed(2)),
-    positiveScore: parseFloat(positiveScore.toFixed(2)),
-    negativeScore: parseFloat(negativeScore.toFixed(2)),
-    totalScore: parseFloat(totalScore.toFixed(2)),
-    method: "javascript_python_equivalent"
-  };
 }
 
 /**
@@ -1204,7 +1207,7 @@ async function analyzeSingleWithPython(text, lexicon = []) {
 
     let result = "";
     let stderrOutput = "";
-    
+
     pyshell.on("message", (message) => {
       result += message;
     });
@@ -1222,7 +1225,10 @@ async function analyzeSingleWithPython(text, lexicon = []) {
       } else {
         try {
           if (!result || result.trim() === "") {
-            console.error("Python returned empty result. Stderr:", stderrOutput);
+            console.error(
+              "Python returned empty result. Stderr:",
+              stderrOutput,
+            );
             reject(new Error("Python returned empty result"));
             return;
           }
