@@ -1128,11 +1128,21 @@ function getPythonOptions(scriptPath) {
 
   // Set NLTK_DATA correctly based on environment
   const localNltkData = path.resolve(__dirname, "../../../nltk_data");
-  const renderNltkData = "/opt/render/project/src/nltk_data";
+  
+  // Render deployment logs show NLTK data is in home dir: /opt/render/nltk_data
+  const renderHomeNltkData = "/opt/render/nltk_data";
+  const renderProjectNltkData = "/opt/render/project/src/nltk_data";
   
   if (isRender) {
-    env.NLTK_DATA = renderNltkData;
-    console.log(`🔧 NLTK_DATA (Render): ${renderNltkData}`);
+    // Check if data exists in home dir first (most likely based on logs)
+    if (require("fs").existsSync(renderHomeNltkData)) {
+      env.NLTK_DATA = renderHomeNltkData;
+      console.log(`🔧 NLTK_DATA (Render Home): ${renderHomeNltkData}`);
+    } else {
+      // Fallback to project dir
+      env.NLTK_DATA = renderProjectNltkData;
+      console.log(`🔧 NLTK_DATA (Render Project): ${renderProjectNltkData}`);
+    }
   } else if (require("fs").existsSync(localNltkData)) {
     env.NLTK_DATA = localNltkData;
     console.log(`🔧 NLTK_DATA (Local): ${localNltkData}`);
