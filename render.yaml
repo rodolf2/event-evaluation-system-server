@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: chmod +x render-build.sh && ./render-build.sh
-    startCommand: python3 -c "from textblob import TextBlob; import langid; print('Python modules ready')" && npm start
+    startCommand: python3 -c "from textblob import TextBlob; print('Python ready')" && npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -40,7 +40,7 @@ services:
         value: "true"
       # Puppeteer cache directory - must match .puppeteerrc.cjs configuration
       - key: PUPPETEER_CACHE_DIR
-        value: /opt/render/project/puppeteer
+        value: /opt/render/project/src/.puppeteer_cache
       # NLTK data directory for sentiment analysis
       - key: NLTK_DATA
         value: ./nltk_data

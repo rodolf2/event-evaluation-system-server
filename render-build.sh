@@ -34,7 +34,17 @@ chmod +x setup_python.sh
 ./setup_python.sh
 
 echo "=== Installing Chrome for Puppeteer ==="
+# Set the cache directory to match .puppeteerrc.cjs
+export PUPPETEER_CACHE_DIR="$(pwd)/.puppeteer_cache"
+echo "PUPPETEER_CACHE_DIR set to: $PUPPETEER_CACHE_DIR"
+
+# Ensure cache directory exists
+mkdir -p "$PUPPETEER_CACHE_DIR"
+
 # Chrome installation for Puppeteer extraction
 npx puppeteer browsers install chrome
+
+echo "=== Verifying Chrome installation ==="
+ls -la "$PUPPETEER_CACHE_DIR" || echo "Cache directory listing failed"
 
 echo "=== Build complete ==="

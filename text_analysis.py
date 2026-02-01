@@ -1,7 +1,7 @@
 """
 Text Analysis Script for Event Evaluation System
 Implements multilingual sentiment analysis for English and Tagalog/Filipino text
-Uses TextBlob for advanced sentiment analysis with custom Tagalog lexicon
+Uses TextBlob for English analysis with custom Tagalog lexicon
 """
 
 import sys
@@ -11,7 +11,7 @@ import traceback
 import re
 
 from textblob import TextBlob
-# Note: langid removed - using fast heuristic language detection instead
+# Note: langid removed for memory efficiency - using heuristic language detection
 
 class MultilingualSentimentAnalyzer:
     def __init__(self, custom_lexicon=None):
@@ -250,7 +250,7 @@ class MultilingualSentimentAnalyzer:
             }
 
     def analyze_english_sentiment(self, text):
-        """Analyze English text using TextBlob with enhanced context and custom word detection"""
+        """Analyze English text using TextBlob with enhanced lexicon support"""
         try:
             analysis = TextBlob(text)
             polarity = analysis.sentiment.polarity
@@ -258,80 +258,65 @@ class MultilingualSentimentAnalyzer:
             text_lower = text.lower()
             words = re.findall(r"\w+", text_lower)
 
-            # Custom English negative words that TextBlob often misses
+            # English negative words with weights
             english_negative_words = {
-                'poor': -0.4, 'crowded': -0.4, 'uncomfortable': -0.5, 'bad': -0.5,
-                'terrible': -0.7, 'horrible': -0.7, 'awful': -0.6, 'worst': -0.8,
-                'disappointing': -0.5, 'disappointed': -0.5, 'frustrating': -0.5,
-                'boring': -0.4, 'waste': -0.5, 'useless': -0.5, 'disorganized': -0.5,
-                'chaotic': -0.5, 'noisy': -0.3, 'late': -0.3, 'delayed': -0.3,
-                'unprofessional': -0.5, 'rude': -0.5, 'slow': -0.3, 'confusing': -0.4,
-                # Added: criticism/improvement words
+                'poor': -0.5, 'crowded': -0.5, 'uncomfortable': -0.6, 'bad': -0.6,
+                'terrible': -0.8, 'horrible': -0.8, 'awful': -0.7, 'worst': -1.0,
+                'disappointing': -0.6, 'disappointed': -0.6, 'frustrating': -0.6,
+                'boring': -0.5, 'waste': -0.6, 'useless': -0.6, 'disorganized': -0.6,
+                'chaotic': -0.6, 'noisy': -0.4, 'late': -0.4, 'delayed': -0.4,
+                'unprofessional': -0.6, 'rude': -0.6, 'slow': -0.4, 'confusing': -0.5,
                 'shortened': -0.3, 'shorter': -0.2, 'improvement': -0.2, 'improve': -0.2,
-                'lacking': -0.4, 'needs': -0.1, 'could': -0.1, 'should': -0.1,
-                'disaster': -0.8, 'waited': -0.4, 'waiting': -0.3, 'hours': -0.2,
-                'long': -0.2, 'hassle': -0.5, 'annoying': -0.5, 'annoyed': -0.5
+                'lacking': -0.5, 'needs': -0.15, 'could': -0.1, 'should': -0.1,
+                'disaster': -1.0, 'waited': -0.5, 'waiting': -0.4, 'hours': -0.3,
+                'long': -0.3, 'hassle': -0.6, 'annoying': -0.6, 'annoyed': -0.6
             }
             
-            # Custom English positive words for balance
+            # English positive words with weights
             english_positive_words = {
-                'great': 0.5, 'excellent': 0.6, 'amazing': 0.6, 'wonderful': 0.6,
-                'fantastic': 0.6, 'awesome': 0.5, 'perfect': 0.7, 'outstanding': 0.6,
-                'love': 0.5, 'loved': 0.5, 'enjoy': 0.4, 'enjoyed': 0.4,
-                'helpful': 0.4, 'informative': 0.4, 'organized': 0.4, 'smooth': 0.4,
-                'relevant': 0.3, 'good': 0.3, 'nice': 0.3
+                'great': 0.6, 'excellent': 0.7, 'amazing': 0.7, 'wonderful': 0.7,
+                'fantastic': 0.7, 'awesome': 0.6, 'perfect': 0.8, 'outstanding': 0.7,
+                'love': 0.6, 'loved': 0.6, 'enjoy': 0.5, 'enjoyed': 0.5,
+                'helpful': 0.5, 'informative': 0.5, 'organized': 0.5, 'smooth': 0.5,
+                'relevant': 0.4, 'good': 0.4, 'nice': 0.4, 'satisfied': 0.5,
+                'happy': 0.5, 'glad': 0.5, 'pleased': 0.5, 'impressed': 0.6
             }
             
             # Contrast words that indicate mixed/neutral sentiment
             contrast_words = {'but', 'however', 'although', 'though', 'yet', 'except'}
             has_contrast = any(word in words for word in contrast_words)
             
-            # Check for "I feel like" pattern which often precedes criticism
+            # Check for criticism patterns
             has_criticism_pattern = 'i feel like' in text_lower or 'could have been' in text_lower or 'should have been' in text_lower
             
-            # Intensifiers that amplify sentiment
-            english_intensifiers = {'very', 'really', 'extremely', 'so', 'too', 'way', 'incredibly', 'absolutely'}
+            # Intensifiers
+            intensifiers = {'very', 'really', 'extremely', 'so', 'too', 'way', 'incredibly', 'absolutely'}
             
             # Calculate custom word scores
             custom_score = 0
             for i, word in enumerate(words):
-                # Check for intensifier before this word
-                multiplier = 1.5 if (i > 0 and words[i-1] in english_intensifiers) else 1.0
-                # "too" before adjective often indicates negative
+                multiplier = 1.5 if (i > 0 and words[i-1] in intensifiers) else 1.0
                 if i > 0 and words[i-1] == 'too' and word in english_positive_words:
-                    custom_score -= 0.3 * multiplier  # "too good" is usually sarcastic/negative context
+                    custom_score -= 0.3 * multiplier
                 elif word in english_negative_words:
                     custom_score += english_negative_words[word] * multiplier
                 elif word in english_positive_words:
                     custom_score += english_positive_words[word] * multiplier
             
-            # Check for emoticons
-            emoticon_boost = 0
-            for emoticon in self.positive_emoticons:
-                if emoticon in text:
-                    emoticon_boost += 0.15
-            for emoticon in self.negative_emoticons:
-                if emoticon in text:
-                    emoticon_boost -= 0.15
-            
-            # Combine TextBlob polarity with custom score and emoticons
-            # Weight custom score more heavily when TextBlob returns near-zero
+            # Combine TextBlob polarity with custom score
             if abs(polarity) < 0.1 and abs(custom_score) > 0.2:
-                # TextBlob missed sentiment, trust custom detection more
-                combined_polarity = custom_score * 0.8 + polarity * 0.2 + emoticon_boost
+                combined_polarity = custom_score * 0.8 + polarity * 0.2
             else:
-                # Blend both sources
-                combined_polarity = polarity * 0.5 + custom_score * 0.5 + emoticon_boost
+                combined_polarity = polarity * 0.5 + custom_score * 0.5
             
             # Clamp to valid range
             combined_polarity = max(-1, min(1, combined_polarity))
 
-            # Apply contrast penalty: "X was good, but Y" should lean neutral
+            # Apply contrast penalty
             if has_contrast or has_criticism_pattern:
-                # Push polarity towards zero (neutral)
                 combined_polarity *= 0.4
             
-            # Enhanced classification with tighter thresholds
+            # Classification
             if combined_polarity > 0.15:
                 sentiment = "positive"
             elif combined_polarity < -0.15:
@@ -339,19 +324,18 @@ class MultilingualSentimentAnalyzer:
             else:
                 sentiment = "neutral"
 
-            # Enhanced confidence based on polarity magnitude and subjectivity
             confidence = min((abs(combined_polarity) + 0.2) * 1.2, 1.0)
 
             return {
                 'sentiment': sentiment,
-                'polarity': combined_polarity,
-                'original_textblob_polarity': polarity,
-                'custom_word_score': custom_score,
-                'subjectivity': subjectivity,
-                'confidence': confidence,
+                'polarity': round(combined_polarity, 3),
+                'textblob_polarity': round(polarity, 3),
+                'custom_score': round(custom_score, 2),
+                'subjectivity': round(subjectivity, 2),
+                'confidence': round(confidence, 2),
                 'has_contrast': has_contrast,
                 'has_criticism_pattern': has_criticism_pattern,
-                'method': 'textblob_english_enhanced_v3'
+                'method': 'textblob_enhanced'
             }
         except Exception as e:
             return {
