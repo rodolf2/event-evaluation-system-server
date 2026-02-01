@@ -2018,7 +2018,9 @@ const getMyEvaluations = async (req, res) => {
     // from leaking into the participant-facing evaluations list.
     const forms = await Form.find({
       status: "published",
-      "attendeeList.email": userEmail,
+      // Use regex for case-insensitive email matching to ensure users see their forms
+      // regardless of how the email was stored in the attendee list
+      "attendeeList.email": { $regex: new RegExp(`^${userEmail}$`, "i") },
       $or: [
         { type: { $exists: false } },
         { type: null },
@@ -2045,29 +2047,16 @@ const getMyEvaluations = async (req, res) => {
     );
 
     const now = new Date();
-    const availableForms = forms.filter((form) => {
-      const startDate = form.eventStartDate
-        ? new Date(form.eventStartDate)
-        : null;
-      const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
-
-      // Only show evaluations that are currently open for responses.
-      if (startDate && now < startDate) {
-        console.log(
-          `[MY-EVALUATIONS] Form "${form.title}" filtered out - starts ${startDate}`
-        );
-        return false;
-      }
-
-      if (endDate && now > endDate) {
-        console.log(
-          `[MY-EVALUATIONS] Form "${form.title}" filtered out - ended ${endDate}`
-        );
-        return false;
-      }
-
-      console.log(`[MY-EVALUATIONS] Form "${form.title}" is available`);
-      return true;
+    // We want to return ALL forms the user is assigned to, regardless of date
+    // The frontend handles the display logic for "Upcoming", "Open", "Closed"
+    // and "Completed" states. 
+    const availableForms = forms;
+    
+    // Log for debugging
+    availableForms.forEach(form => {
+        const startDate = form.eventStartDate ? new Date(form.eventStartDate) : null;
+        const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
+        console.log(`[MY-EVALUATIONS] Returning form "${form.title}" (Start: ${startDate}, End: ${endDate})`);
     });
 
     console.log(
