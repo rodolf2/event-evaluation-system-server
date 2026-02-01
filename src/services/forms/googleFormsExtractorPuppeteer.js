@@ -1,5 +1,13 @@
 const puppeteer = require("puppeteer");
 
+// Try to load @sparticuz/chromium for serverless environments (Render, AWS Lambda, etc.)
+let chromium;
+try {
+  chromium = require("@sparticuz/chromium");
+} catch (e) {
+  chromium = null;
+}
+
 /**
  * Google Forms Extractor using Puppeteer
  *
@@ -28,34 +36,53 @@ class GoogleFormsExtractorPuppeteer {
   async extractForm(url) {
     console.log(`\n🔍 [Puppeteer Extractor] Starting extraction for: ${url}`);
     console.log(`   PUPPETEER_CACHE_DIR: ${process.env.PUPPETEER_CACHE_DIR || "Not set"}`);
+    console.log(`   RENDER environment: ${process.env.RENDER || "Not set"}`);
     console.log(`   Current working directory: ${process.cwd()}`);
     console.log(`   __dirname: ${__dirname}`);
+    console.log(`   @sparticuz/chromium available: ${chromium ? "Yes" : "No"}`);
 
-    // Check if .puppeteerrc.cjs exists and what it resolves to
-    const path = require('path');
-    const fs = require('fs');
-    const puppeteerConfigPath = path.join(__dirname, '..', '..', '..', '.puppeteerrc.cjs');
-    console.log(`   Looking for .puppeteerrc.cjs at: ${puppeteerConfigPath}`);
-    console.log(`   .puppeteerrc.cjs exists: ${fs.existsSync(puppeteerConfigPath)}`);
+    let browser;
+    
+    // Use @sparticuz/chromium on Render (serverless), regular puppeteer locally
+    if (process.env.RENDER === 'true' && chromium) {
+      console.log(`   Using @sparticuz/chromium for Render deployment...`);
+      const puppeteerCore = require("puppeteer-core");
+      
+      browser = await puppeteerCore.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      });
+    } else {
+      console.log(`   Using regular Puppeteer...`);
+      
+      // Check if .puppeteerrc.cjs exists and what it resolves to
+      const path = require('path');
+      const fs = require('fs');
+      const puppeteerConfigPath = path.join(__dirname, '..', '..', '..', '.puppeteerrc.cjs');
+      console.log(`   Looking for .puppeteerrc.cjs at: ${puppeteerConfigPath}`);
+      console.log(`   .puppeteerrc.cjs exists: ${fs.existsSync(puppeteerConfigPath)}`);
 
-    if (fs.existsSync(puppeteerConfigPath)) {
-      const config = require(puppeteerConfigPath);
-      console.log(`   .puppeteerrc.cjs cacheDirectory: ${config.cacheDirectory}`);
-      console.log(`   Resolved cacheDirectory: ${path.resolve(config.cacheDirectory)}`);
+      if (fs.existsSync(puppeteerConfigPath)) {
+        const config = require(puppeteerConfigPath);
+        console.log(`   .puppeteerrc.cjs cacheDirectory: ${config.cacheDirectory}`);
+        console.log(`   Resolved cacheDirectory: ${path.resolve(config.cacheDirectory)}`);
+      }
+
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--disable-gpu",
+        ],
+      });
     }
-
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--no-first-run",
-        "--no-zygote",
-        "--disable-gpu",
-      ],
-    });
 
     try {
       const page = await browser.newPage();
