@@ -869,6 +869,8 @@ def main():
             # Analyze a single comment and return sentiment
             comment = data.get('comment', '')
             lexicon = data.get('lexicon', None)
+            print(f"🐍 Comment length: {len(comment)}, Lexicon entries: {len(lexicon) if lexicon else 0}", file=sys.stderr, flush=True)
+            
             if not comment or not comment.strip():
                 print(json.dumps({
                     'success': True,
@@ -877,8 +879,11 @@ def main():
                     'method': 'empty_text'
                 }))
             else:
+                print("🐍 Creating analyzer...", file=sys.stderr, flush=True)
                 analyzer = MultilingualSentimentAnalyzer(custom_lexicon=lexicon)
+                print("🐍 Analyzer created, running analysis...", file=sys.stderr, flush=True)
                 result = analyzer.analyze_sentiment(comment)
+                print("🐍 Analysis complete", file=sys.stderr, flush=True)
                 print(json.dumps({
                     'success': True,
                     'sentiment': result.get('sentiment', 'neutral'),

@@ -1187,9 +1187,15 @@ async function analyzeCommentSentiment(text) {
 
   // Use Python for sentiment analysis (Render upgraded to 2GB RAM)
   try {
-    // NOTE: Don't send DB lexicon for single analysis - Python has built-in lexicons
-    // This keeps the payload small (~100 bytes vs 32KB) for fast analysis
-    const pythonPromise = analyzeSingleWithPython(cleanText, []);
+    // Fetch custom lexicon from DB (MIS lexicon management)
+    // Only send minimal data: { word, sentiment } to reduce payload size
+    const dbLexicon = await Lexicon.find().select('word sentiment').lean();
+    const minimalLexicon = dbLexicon.map(entry => ({
+      word: entry.word,
+      sentiment: entry.sentiment
+    }));
+
+    const pythonPromise = analyzeSingleWithPython(cleanText, minimalLexicon);
 
     // 30 second timeout for Python (cold starts on Render can be slow)
     const timeoutPromise = new Promise((_, reject) =>
