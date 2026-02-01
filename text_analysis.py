@@ -835,14 +835,21 @@ def analyze_quantitative(current_year_data, previous_year_data, current_year, pr
 def main():
     """Main function to handle different analysis actions"""
     try:
+        # Debug: Print to stderr that script started
+        print("🐍 Python script started", file=sys.stderr, flush=True)
+        
         # Read input from stdin
+        print("🐍 Waiting for stdin input...", file=sys.stderr, flush=True)
         input_data = sys.stdin.read()
+        print(f"🐍 Received input: {len(input_data)} bytes", file=sys.stderr, flush=True)
+        
         if not input_data:
             print(json.dumps({'success': False, 'error': 'No input data received'}))
             return
 
         data = json.loads(input_data)
         action = data.get('action')
+        print(f"🐍 Action: {action}", file=sys.stderr, flush=True)
 
         if action == 'generate_report':
             feedbacks = data.get('feedbacks', [])
