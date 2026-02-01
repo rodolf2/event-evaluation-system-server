@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: RENDER
+        value: "true"
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET

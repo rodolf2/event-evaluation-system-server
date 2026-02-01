@@ -1094,6 +1094,9 @@ function getPythonOptions(scriptPath) {
   const pythonPath = getPythonPath();
   const env = { ...process.env };
 
+  // Detect if running on Render
+  const isRender = process.env.RENDER === "true" || process.cwd().includes("/opt/render");
+  
   // Only inject PYTHONPATH if we are NOT using a venv
   // (If using venv, libraries are already in path)
   const isVenv = pythonPath.includes("venv");
@@ -1101,8 +1104,18 @@ function getPythonOptions(scriptPath) {
   if (!isVenv) {
     const pythonLibs = path.resolve(__dirname, "../../../python_libs");
     const renderLibs = "/opt/render/project/src/python_libs";
+    const userSitePackages = isRender 
+      ? "/opt/render/.local/lib/python3.11/site-packages"  // Render user site-packages
+      : "";
 
     let pythonPathEnv = process.env.PYTHONPATH || "";
+    
+    // Add user site-packages for Render (pip install --user)
+    if (isRender && userSitePackages) {
+      pythonPathEnv = `${userSitePackages}${path.delimiter}${pythonPathEnv}`;
+      console.log(`🔧 Injecting PYTHONPATH (Render user site): ${userSitePackages}`);
+    }
+    
     if (require("fs").existsSync(pythonLibs)) {
       pythonPathEnv = `${pythonLibs}${path.delimiter}${pythonPathEnv}`;
       console.log(`🔧 Injecting PYTHONPATH (Local libs): ${pythonLibs}`);
@@ -1113,9 +1126,17 @@ function getPythonOptions(scriptPath) {
     env.PYTHONPATH = pythonPathEnv;
   }
 
-  // Ensure NLTK_DATA is set
-  const nltkData = path.resolve(__dirname, "../../../nltk_data");
-  env.NLTK_DATA = nltkData;
+  // Set NLTK_DATA correctly based on environment
+  const localNltkData = path.resolve(__dirname, "../../../nltk_data");
+  const renderNltkData = "/opt/render/project/src/nltk_data";
+  
+  if (isRender) {
+    env.NLTK_DATA = renderNltkData;
+    console.log(`🔧 NLTK_DATA (Render): ${renderNltkData}`);
+  } else if (require("fs").existsSync(localNltkData)) {
+    env.NLTK_DATA = localNltkData;
+    console.log(`🔧 NLTK_DATA (Local): ${localNltkData}`);
+  }
 
   const scriptDir = path.dirname(scriptPath);
   console.log(`🔧 Python Options - Script Dir: ${scriptDir}`);
@@ -1162,16 +1183,16 @@ async function analyzeCommentSentiment(text) {
     // Try Python analysis with timeout
     const pythonPromise = analyzeSingleWithPython(cleanText, dbLexicon);
 
-    // 15 second timeout for Python (2GB RAM should be faster)
+    // 30 second timeout for Python (cold starts on Render can be slow)
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Python analysis timed out")), 15000),
+      setTimeout(() => reject(new Error("Python analysis timed out")), 30000),
     );
 
     result = await Promise.race([pythonPromise, timeoutPromise]);
     console.log(`✅ Python analysis succeeded for: "${cleanText.substring(0, 30)}..."`);
   } catch (error) {
     console.error(`❌ Python analysis failed: ${error.message}`);
-    throw error; // No JS fallback - testing Python on Render first
+    throw error; // No JS fallback - fix Python on Render
   }
 
   // Cache the result
