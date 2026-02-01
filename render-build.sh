@@ -37,14 +37,33 @@ echo "=== Installing Chrome for Puppeteer ==="
 # Set the cache directory to match .puppeteerrc.cjs
 export PUPPETEER_CACHE_DIR="$(pwd)/.puppeteer_cache"
 echo "PUPPETEER_CACHE_DIR set to: $PUPPETEER_CACHE_DIR"
+echo "Current directory: $(pwd)"
 
 # Ensure cache directory exists
 mkdir -p "$PUPPETEER_CACHE_DIR"
 
 # Chrome installation for Puppeteer extraction
+echo "Running: npx puppeteer browsers install chrome"
 npx puppeteer browsers install chrome
 
 echo "=== Verifying Chrome installation ==="
-ls -la "$PUPPETEER_CACHE_DIR" || echo "Cache directory listing failed"
+echo "Checking cache directory contents..."
+ls -laR "$PUPPETEER_CACHE_DIR" 2>/dev/null | head -50 || echo "Cache directory listing failed"
+
+echo ""
+echo "Looking for Chrome binary..."
+find "$PUPPETEER_CACHE_DIR" -name "chrome" -o -name "chrome-linux64" 2>/dev/null | head -10 || echo "Chrome binary not found"
+
+echo ""
+echo "Checking if Chrome executable exists..."
+CHROME_PATH=$(find "$PUPPETEER_CACHE_DIR" -name "chrome" -type f 2>/dev/null | head -1)
+if [ -n "$CHROME_PATH" ]; then
+    echo "✅ Chrome found at: $CHROME_PATH"
+    ls -la "$CHROME_PATH"
+else
+    echo "❌ Chrome executable not found in $PUPPETEER_CACHE_DIR"
+    echo "Directory structure:"
+    find "$PUPPETEER_CACHE_DIR" -type d 2>/dev/null | head -20
+fi
 
 echo "=== Build complete ==="
