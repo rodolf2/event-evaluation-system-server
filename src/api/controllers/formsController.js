@@ -1289,14 +1289,20 @@ const submitFormResponse = async (req, res) => {
       
       if (form.eventStartDate) {
         const startDate = new Date(form.eventStartDate);
-        // Set start date to beginning of the day (00:00:00)
         startDate.setHours(0, 0, 0, 0);
         
-        // Use a comparison date for "now" that respects the day
-        // We want to allow submission ANY time on the start day
-        const checkDate = new Date(now);
+        // Timezone fix: Server is likely UTC, user might be UTC+8 (Philippines/Asia).
+        // If it's Feb 2nd for user, it might still be Feb 1st for server.
+        // We create a "lenient" check by verifying if the start date is 
+        // significantly in the future (more than 24 hours away).
+        // This allows access effectively "on the day" regardless of timezone.
         
-        if (checkDate < startDate) {
+        const nowTime = now.getTime();
+        const startTime = startDate.getTime();
+        
+        // If start time is more than 24 hours in the future relative to server time, block it.
+        // (86400000 ms = 24 hours)
+        if (startTime - nowTime > 86400000) {
            return res.status(400).json({
             success: false,
             message: `This form will be available starting from ${startDate.toLocaleDateString()}`,
@@ -1309,7 +1315,13 @@ const submitFormResponse = async (req, res) => {
         // Set end date to end of the day (23:59:59)
         endDate.setHours(23, 59, 59, 999);
         
-        if (now > endDate) {
+        // Similar lenient check for end date - allow up to 24 hours "past" the strict server time
+        // to accommodate users who are "behind" UTC (e.g. US West Coast)
+        // or just generous buffer.
+        const endTime = endDate.getTime();
+        const nowTime = now.getTime();
+        
+        if (nowTime - endTime > 86400000) {
           return res.status(400).json({
             success: false,
             message: `This form is no longer available. It was available until ${endDate.toLocaleDateString()}`,
