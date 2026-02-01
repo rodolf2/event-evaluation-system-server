@@ -1162,9 +1162,9 @@ async function analyzeCommentSentiment(text) {
     // Try Python analysis with timeout
     const pythonPromise = analyzeSingleWithPython(cleanText, dbLexicon);
 
-    // 10 second timeout for Python (increased for production)
+    // 30 second timeout for Python (cold starts on Render can be slow)
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Python analysis timed out")), 10000),
+      setTimeout(() => reject(new Error("Python analysis timed out")), 30000),
     );
 
     result = await Promise.race([pythonPromise, timeoutPromise]);

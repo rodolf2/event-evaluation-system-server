@@ -3,9 +3,9 @@ services:
     name: event-evaluation-backend
     env: node
     region: oregon
-    plan: free
+    plan: starter
     buildCommand: chmod +x render-build.sh && ./render-build.sh
-    startCommand: OPENBLAS_NUM_THREADS=1 pip3 install --user --break-system-packages -r requirements.txt && python3 -c "import nltk; nltk.download('punkt')" && npm start
+    startCommand: python3 -c "from textblob import TextBlob; import langid; print('Python modules ready')" && npm start
     envVars:
       - key: NODE_ENV
         value: production
