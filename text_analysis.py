@@ -172,14 +172,47 @@ class MultilingualSentimentAnalyzer:
 
 
     def detect_language(self, text):
-        """Detect language with confidence score"""
+        """Detect language using fast heuristics (no ML model loading)"""
         try:
-            lang, confidence = langid.classify(text)
-            return {
-                'language': lang,
-                'confidence': float(confidence),
-                'is_reliable': confidence > 0.7
-            }
+            text_lower = text.lower()
+            words = set(re.findall(r"\w+", text_lower))
+            
+            # Count Tagalog indicators
+            tagalog_words = words.intersection(set(self.tagalog_positive.keys()) | set(self.tagalog_negative.keys()))
+            
+            # Common Tagalog function words and markers
+            tagalog_markers = {'ang', 'ng', 'mga', 'sa', 'na', 'ay', 'ko', 'mo', 'niya', 
+                              'kami', 'tayo', 'sila', 'po', 'opo', 'ba', 'din', 'rin',
+                              'lang', 'lamang', 'pero', 'kasi', 'kaya', 'dahil', 'para',
+                              'naman', 'talaga', 'sobra', 'napaka', 'grabe', 'yung'}
+            tagalog_marker_count = len(words.intersection(tagalog_markers))
+            
+            # Check for Tagalog phrases
+            has_tagalog_phrase = any(phrase in text_lower for phrase in 
+                                     self.positive_phrases + self.negative_phrases)
+            
+            # Determine language based on heuristics
+            tagalog_score = len(tagalog_words) + tagalog_marker_count + (2 if has_tagalog_phrase else 0)
+            
+            if tagalog_score >= 2 or has_tagalog_phrase:
+                return {
+                    'language': 'tl',
+                    'confidence': min(0.9, 0.5 + tagalog_score * 0.1),
+                    'is_reliable': True
+                }
+            elif tagalog_score == 1:
+                return {
+                    'language': 'mixed',
+                    'confidence': 0.5,
+                    'is_reliable': False
+                }
+            else:
+                # Assume English if no Tagalog indicators
+                return {
+                    'language': 'en',
+                    'confidence': 0.8,
+                    'is_reliable': True
+                }
         except Exception as e:
             return {
                 'language': 'unknown',
