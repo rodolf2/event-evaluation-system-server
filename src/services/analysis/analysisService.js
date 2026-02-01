@@ -1154,7 +1154,7 @@ async function analyzeCommentSentiment(text) {
 
   let result;
 
-  // Always use Python for sentiment analysis (upgraded Render plan)
+  // Use Python for sentiment analysis (Render upgraded to 2GB RAM)
   try {
     // Fetch lexicon to pass to Python for custom word support
     const dbLexicon = await Lexicon.find().lean();
@@ -1162,15 +1162,16 @@ async function analyzeCommentSentiment(text) {
     // Try Python analysis with timeout
     const pythonPromise = analyzeSingleWithPython(cleanText, dbLexicon);
 
-    // 30 second timeout for Python (cold starts on Render can be slow)
+    // 15 second timeout for Python (2GB RAM should be faster)
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Python analysis timed out")), 30000),
+      setTimeout(() => reject(new Error("Python analysis timed out")), 15000),
     );
 
     result = await Promise.race([pythonPromise, timeoutPromise]);
+    console.log(`✅ Python analysis succeeded for: "${cleanText.substring(0, 30)}..."`);
   } catch (error) {
     console.error(`❌ Python analysis failed: ${error.message}`);
-    throw error; // No JS fallback - fully Python-based
+    throw error; // No JS fallback - testing Python on Render first
   }
 
   // Cache the result
