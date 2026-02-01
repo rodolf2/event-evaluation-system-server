@@ -46,10 +46,23 @@ class MultilingualSentimentAnalyzer:
             'crowded': -0.8, 'difficult': -0.8, 'nahirapan': -0.8, 'hard': -0.7,
             'frustrated': -1, 'frustrating': -1, 'nakakafrustrate': -1,
             'bad': -1, 'worst': -2, 'disorganized': -1, 'chaotic': -1,
-            'magulo': -0.8, 'noisy': -0.6, 'late': -0.7, 'delayed': -0.7,
-            'matagal': -0.6, 'mabagal': -0.6, 'unprepared': -0.8,
+            # Chaos/disorder (stronger weights)
+            'magulo': -1.2, 'gulo': -1.2, 'noisy': -0.6, 'late': -0.7, 'delayed': -0.7,
+            'matagal': -1, 'mabagal': -0.6, 'unprepared': -0.8, 'tagal': -0.8,
             'unprofessional': -1, 'mediocre': -0.6, 'meh': -0.5,
-            'reklamo': -1, 'bagsak': -1.5, 'lungkot': -1, 'nakakalungkot': -1
+            'reklamo': -1, 'bagsak': -1.5, 'lungkot': -1, 'nakakalungkot': -1,
+            # Queue/waiting complaints (stronger weights)
+            'disaster': -1.5, 'terrible': -1.5, 'horrible': -1.5, 'awful': -1.5,
+            'waited': -1, 'waiting': -0.8, 'antay': -1, 'hintay': -1, 'naghintay': -1,
+            'pila': -0.5, 'hours': -0.6, 'oras': -0.6, 'dalawa': -0.3,
+            # Additional strong negative words
+            'hassle': -1, 'inconvenient': -1, 'uncomfortable': -0.8,
+            'unacceptable': -1.2, 'ridiculous': -1, 'absurd': -1,
+            'annoying': -1, 'annoyed': -1, 'irritating': -1, 'irritated': -1,
+            'stressful': -1, 'stressed': -0.8, 'tiring': -0.7, 'exhausting': -0.8,
+            'pagod': -0.6, 'napagod': -0.7, 'hirap': -0.8, 'mahirap': -0.8,
+            # Common complaint verbs
+            'pasok': -0.2, 'loob': -0.1, 'bago': -0.1
         }
 
         # Common Filipino phrases for context
@@ -70,7 +83,14 @@ class MultilingualSentimentAnalyzer:
             'napakamasama', 'sobrang masama', 'ang sama',
             'napakapangit', 'sobrang pangit', 'hindi prepared',
             'hindi naging maayos', 'hindi maayos', 'hindi okay',
-            'hindi ayos', 'di maayos', 'di maganda', 'waste of energy'
+            'hindi ayos', 'di maayos', 'di maganda', 'waste of energy',
+            # Queue/waiting complaints
+            'sobrang gulo', 'sobra gulo', 'ang gulo', 'napakatagal',
+            'waited for hours', 'waited for two hours', 'waited too long',
+            'matagal na pila', 'mahabang pila', 'ang tagal', 'sobrang tagal',
+            'dalawang oras', 'isang oras', 'nag-antay', 'naghintay',
+            'was a disaster', 'total disaster', 'complete disaster',
+            'could have been better', 'needs improvement', 'room for improvement'
         ]
 
         # Neutral words that might indicate mixed sentiment
@@ -89,6 +109,14 @@ class MultilingualSentimentAnalyzer:
             'walang masyadong', 'walang special', 'walang espesyal',
             # Mixed/hesitant expressions
             'may improvement', 'pwede pang', 'pero okay', 'pero ayos'
+        ]
+        
+        # Contrast words that often indicate mixed sentiment (positive + negative)
+        self.contrast_indicators = [
+            'but', 'however', 'although', 'though', 'yet', 'except',
+            'pero', 'kaya lang', 'kaso', 'subalit', 'ngunit',
+            'on the other hand', 'at the same time', 'i feel like',
+            'could have been', 'should have been', 'wish it was'
         ]
         
         # Negation words
@@ -237,7 +265,12 @@ class MultilingualSentimentAnalyzer:
                 'disappointing': -0.5, 'disappointed': -0.5, 'frustrating': -0.5,
                 'boring': -0.4, 'waste': -0.5, 'useless': -0.5, 'disorganized': -0.5,
                 'chaotic': -0.5, 'noisy': -0.3, 'late': -0.3, 'delayed': -0.3,
-                'unprofessional': -0.5, 'rude': -0.5, 'slow': -0.3, 'confusing': -0.4
+                'unprofessional': -0.5, 'rude': -0.5, 'slow': -0.3, 'confusing': -0.4,
+                # Added: criticism/improvement words
+                'shortened': -0.3, 'shorter': -0.2, 'improvement': -0.2, 'improve': -0.2,
+                'lacking': -0.4, 'needs': -0.1, 'could': -0.1, 'should': -0.1,
+                'disaster': -0.8, 'waited': -0.4, 'waiting': -0.3, 'hours': -0.2,
+                'long': -0.2, 'hassle': -0.5, 'annoying': -0.5, 'annoyed': -0.5
             }
             
             # Custom English positive words for balance
@@ -245,8 +278,16 @@ class MultilingualSentimentAnalyzer:
                 'great': 0.5, 'excellent': 0.6, 'amazing': 0.6, 'wonderful': 0.6,
                 'fantastic': 0.6, 'awesome': 0.5, 'perfect': 0.7, 'outstanding': 0.6,
                 'love': 0.5, 'loved': 0.5, 'enjoy': 0.4, 'enjoyed': 0.4,
-                'helpful': 0.4, 'informative': 0.4, 'organized': 0.4, 'smooth': 0.4
+                'helpful': 0.4, 'informative': 0.4, 'organized': 0.4, 'smooth': 0.4,
+                'relevant': 0.3, 'good': 0.3, 'nice': 0.3
             }
+            
+            # Contrast words that indicate mixed/neutral sentiment
+            contrast_words = {'but', 'however', 'although', 'though', 'yet', 'except'}
+            has_contrast = any(word in words for word in contrast_words)
+            
+            # Check for "I feel like" pattern which often precedes criticism
+            has_criticism_pattern = 'i feel like' in text_lower or 'could have been' in text_lower or 'should have been' in text_lower
             
             # Intensifiers that amplify sentiment
             english_intensifiers = {'very', 'really', 'extremely', 'so', 'too', 'way', 'incredibly', 'absolutely'}
@@ -285,6 +326,11 @@ class MultilingualSentimentAnalyzer:
             # Clamp to valid range
             combined_polarity = max(-1, min(1, combined_polarity))
 
+            # Apply contrast penalty: "X was good, but Y" should lean neutral
+            if has_contrast or has_criticism_pattern:
+                # Push polarity towards zero (neutral)
+                combined_polarity *= 0.4
+            
             # Enhanced classification with tighter thresholds
             if combined_polarity > 0.15:
                 sentiment = "positive"
@@ -303,7 +349,9 @@ class MultilingualSentimentAnalyzer:
                 'custom_word_score': custom_score,
                 'subjectivity': subjectivity,
                 'confidence': confidence,
-                'method': 'textblob_english_enhanced_v2'
+                'has_contrast': has_contrast,
+                'has_criticism_pattern': has_criticism_pattern,
+                'method': 'textblob_english_enhanced_v3'
             }
         except Exception as e:
             return {
@@ -511,9 +559,15 @@ class MultilingualSentimentAnalyzer:
             # Sentiment determination
             has_mixed_sentiment = (positive_sentences > 0 and negative_sentences > 0) or constructive_criticism_count > 0
             has_significant_negative = negative_score >= 1.0
+            has_strong_negative = negative_score >= 1.5  # Strong negative like "gulo" + "antay"
             score_ratio = abs(total_score) / max(positive_score + negative_score, 1)
 
-            if neutral_count >= 1 and positive_score < 1.0 and negative_score < 1.0:
+            # PRIORITY 1: Strong negative score overrides neutral indicators
+            if has_strong_negative and positive_score < negative_score:
+                sentiment = "negative"
+                confidence = min(0.6 + (abs(total_score) / 10), 0.95)
+            # PRIORITY 2: Neutral indicators only if no strong sentiment
+            elif neutral_count >= 1 and positive_score < 1.5 and negative_score < 1.5:
                 sentiment = "neutral"
                 confidence = 0.75
             elif has_mixed_sentiment and (constructive_criticism_count >= 2 or has_significant_negative):
@@ -670,6 +724,23 @@ class MultilingualSentimentAnalyzer:
         else:
             # Mixed, uncertain, or English with Tagalog tokens
             result = self.analyze_mixed_sentiment(cleaned_text)
+
+        # Check for contrast patterns that indicate mixed sentiment
+        # "X was good, but Y needs improvement" should be neutral, not positive
+        has_contrast = any(indicator in text_lower for indicator in self.contrast_indicators)
+        if has_contrast and result.get('sentiment') in ['positive', 'negative']:
+            # Check if there are both positive and negative indicators
+            has_positive = any(phrase in text_lower for phrase in self.positive_phrases) or \
+                          any(word in text_lower for word in self.tagalog_positive.keys())
+            has_negative = any(phrase in text_lower for phrase in self.negative_phrases) or \
+                          any(word in text_lower for word in self.tagalog_negative.keys())
+            
+            if has_positive and has_negative:
+                # Mixed sentiment - classify as neutral
+                result['sentiment'] = 'neutral'
+                result['confidence'] = min(result.get('confidence', 0.5), 0.6)
+                result['mixed_detected'] = True
+                result['method'] = result.get('method', '') + '_contrast_mixed'
 
         # Add language info and emoji removal info to result
         result['language'] = lang_info
