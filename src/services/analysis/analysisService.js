@@ -92,10 +92,15 @@ const neutralIndicators = [
   'okay', 'ok', 'alright', 'fine', 'so-so', 'average', 'normal',
   'ordinary', 'fair', 'decent', 'not bad', 'moderate',
   'acceptable', 'passable', 'adequate', 'sufficient', 'however',
+  // Tagalog neutral - common expressions (prioritized patterns)
   'okay lang', 'ok lang', 'oks lang', 'ayos lang', 'pwede na',
   'pwede naman', 'ganon lang', 'ganun lang', 'sige lang',
   'lang naman', 'naman', 'typical', 'karaniwan', 'normal lang',
   'pwede', 'maaari', 'maybe', 'perhaps', 'siguro',
+  // Key neutral Tagalog expressions with "lang" (just/only) modifier
+  'sakto lang', 'sakto', 'tama lang', 'kaya lang', 'medyo',
+  'walang masyadong', 'walang special', 'walang espesyal',
+  // Mixed/hesitant expressions
   'may improvement', 'pwede pang', 'pero okay', 'pero ayos'
 ];
 
@@ -899,11 +904,18 @@ function analyzeWithJS(text) {
   }
 
   // ========================================
-  // 2. NEUTRAL INDICATOR CHECK
+  // 2. NEUTRAL INDICATOR CHECK (track positions)
   // ========================================
+  const neutralPhraseRanges = [];
   for (const neutral of neutralIndicators) {
     if (textLower.includes(neutral)) {
       neutralCount++;
+      // Track the range of this neutral phrase so we can skip word-level scoring
+      const regex = new RegExp(neutral.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      let match;
+      while ((match = regex.exec(textLower)) !== null) {
+        neutralPhraseRanges.push({ start: match.index, end: match.index + match[0].length });
+      }
     }
   }
 
@@ -1042,6 +1054,9 @@ function analyzeWithJS(text) {
 
     // Skip if part of already-analyzed phrase
     if (usedPhraseRanges.some(r => wordStart >= r.start && wordStart < r.end)) continue;
+    
+    // Skip if part of neutral phrase (e.g., "ayos" in "ayos lang")
+    if (neutralPhraseRanges.some(r => wordStart >= r.start && wordStart < r.end)) continue;
 
     // Check negation context
     const isNegated = isNegatedContext(textLower, wordStart);
@@ -1074,15 +1089,42 @@ function analyzeWithJS(text) {
       else negativeScore += score;
     }
     else {
-      const engResult = sentimentLib.analyze(word);
-      if (engResult.score !== 0) {
-        const score = Math.abs(engResult.score) * multiplier;
-        if (engResult.score > 0) {
-          if (isNegated) negativeScore += score;
-          else positiveScore += score;
-        } else {
-          if (isNegated) positiveScore += score;
-          else negativeScore += score;
+      // Custom English word scoring (matches Python enhancement)
+      const englishNegativeWords = {
+        'poor': -0.4, 'crowded': -0.4, 'uncomfortable': -0.5, 'bad': -0.5,
+        'terrible': -0.7, 'horrible': -0.7, 'awful': -0.6, 'worst': -0.8,
+        'disappointing': -0.5, 'disappointed': -0.5, 'frustrating': -0.5,
+        'boring': -0.4, 'waste': -0.5, 'useless': -0.5, 'disorganized': -0.5,
+        'chaotic': -0.5, 'noisy': -0.3, 'late': -0.3, 'delayed': -0.3,
+        'unprofessional': -0.5, 'rude': -0.5, 'slow': -0.3, 'confusing': -0.4
+      };
+      const englishPositiveWords = {
+        'great': 0.5, 'excellent': 0.6, 'amazing': 0.6, 'wonderful': 0.6,
+        'fantastic': 0.6, 'awesome': 0.5, 'perfect': 0.7, 'outstanding': 0.6,
+        'love': 0.5, 'loved': 0.5, 'enjoy': 0.4, 'enjoyed': 0.4,
+        'helpful': 0.4, 'informative': 0.4, 'organized': 0.4, 'smooth': 0.4
+      };
+      
+      if (englishNegativeWords[word]) {
+        const score = Math.abs(englishNegativeWords[word]) * multiplier;
+        if (isNegated) positiveScore += score;
+        else negativeScore += score;
+      } else if (englishPositiveWords[word]) {
+        const score = englishPositiveWords[word] * multiplier;
+        if (isNegated) negativeScore += score;
+        else positiveScore += score;
+      } else {
+        // Fall back to sentiment library
+        const engResult = sentimentLib.analyze(word);
+        if (engResult.score !== 0) {
+          const score = Math.abs(engResult.score) * multiplier;
+          if (engResult.score > 0) {
+            if (isNegated) negativeScore += score;
+            else positiveScore += score;
+          } else {
+            if (isNegated) positiveScore += score;
+            else negativeScore += score;
+          }
         }
       }
     }

@@ -47,6 +47,7 @@ const ACTION_CATEGORIES = {
 
   // Notification actions
   NOTIFICATION_CREATE: "notification",
+  NOTIFICATION_DELETE: "notification",
   NOTIFICATION_READ: "notification",
 
   // System actions

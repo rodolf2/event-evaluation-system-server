@@ -36,6 +36,9 @@ const reminderSchema = new mongoose.Schema({
   },
   emailSentAt: {
     type: Date
+  },
+  lastNotifiedAt: {
+    type: Date
   }
 }, {
   timestamps: true

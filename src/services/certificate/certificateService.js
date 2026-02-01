@@ -381,7 +381,7 @@ class CertificateService {
 
     // Right signature - use custom names if provided
     const signature2Name =
-      formCustomizations?.signature2Name || "Luckie Christine Villanueva";
+      formCustomizations?.signature2Name || "Luckie Kristine Villanueva";
     const signature2Title =
       formCustomizations?.signature2Title || "PSAS Department Head";
 

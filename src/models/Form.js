@@ -130,7 +130,7 @@ const formSchema = new mongoose.Schema(
     questions: [questionSchema],
     status: {
       type: String,
-      enum: ["draft", "published"],
+      enum: ["draft", "published", "closed"],
       default: "draft",
     },
     type: {
@@ -309,7 +309,7 @@ const formSchema = new mongoose.Schema(
       },
       signature2Name: {
         type: String,
-        default: "Luckie Christine Villanueva",
+        default: "Luckie Kristine Villanueva",
         maxlength: [100, "Signature 2 name cannot exceed 100 characters"],
       },
       signature2Title: {

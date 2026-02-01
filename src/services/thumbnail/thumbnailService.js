@@ -222,8 +222,8 @@ class ThumbnailService {
 
       // Light background with subtle gradient
       const bgGradient = ctx.createLinearGradient(0, 0, 0, this.height);
-      bgGradient.addColorStop(0, "#F8FAFC");
-      bgGradient.addColorStop(1, "#F1F5F9");
+      bgGradient.addColorStop(0, "#F1F5F9");
+      bgGradient.addColorStop(1, "#E2E8F0");
       ctx.fillStyle = bgGradient;
       ctx.fillRect(0, 0, this.width, this.height);
 
@@ -269,12 +269,18 @@ class ThumbnailService {
       ctx.shadowColor = "transparent";
       ctx.shadowBlur = 0;
 
-      // Stats cards at the top
-      const cardWidth = 200;
-      const cardHeight = 80;
+      // Title at the top
+      ctx.fillStyle = "#1E3A8A";
+      ctx.font = "bold 28px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("Evaluation Summary", this.width / 2, 55);
+
+      // Stats cards below title
+      const cardWidth = 220;
+      const cardHeight = 90;
       const cardSpacing = 20;
       const cardStartX = (this.width - (cardWidth * 3 + cardSpacing * 2)) / 2;
-      const cardStartY = 60;
+      const cardStartY = 85;
 
       // Card 1: Total Event Attendees (Blue gradient)
       const card1X = cardStartX;
@@ -295,11 +301,11 @@ class ThumbnailService {
 
       // Card 1 icon and text
       ctx.fillStyle = "#FFFFFF";
-      ctx.font = "10px Arial";
+      ctx.font = "bold 12px Arial";
       ctx.textAlign = "left";
-      ctx.fillText("👥 Total Event Attendees", card1X + 15, card1Y + 25);
-      ctx.font = "bold 32px Arial";
-      ctx.fillText(totalAttendees.toString(), card1X + 15, card1Y + 60);
+      ctx.fillText("Total Event Attendees", card1X + 15, card1Y + 30);
+      ctx.font = "bold 36px Arial";
+      ctx.fillText(totalAttendees.toString(), card1X + 15, card1Y + 70);
 
       // Card 2: Total Responses (Light background)
       const card2X = cardStartX + cardWidth + cardSpacing;
@@ -314,11 +320,11 @@ class ThumbnailService {
       ctx.stroke();
 
       ctx.fillStyle = "#1E3A8A";
-      ctx.font = "10px Arial";
+      ctx.font = "bold 12px Arial";
       ctx.textAlign = "left";
-      ctx.fillText("📊 Total Responses", card2X + 15, card2Y + 25);
-      ctx.font = "bold 32px Arial";
-      ctx.fillText(totalResponses.toString(), card2X + 15, card2Y + 60);
+      ctx.fillText("Total Responses", card2X + 15, card2Y + 30);
+      ctx.font = "bold 36px Arial";
+      ctx.fillText(totalResponses.toString(), card2X + 15, card2Y + 70);
 
       // Card 3: Remaining Non-Responses (Blue gradient)
       const card3X = cardStartX + (cardWidth + cardSpacing) * 2;
@@ -338,11 +344,11 @@ class ThumbnailService {
       ctx.fill();
 
       ctx.fillStyle = "#FFFFFF";
-      ctx.font = "10px Arial";
+      ctx.font = "bold 12px Arial";
       ctx.textAlign = "left";
-      ctx.fillText("📋 Remaining Non-Responses", card3X + 15, card3Y + 25);
-      ctx.font = "bold 32px Arial";
-      ctx.fillText(remainingNonResponses.toString(), card3X + 15, card3Y + 60);
+      ctx.fillText("Non-Responses", card3X + 15, card3Y + 30);
+      ctx.font = "bold 36px Arial";
+      ctx.fillText(remainingNonResponses.toString(), card3X + 15, card3Y + 70);
 
       // Charts section
       const chartsY = cardStartY + cardHeight + 40;
@@ -376,12 +382,12 @@ class ThumbnailService {
 
       // Label below gauge
       ctx.fillStyle = "#64748B";
-      ctx.font = "14px Arial";
-      ctx.fillText("Response Rate", gaugeX, gaugeY + 50);
+      ctx.font = "bold 14px Arial";
+      ctx.fillText("Response Rate", gaugeX, gaugeY + 45);
 
-      // RIGHT: Response Breakdown Donut Chart
-      const donutX = this.width * 0.7;
-      const donutY = chartsY + 60;
+      // RIGHT: Response Breakdown Donut Chart - shifted left to make room for legend
+      const donutX = this.width * 0.6;
+      const donutY = chartsY + 70;
       const donutOuterRadius = 60;
       const donutInnerRadius = 35;
 
@@ -474,9 +480,9 @@ class ThumbnailService {
         ctx.fill();
       }
 
-      // Donut legend
-      const legendX = donutX - 100;
-      const legendY = donutY + donutOuterRadius + 30;
+      // Donut legend - moved to the right of the donut
+      const legendX = donutX + donutOuterRadius + 30;
+      const legendY = donutY - 25;
       const legendSpacing = 25;
 
       ctx.textAlign = "left";
@@ -487,7 +493,7 @@ class ThumbnailService {
       ctx.fillRect(legendX, legendY, 12, 12);
       ctx.fillStyle = "#1E3A8A";
       ctx.fillText(
-        `Positive    ${responseBreakdown.positive.count} (${responseBreakdown.positive.percentage}%)`,
+        `Positive: ${responseBreakdown.positive.count}`,
         legendX + 20,
         legendY + 10
       );
@@ -497,7 +503,7 @@ class ThumbnailService {
       ctx.fillRect(legendX, legendY + legendSpacing, 12, 12);
       ctx.fillStyle = "#3B82F6";
       ctx.fillText(
-        `Neutral     ${responseBreakdown.neutral.count} (${responseBreakdown.neutral.percentage}%)`,
+        `Neutral: ${responseBreakdown.neutral.count}`,
         legendX + 20,
         legendY + legendSpacing + 10
       );
@@ -507,22 +513,18 @@ class ThumbnailService {
       ctx.fillRect(legendX, legendY + legendSpacing * 2, 12, 12);
       ctx.fillStyle = "#93C5FD";
       ctx.fillText(
-        `Negative    ${responseBreakdown.negative.count} (${responseBreakdown.negative.percentage}%)`,
+        `Negative: ${responseBreakdown.negative.count}`,
         legendX + 20,
         legendY + legendSpacing * 2 + 10
       );
 
       // Response Breakdown title above donut
       ctx.fillStyle = "#1E3A8A";
-      ctx.font = "bold 14px Arial";
+      ctx.font = "bold 16px Arial";
       ctx.textAlign = "center";
-      ctx.fillText("Response Breakdown", donutX, chartsY + 20);
+      ctx.fillText("Response Breakdown", donutX, chartsY + 10);
 
-      // Bottom title
-      ctx.fillStyle = "#3B82F6";
-      ctx.font = "bold 24px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText("View Event Analytics", this.width / 2, this.height - 40);
+      // No bottom title needed as DashboardCard provides it
 
       // Save thumbnail
       const buffer = canvas.toBuffer("image/png");

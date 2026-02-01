@@ -1,7 +1,9 @@
 const certificateService = require("../../services/certificate/certificateService");
 const Certificate = require("../../models/Certificate");
+const AuditLog = require("../../models/AuditLog");
 const fs = require("fs");
 const path = require("path");
+const { emitUpdate } = require("../../utils/socket");
 
 /**
  * @typedef {import('express').Request} Request
@@ -56,6 +58,29 @@ class CertificateController {
         message: "Certificate generated successfully",
         data: result,
       });
+
+      // Emit socket event for real-time updates
+      emitUpdate("certificate-received", result, userId);
+
+      // Audit log for certificate generation
+      try {
+        await AuditLog.logEvent({
+          userId: req.user?._id,
+          userEmail: req.user?.email,
+          userName: req.user?.name,
+          action: "CERTIFICATE_CREATE",
+          category: "certificate",
+          description: `Generated certificate for: ${studentName || "participant"}`,
+          severity: "info",
+          metadata: {
+            targetId: result?.certificateId || result?._id,
+            targetType: "Certificate",
+            newValue: { userId, eventId, certificateType: options.certificateType },
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to log certificate generation:", auditError);
+      }
     } catch (error) {
       console.error("Error generating certificate:", error);
       res.status(500).json({
@@ -114,6 +139,9 @@ class CertificateController {
         message: `Processed ${results.length} certificates. ${successCount} successful, ${failureCount} failed`,
         data: results,
       });
+
+      // Emit socket event for real-time updates to the person who triggered bulk generation
+      emitUpdate("certificate-received", { count: successCount }, req.user._id);
     } catch (error) {
       console.error("Error generating bulk certificates:", error);
       res.status(500).json({
@@ -557,6 +585,26 @@ class CertificateController {
 
       await Certificate.findOneAndDelete({ certificateId });
 
+      // Audit log for certificate deletion
+      try {
+        await AuditLog.logEvent({
+          userId: req.user?._id,
+          userEmail: req.user?.email,
+          userName: req.user?.name,
+          action: "CERTIFICATE_DELETE",
+          category: "certificate",
+          description: `Deleted certificate: ${certificateId}`,
+          severity: "critical",
+          metadata: {
+            targetId: certificateId,
+            targetType: "Certificate",
+            oldValue: { certificateType: certificate.certificateType },
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to log certificate deletion:", auditError);
+      }
+
       res.status(200).json({
         success: true,
         message: "Certificate deleted successfully",
@@ -659,6 +707,26 @@ class CertificateController {
         message: "Certificate updated successfully",
         data: { certificate },
       });
+
+      // Audit log for certificate update
+      try {
+        await AuditLog.logEvent({
+          userId: req.user?._id,
+          userEmail: req.user?.email,
+          userName: req.user?.name,
+          action: "CERTIFICATE_UPDATE",
+          category: "certificate",
+          description: `Updated certificate: ${certificateId}`,
+          severity: "info",
+          metadata: {
+            targetId: certificateId,
+            targetType: "Certificate",
+            changedFields: Object.keys(req.body),
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to log certificate update:", auditError);
+      }
     } catch (error) {
       console.error("Error updating certificate:", error);
       res.status(500).json({

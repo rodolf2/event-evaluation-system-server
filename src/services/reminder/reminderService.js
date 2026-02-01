@@ -182,6 +182,25 @@ class ReminderService {
     }
   }
 
+  async updateReminder(reminderId, userId, updateData) {
+    try {
+      const reminder = await Reminder.findOneAndUpdate(
+        { _id: reminderId, userId: userId },
+        { $set: updateData },
+        { new: true, runValidators: true },
+      );
+
+      if (!reminder) {
+        throw new Error("Reminder not found or unauthorized");
+      }
+
+      return reminder;
+    } catch (error) {
+      console.error("Error updating reminder:", error);
+      throw error;
+    }
+  }
+
   async deleteReminder(reminderId, userId) {
     try {
       const reminder = await Reminder.findOneAndDelete({

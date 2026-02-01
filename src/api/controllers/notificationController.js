@@ -2,6 +2,7 @@ const Notification = require("../../models/Notification");
 const NotificationRead = require("../../models/NotificationRead");
 const User = require("../../models/User");
 const { emitUpdate } = require("../../utils/socket");
+const AuditLog = require("../../models/AuditLog");
 
 // Helper function to build visibility filter
 const buildVisibilityFilter = (userId, userRole) => {
@@ -290,6 +291,26 @@ const createNotification = async (req, res) => {
       // For now, we'll broadcast it and let clients filter or handle it
       emitUpdate("notification-received", notification);
     }
+
+    // Audit log for notification creation
+    try {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "NOTIFICATION_CREATE",
+        category: "notification",
+        description: `Created notification: ${title}`,
+        severity: "info",
+        metadata: {
+          targetId: notification._id,
+          targetType: "Notification",
+          newValue: { title, targetRoles: targetRoles || [] },
+        },
+      });
+    } catch (auditError) {
+      console.error("Failed to log notification creation:", auditError);
+    }
   } catch (error) {
     console.error("Error creating notification:", error);
     res.status(500).json({
@@ -332,6 +353,9 @@ const markAsRead = async (req, res) => {
       success: true,
       message: "Notification marked as read",
     });
+
+    // Emit socket event for real-time updates to this user
+    emitUpdate("notification-updated", { userId: userId }, userId);
   } catch (error) {
     console.error("Error marking notification as read:", error);
     res.status(500).json({
@@ -383,6 +407,9 @@ const markMultipleAsRead = async (req, res) => {
       success: true,
       message: `${accessibleIds.length} notifications marked as read`,
     });
+
+    // Emit socket event for real-time updates to this user
+    emitUpdate("notification-updated", { userId: userId }, userId);
   } catch (error) {
     console.error("Error marking multiple notifications as read:", error);
     res.status(500).json({
@@ -426,6 +453,9 @@ const markAllAsRead = async (req, res) => {
       success: true,
       message: `${notificationIds.length} notifications marked as read`,
     });
+
+    // Emit socket event for real-time updates to this user
+    emitUpdate("notification-updated", { userId: userId }, userId);
   } catch (error) {
     console.error("Error marking all notifications as read:", error);
     res.status(500).json({
@@ -475,6 +505,26 @@ const deleteNotification = async (req, res) => {
 
     // Also delete read statuses
     await NotificationRead.deleteMany({ notificationId: id });
+
+    // Audit log for notification deletion
+    try {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "NOTIFICATION_DELETE",
+        category: "notification",
+        description: `Deleted notification: ${notification.title}`,
+        severity: "info",
+        metadata: {
+          targetId: id,
+          targetType: "Notification",
+          oldValue: { title: notification.title },
+        },
+      });
+    } catch (auditError) {
+      console.error("Failed to log notification deletion:", auditError);
+    }
 
     res.json({
       success: true,

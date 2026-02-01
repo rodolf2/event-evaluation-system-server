@@ -10,6 +10,7 @@ const { emitUpdate } = require("../../utils/socket");
 const { invalidateCache } = require("../../utils/cache");
 const { sendEmail } = require("../../utils/email");
 const { generateFormAssignmentEmailHtml } = require("../../utils/formAssignmentEmailTemplate");
+const AuditLog = require("../../models/AuditLog");
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -497,6 +498,26 @@ const createBlankForm = async (req, res) => {
       message: "Draft form created successfully",
       data: { form: savedForm },
     });
+
+    // Audit log for form creation (after response to not block)
+    try {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "FORM_CREATE",
+        category: "form",
+        description: `Created form: ${savedForm.title}`,
+        severity: "info",
+        metadata: {
+          targetId: savedForm._id,
+          targetType: "Form",
+          newValue: { title: savedForm.title, status: savedForm.status },
+        },
+      });
+    } catch (auditError) {
+      console.error("Failed to log form creation:", auditError);
+    }
   } catch (error) {
     console.error("Error creating form:", error);
     console.error("Error stack:", error.stack);
@@ -582,6 +603,26 @@ const updateDraftForm = async (req, res) => {
       message: "Draft autosaved successfully",
       data: { form: saved },
     });
+
+    // Audit log for form update (after response to not block)
+    try {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "FORM_UPDATE",
+        category: "form",
+        description: `Updated form: ${saved.title}`,
+        severity: "info",
+        metadata: {
+          targetId: saved._id,
+          targetType: "Form",
+          changedFields: Object.keys(req.body),
+        },
+      });
+    } catch (auditError) {
+      console.error("Failed to log form update:", auditError);
+    }
   } catch (error) {
     console.error("Error updating draft form:", error);
     res.status(500).json({
@@ -1065,7 +1106,7 @@ const publishForm = async (req, res) => {
 
     // Generate shareable link
     const shareableLink = `${process.env.CLIENT_URL || "http://localhost:3000"
-      }/form/${form._id}`;
+      }/evaluations/start/${form._id}`;
 
     form.shareableLink = shareableLink;
 
@@ -1123,6 +1164,34 @@ const publishForm = async (req, res) => {
       // Don't fail the form publication if notifications fail
     }
 
+    // Send email notifications to all attendees
+    if (savedForm.attendeeList && savedForm.attendeeList.length > 0 && savedForm.shareableLink) {
+      console.log(`[FORM-PUB-EMAIL] Sending emails to ${savedForm.attendeeList.length} attendees for form: ${savedForm.title}`);
+      
+      savedForm.attendeeList.forEach(async (attendee) => {
+        // Skip if attendee already responded (though unlikely at publish time)
+        if (attendee.hasResponded) return;
+
+        try {
+          await sendEmail({
+            to: attendee.email,
+            subject: `New Evaluation Assigned: ${savedForm.title}`,
+            html: generateFormAssignmentEmailHtml({
+              name: attendee.name,
+              formTitle: savedForm.title,
+              shareableLink: savedForm.shareableLink,
+              eventDate: savedForm.eventStartDate
+            })
+          });
+        } catch (emailError) {
+          console.error(`[FORM-PUB-EMAIL] Failed to send email to ${attendee.email}:`, emailError.message);
+        }
+      });
+    }
+
+    // Emit socket event for real-time updates
+    emitUpdate("form-updated", { formId: id, status: "published" });
+
     res.status(200).json({
       success: true,
       message: "Form published successfully",
@@ -1147,13 +1216,40 @@ const deleteForm = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // First get the form details for audit logging
+    const formToDelete = await Form.findById(id);
+    const formTitle = formToDelete?.title || "Unknown Form";
+
     // Use the formsService to delete form and associated files
     const form = await formsService.deleteForm(id, req.user._id);
+
+    // Audit log for form deletion
+    try {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "FORM_DELETE",
+        category: "form",
+        description: `Deleted form: ${formTitle}`,
+        severity: "critical",
+        metadata: {
+          targetId: id,
+          targetType: "Form",
+          oldValue: { title: formTitle },
+        },
+      });
+    } catch (auditError) {
+      console.error("Failed to log form deletion:", auditError);
+    }
 
     res.status(200).json({
       success: true,
       message: "Form and associated files deleted successfully",
     });
+
+    // Emit socket event for real-time updates
+    emitUpdate("form-deleted", { formId: id });
   } catch (error) {
     console.error("Error deleting form:", error);
     res.status(500).json({
@@ -1188,27 +1284,27 @@ const submitFormResponse = async (req, res) => {
     // }
 
     // Check if form is within event date range (if dates are set)
-    // if (form.eventStartDate || form.eventEndDate) {
-    //   const now = new Date();
-    //   const startDate = form.eventStartDate
-    //     ? new Date(form.eventStartDate)
-    //     : null;
-    //   const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
+    if (form.eventStartDate || form.eventEndDate) {
+      const now = new Date();
+      const startDate = form.eventStartDate
+        ? new Date(form.eventStartDate)
+        : null;
+      const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
 
-    //   if (startDate && now < startDate) {
-    //     return res.status(400).json({
-    //       success: false,
-    //       message: `This form will be available starting from ${startDate.toLocaleDateString()}`,
-    //     });
-    //   }
+      if (startDate && now < startDate) {
+        return res.status(400).json({
+          success: false,
+          message: `This form will be available starting from ${startDate.toLocaleDateString()}`,
+        });
+      }
 
-    //   if (endDate && now > endDate) {
-    //     return res.status(400).json({
-    //       success: false,
-    //       message: `This form is no longer available. It was available until ${endDate.toLocaleDateString()}`,
-    //     });
-    //   }
-    // }
+      if (endDate && now > endDate) {
+        return res.status(400).json({
+          success: false,
+          message: `This form is no longer available. It was available until ${endDate.toLocaleDateString()}`,
+        });
+      }
+    }
 
     // Process responses - handle both old format (array of answers) and new format (structured objects)
     let processedResponses = responses;
@@ -1622,6 +1718,11 @@ const uploadAttendeeList = [
 
       await form.save();
 
+      // Update shareable link to the correct format if it's currently wrong/old
+      if (!form.shareableLink || form.shareableLink.includes("/form/")) {
+        form.shareableLink = `${process.env.CLIENT_URL || "http://localhost:3000"}/evaluations/start/${form._id}`;
+      }
+
       // Send email notifications to attendees if the form is published
       if (form.status === "published" && form.shareableLink) {
         console.log(`[FORM-ASSIGN] Sending emails to ${processedAttendees.length} attendees for form: ${form.title}`);
@@ -1782,6 +1883,11 @@ const updateAttendeeListJson = async (req, res) => {
     form.attendeeList = processedAttendees;
 
     await form.save();
+
+    // Update shareable link to the correct format if it's currently wrong/old
+    if (!form.shareableLink || form.shareableLink.includes("/form/")) {
+      form.shareableLink = `${process.env.CLIENT_URL || "http://localhost:3000"}/evaluations/start/${form._id}`;
+    }
 
     // Send email notifications to attendees if the form is published
     if (form.status === "published" && form.shareableLink) {
@@ -1946,19 +2052,19 @@ const getMyEvaluations = async (req, res) => {
       const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
 
       // Only show evaluations that are currently open for responses.
-      // if (startDate && now < startDate) {
-      //   console.log(
-      //     `[MY-EVALUATIONS] Form "${form.title}" filtered out - starts ${startDate}`
-      //   );
-      //   return false;
-      // }
+      if (startDate && now < startDate) {
+        console.log(
+          `[MY-EVALUATIONS] Form "${form.title}" filtered out - starts ${startDate}`
+        );
+        return false;
+      }
 
-      // if (endDate && now > endDate) {
-      //   console.log(
-      //     `[MY-EVALUATIONS] Form "${form.title}" filtered out - ended ${endDate}`
-      //   );
-      //   return false;
-      // }
+      if (endDate && now > endDate) {
+        console.log(
+          `[MY-EVALUATIONS] Form "${form.title}" filtered out - ended ${endDate}`
+        );
+        return false;
+      }
 
       console.log(`[MY-EVALUATIONS] Form "${form.title}" is available`);
       return true;
@@ -2134,8 +2240,73 @@ const getLatestFormId = async (req, res) => {
 };
 
 /**
+ * PATCH /api/forms/:id/close
+ * Manually close a published form.
+ * - Only creator can close.
+ * - Changes status to 'closed'.
+ */
+const closeForm = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+    }
+
+    const form = await Form.findOne({
+      _id: id,
+      createdBy: req.user._id,
+    });
+
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: "Form not found or you don't have permission to modify it",
+      });
+    }
+
+    if (form.status !== "published") {
+      return res.status(400).json({
+        success: false,
+        message: "Only published forms can be closed",
+      });
+    }
+
+    form.status = "closed";
+    const savedForm = await form.save();
+
+    // Log activity
+    try {
+      const activityService = require("../../services/activityService");
+      await activityService.logFormUpdated(req.user._id, savedForm.title, req);
+    } catch (activityError) {
+      console.error("Failed to log form closing activity:", activityError);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Form closed successfully",
+      data: { form: savedForm },
+    });
+
+    // Emit socket event for real-time updates
+    emitUpdate("form-updated", { formId: id, status: "closed" });
+  } catch (error) {
+    console.error("Error closing form:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to close form",
+      error: error.message,
+    });
+  }
+};
+
+/**
  * PATCH /api/forms/:id/reopen
- * Reopen a closed form.
+ * Reopen a closed or expired form.
  * - Only creator can reopen.
  * - Changes status to 'published'.
  * - Extends end date by 7 days if expired.
@@ -2163,10 +2334,13 @@ const reopenForm = async (req, res) => {
       });
     }
 
-    if (form.status !== "closed") {
+    const now = new Date();
+    const isExpired = form.eventEndDate && now > form.eventEndDate;
+
+    if (form.status !== "closed" && !isExpired) {
       return res.status(400).json({
         success: false,
-        message: "Only closed forms can be reopened",
+        message: "Only closed or expired forms can be reopened",
       });
     }
 
@@ -2179,6 +2353,31 @@ const reopenForm = async (req, res) => {
     form.eventEndDate = newEndDate;
 
     const savedForm = await form.save();
+
+    // Send email notifications to all attendees who haven't responded yet
+    if (savedForm.attendeeList && savedForm.attendeeList.length > 0 && savedForm.shareableLink) {
+      console.log(`[FORM-REOPEN-EMAIL] Sending emails to attendees who haven't responded for form: ${savedForm.title}`);
+      
+      savedForm.attendeeList.forEach(async (attendee) => {
+        // Only notify those who haven't responded
+        if (attendee.hasResponded) return;
+
+        try {
+          await sendEmail({
+            to: attendee.email,
+            subject: `Evaluation Reopened: ${savedForm.title}`,
+            html: generateFormAssignmentEmailHtml({
+              name: attendee.name,
+              formTitle: savedForm.title,
+              shareableLink: savedForm.shareableLink,
+              eventDate: savedForm.eventStartDate
+            })
+          });
+        } catch (emailError) {
+          console.error(`[FORM-REOPEN-EMAIL] Failed to send email to ${attendee.email}:`, emailError.message);
+        }
+      });
+    }
 
     // Log activity
     try {
@@ -2193,6 +2392,9 @@ const reopenForm = async (req, res) => {
       message: "Form reopened successfully",
       data: { form: savedForm },
     });
+
+    // Emit socket event for real-time updates
+    emitUpdate("form-updated", { formId: id, status: "published" });
   } catch (error) {
     console.error("Error reopening form:", error);
     res.status(500).json({
@@ -2222,6 +2424,7 @@ module.exports = {
   updateAttendeeListJson,
   getAttendeeList,
   getLatestFormId,
+  closeForm,
   reopenForm,
 };
 

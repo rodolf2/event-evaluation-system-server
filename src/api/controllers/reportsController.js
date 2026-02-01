@@ -209,10 +209,10 @@ exports.generatePDFReport = async (req, res) => {
       format: "A4",
       printBackground: true,
       margin: {
-        top: "250px", // Increased space for header + form title + description
-        right: "30px", // Small right margin for better content fit
-        bottom: "100px", // Increased space for footer template
-        left: "30px", // Small left margin for better content fit
+        top: "80px", // Header height only
+        right: "15px",
+        bottom: "50px", // Footer height only
+        left: "15px",
       },
       preferCSSPageSize: false,
       displayHeaderFooter: !!(headerTemplate || footerTemplate),

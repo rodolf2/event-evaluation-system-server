@@ -392,8 +392,12 @@ const server = app.listen(PORT, () => {
   try {
     const { initRoleDemotionCron } = require("./jobs/roleDemotionCron");
     initRoleDemotionCron();
+    
+    // Initialize reminder cron
+    const { initReminderCron } = require("./jobs/reminderCron");
+    initReminderCron();
   } catch (cronError) {
-    console.error("❌ Failed to initialize role demotion cron job:", cronError);
+    console.error("❌ Failed to initialize cron jobs:", cronError);
   }
 });
 

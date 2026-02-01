@@ -94,6 +94,40 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
+// PUT /api/reminders/:id - Update a reminder
+// All authenticated users (any role) can update only their own reminders
+router.put("/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, date, description, priority } = req.body;
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (date !== undefined) updateData.date = new Date(date);
+    if (description !== undefined) updateData.description = description;
+    if (priority !== undefined) updateData.priority = priority;
+
+    const reminder = await reminderService.updateReminder(
+      id,
+      req.user._id,
+      updateData,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Reminder updated successfully",
+      data: reminder,
+    });
+  } catch (error) {
+    console.error("Error updating reminder:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update reminder",
+      error: error.message,
+    });
+  }
+});
+
 // DELETE /api/reminders/:id - Delete a reminder
 // All authenticated users (any role) can delete only their own reminders
 router.delete("/:id", requireAuth, async (req, res) => {

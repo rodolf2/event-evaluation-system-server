@@ -42,6 +42,24 @@ const createUser = async (req, res) => {
     const savedUser = await newUser.save();
     console.log("✅ User saved successfully:", savedUser._id);
 
+    // Audit log for user creation
+    if (req.user) {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "USER_CREATE",
+        category: "user",
+        description: `Created user: ${savedUser.email}`,
+        severity: "info",
+        metadata: {
+          targetId: savedUser._id,
+          targetType: "User",
+          newValue: { name: savedUser.name, email: savedUser.email, role: savedUser.role },
+        },
+      });
+    }
+
     res.status(201).json({
       success: true,
       message: "User created successfully",
@@ -64,6 +82,24 @@ const createUser = async (req, res) => {
 
         const savedUser = await newUser.save();
         console.log("✅ User saved with generated googleId");
+
+        // Audit log for user creation (retry path)
+        if (req.user) {
+          await AuditLog.logEvent({
+            userId: req.user._id,
+            userEmail: req.user.email,
+            userName: req.user.name,
+            action: "USER_CREATE",
+            category: "user",
+            description: `Created user: ${savedUser.email}`,
+            severity: "info",
+            metadata: {
+              targetId: savedUser._id,
+              targetType: "User",
+              newValue: { name: savedUser.name, email: savedUser.email, role: savedUser.role },
+            },
+          });
+        }
 
         console.log("✅ Sending response:", {
           success: true,
@@ -344,8 +380,34 @@ const deleteUser = async (req, res) => {
       });
     }
 
+    // Capture user details before deletion for audit log
+    const deletedUserDetails = {
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    };
+
     // Permanently delete user
     await User.findByIdAndDelete(id);
+
+    // Audit log for user deletion
+    if (req.user) {
+      await AuditLog.logEvent({
+        userId: req.user._id,
+        userEmail: req.user.email,
+        userName: req.user.name,
+        action: "USER_DELETE",
+        category: "user",
+        description: `Deleted user: ${deletedUserDetails.email}`,
+        severity: "critical",
+        metadata: {
+          targetId: id,
+          targetType: "User",
+          oldValue: deletedUserDetails,
+        },
+      });
+    }
+
     res.json({
       success: true,
       message: "User permanently deleted",

@@ -78,12 +78,15 @@ class MultilingualSentimentAnalyzer:
             # English neutral
             'okay', 'ok', 'alright', 'fine', 'so-so', 'average', 'normal', 
             'ordinary', 'mediocre', 'fair', 'decent', 'not bad', 'moderate',
-            'acceptable', 'passable', 'adequate', 'sufficient','however'
-            # Tagalog neutral - common expressions
+            'acceptable', 'passable', 'adequate', 'sufficient', 'however',
+            # Tagalog neutral - common expressions (prioritized patterns)
             'okay lang', 'ok lang', 'oks lang', 'ayos lang', 'pwede na', 
             'pwede naman', 'ganon lang', 'ganun lang', 'sige lang', 
             'lang naman', 'naman', 'typical', 'karaniwan', 'normal lang',
             'sige', 'pwede', 'maaari', 'maybe', 'perhaps', 'siguro',
+            # Key neutral Tagalog expressions with "lang" (just/only) modifier
+            'sakto lang', 'sakto', 'tama lang', 'kaya lang', 'medyo',
+            'walang masyadong', 'walang special', 'walang espesyal',
             # Mixed/hesitant expressions
             'may improvement', 'pwede pang', 'pero okay', 'pero ayos'
         ]
@@ -186,12 +189,48 @@ class MultilingualSentimentAnalyzer:
             }
 
     def analyze_english_sentiment(self, text):
-        """Analyze English text using TextBlob with enhanced context"""
+        """Analyze English text using TextBlob with enhanced context and custom word detection"""
         try:
             analysis = TextBlob(text)
             polarity = analysis.sentiment.polarity
             subjectivity = analysis.sentiment.subjectivity
+            text_lower = text.lower()
+            words = re.findall(r"\w+", text_lower)
 
+            # Custom English negative words that TextBlob often misses
+            english_negative_words = {
+                'poor': -0.4, 'crowded': -0.4, 'uncomfortable': -0.5, 'bad': -0.5,
+                'terrible': -0.7, 'horrible': -0.7, 'awful': -0.6, 'worst': -0.8,
+                'disappointing': -0.5, 'disappointed': -0.5, 'frustrating': -0.5,
+                'boring': -0.4, 'waste': -0.5, 'useless': -0.5, 'disorganized': -0.5,
+                'chaotic': -0.5, 'noisy': -0.3, 'late': -0.3, 'delayed': -0.3,
+                'unprofessional': -0.5, 'rude': -0.5, 'slow': -0.3, 'confusing': -0.4
+            }
+            
+            # Custom English positive words for balance
+            english_positive_words = {
+                'great': 0.5, 'excellent': 0.6, 'amazing': 0.6, 'wonderful': 0.6,
+                'fantastic': 0.6, 'awesome': 0.5, 'perfect': 0.7, 'outstanding': 0.6,
+                'love': 0.5, 'loved': 0.5, 'enjoy': 0.4, 'enjoyed': 0.4,
+                'helpful': 0.4, 'informative': 0.4, 'organized': 0.4, 'smooth': 0.4
+            }
+            
+            # Intensifiers that amplify sentiment
+            english_intensifiers = {'very', 'really', 'extremely', 'so', 'too', 'way', 'incredibly', 'absolutely'}
+            
+            # Calculate custom word scores
+            custom_score = 0
+            for i, word in enumerate(words):
+                # Check for intensifier before this word
+                multiplier = 1.5 if (i > 0 and words[i-1] in english_intensifiers) else 1.0
+                # "too" before adjective often indicates negative
+                if i > 0 and words[i-1] == 'too' and word in english_positive_words:
+                    custom_score -= 0.3 * multiplier  # "too good" is usually sarcastic/negative context
+                elif word in english_negative_words:
+                    custom_score += english_negative_words[word] * multiplier
+                elif word in english_positive_words:
+                    custom_score += english_positive_words[word] * multiplier
+            
             # Check for emoticons
             emoticon_boost = 0
             for emoticon in self.positive_emoticons:
@@ -201,26 +240,37 @@ class MultilingualSentimentAnalyzer:
                 if emoticon in text:
                     emoticon_boost -= 0.15
             
-            # Adjust polarity with emoticon boost
-            polarity = max(-1, min(1, polarity + emoticon_boost))
+            # Combine TextBlob polarity with custom score and emoticons
+            # Weight custom score more heavily when TextBlob returns near-zero
+            if abs(polarity) < 0.1 and abs(custom_score) > 0.2:
+                # TextBlob missed sentiment, trust custom detection more
+                combined_polarity = custom_score * 0.8 + polarity * 0.2 + emoticon_boost
+            else:
+                # Blend both sources
+                combined_polarity = polarity * 0.5 + custom_score * 0.5 + emoticon_boost
+            
+            # Clamp to valid range
+            combined_polarity = max(-1, min(1, combined_polarity))
 
             # Enhanced classification with tighter thresholds
-            if polarity > 0.15:
+            if combined_polarity > 0.15:
                 sentiment = "positive"
-            elif polarity < -0.15:
+            elif combined_polarity < -0.15:
                 sentiment = "negative"
             else:
                 sentiment = "neutral"
 
             # Enhanced confidence based on polarity magnitude and subjectivity
-            confidence = min((abs(polarity) + 0.2) * 1.2, 1.0)
+            confidence = min((abs(combined_polarity) + 0.2) * 1.2, 1.0)
 
             return {
                 'sentiment': sentiment,
-                'polarity': polarity,
+                'polarity': combined_polarity,
+                'original_textblob_polarity': polarity,
+                'custom_word_score': custom_score,
                 'subjectivity': subjectivity,
                 'confidence': confidence,
-                'method': 'textblob_english_enhanced'
+                'method': 'textblob_english_enhanced_v2'
             }
         except Exception as e:
             return {
@@ -293,10 +343,15 @@ class MultilingualSentimentAnalyzer:
                 if emoticon in text:
                     emoticon_score -= 0.5
 
-            # Check for neutral indicators
+            # Check for neutral indicators and track their positions
+            # Neutral phrases with "lang" (just/only) indicate mild sentiment
+            neutral_phrase_ranges = []
             for neutral in self.neutral_indicators:
                 if neutral in text_lower:
                     neutral_count += 1
+                    # Track the range of this neutral phrase so we can skip word-level scoring
+                    for m in re.finditer(re.escape(neutral), text_lower):
+                        neutral_phrase_ranges.append(range(m.start(), m.end()))
 
             # Helper for phrase/word negation check
             def is_negated_context(text, start_idx):
@@ -368,6 +423,10 @@ class MultilingualSentimentAnalyzer:
 
                 # Skip if this word is part of an already analyzed phrase
                 if any(word_start in r for r in used_phrase_ranges):
+                    continue
+                
+                # Skip if this word is part of a neutral phrase (e.g., "ayos" in "ayos lang")
+                if any(word_start in r for r in neutral_phrase_ranges):
                     continue
 
                 # Check for negation before the word
