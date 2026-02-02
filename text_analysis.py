@@ -78,7 +78,8 @@ class MultilingualSentimentAnalyzer:
             'great job', 'excellent work', 'love it', 'loved it',
             'napakasaya', 'sobrang saya', 'sobra saya', 'ang saya',
             'napakaayos', 'sobrang ayos', 'ang husay', 'napakatahimik',
-            'well-organized', 'well-prepared', 'well-managed', 'well-planned'
+            'well-organized', 'well-prepared', 'well-managed', 'well-planned',
+            'looking forward', 'expecting more', 'next year', 'next event'
         ]
 
         self.negative_phrases = [
@@ -95,7 +96,8 @@ class MultilingualSentimentAnalyzer:
             'matagal na pila', 'mahabang pila', 'ang tagal', 'sobrang tagal',
             'dalawang oras', 'isang oras', 'nag-antay', 'naghintay',
             'was a disaster', 'total disaster', 'complete disaster',
-            'could have been better', 'needs improvement', 'room for improvement'
+            'could have been better', 'needs improvement', 'room for improvement',
+            'medyo magulo', 'medyo matagal', 'medyo mainit'
         ]
 
         # Neutral words that might indicate mixed sentiment
@@ -286,7 +288,8 @@ class MultilingualSentimentAnalyzer:
                 'love': 0.6, 'loved': 0.6, 'enjoy': 0.5, 'enjoyed': 0.5,
                 'helpful': 0.5, 'informative': 0.5, 'organized': 0.5, 'smooth': 0.5,
                 'relevant': 0.4, 'good': 0.4, 'nice': 0.4, 'satisfied': 0.5,
-                'happy': 0.5, 'glad': 0.5, 'pleased': 0.5, 'impressed': 0.6
+                'happy': 0.5, 'glad': 0.5, 'pleased': 0.5, 'impressed': 0.6,
+                'forward': 0.5, 'waiting': 0.2
             }
             
             # Contrast words that indicate mixed/neutral sentiment
@@ -557,8 +560,8 @@ class MultilingualSentimentAnalyzer:
             if has_strong_negative and positive_score < negative_score:
                 sentiment = "negative"
                 confidence = min(0.6 + (abs(total_score) / 10), 0.95)
-            # PRIORITY 2: Neutral indicators only if no strong sentiment
-            elif neutral_count >= 1 and positive_score < 1.5 and negative_score < 1.5:
+            # PRIORITY 2: Neutral indicators only if no strong sentiment (lowered threshold from 1.5 to 1.0)
+            elif neutral_count >= 1 and positive_score < 1.0 and negative_score < 1.0:
                 sentiment = "neutral"
                 confidence = 0.75
             elif has_mixed_sentiment and (constructive_criticism_count >= 2 or has_significant_negative):

@@ -47,6 +47,56 @@ const checkSharedReportAccess = async (reportId, user) => {
 };
 
 /**
+ * Helper to find the previous year's form for the same event
+ */
+const findPreviousYearForm = async (currentForm) => {
+  try {
+    const currentYear = new Date(currentForm.createdAt).getFullYear();
+    const targetYear = currentYear - 1;
+
+    // 1. Clean the title: 
+    // - Remove 4-digit year (e.g., "Gala 2024" -> "Gala")
+    // - Remove ordinal prefixes (e.g., "1st", "2nd", "3rd", "4th", "10th", "21st")
+    // - Trim and escape special regex characters
+    const cleanTitle = currentForm.title
+      .replace(/\b\d{4}\b/g, "") // Remove year
+      .replace(/\b\d+(?:st|nd|rd|th)\b/gi, "") // Remove ordinals
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .trim();
+
+    if (!cleanTitle) return null;
+
+    // 2. Search for forms in the previous year with a matching title
+    const startDate = new Date(targetYear, 0, 1);
+    const endDate = new Date(targetYear, 11, 31, 23, 59, 59);
+
+    console.log(`[LINKING] Searching for previous event:`);
+    console.log(`- Base Title: "${cleanTitle}"`);
+    console.log(`- Target Year: ${targetYear} (${startDate.toISOString()} - ${endDate.toISOString()})`);
+
+    const previousForms = await Form.find({
+      status: { $in: ["published", "closed"] }, // Include closed forms
+      title: { $regex: cleanTitle, $options: "i" }, // Case-insensitive match
+      createdAt: { $gte: startDate, $lte: endDate },
+      _id: { $ne: currentForm._id }, // Exclude self (just in case)
+    }).sort({ createdAt: -1 }); // Get the latest one from that year
+
+    console.log(`[LINKING] Found ${previousForms.length} matches.`);
+    if (previousForms.length > 0) {
+       console.log(`[LINKING] Match: "${previousForms[0].title}" (${previousForms[0]._id})`);
+    }
+
+    if (previousForms.length === 0) return null;
+
+    // Return the best match (first one)
+    return previousForms[0];
+  } catch (error) {
+    console.error("Error finding previous year form:", error);
+    return null;
+  }
+};
+
+/**
  * Get dynamic quantitative data with filtering and date range
  */
 const getDynamicQuantitativeData = async (req, res) => {
@@ -180,7 +230,20 @@ const getDynamicQuantitativeData = async (req, res) => {
     );
     const statusBreakdown = processStatusBreakdownFromForm(form);
     const responseTrends = processResponseTrendsFromForm(responses);
-    const yearLevelBreakdown = processYearLevelBreakdown(form, responses);
+
+    // --- NEW: Fetch Previous Year Data for Breakdown ---
+    let previousForm = null;
+    let previousResponses = [];
+    try {
+      previousForm = await findPreviousYearForm(form);
+      if (previousForm) {
+        previousResponses = previousForm.responses || [];
+      }
+    } catch (err) {
+      console.error("[LINKING] Error fetching previous form for breakdown:", err);
+    }
+
+    const yearLevelBreakdown = processYearLevelBreakdown(form, responses, previousForm, previousResponses);
 
     // Calculate metrics
     const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
@@ -367,6 +430,41 @@ const getDynamicQualitativeData = async (req, res) => {
       responses,
       questionTypeMap,
     );
+
+    // --- NEW: Fetch Previous Year Data ---
+    let previousYearData = null;
+    try {
+      const previousForm = await findPreviousYearForm(form);
+      if (previousForm) {
+        // Build question map for previous form
+        const prevQuestionTypeMap = {};
+        (previousForm.questions || []).forEach((q) => {
+          prevQuestionTypeMap[q._id.toString()] = q.type;
+          prevQuestionTypeMap[q.title] = q.type;
+        });
+
+        // Analyze previous form responses
+        // We only need the summary, so this is lightweight enough
+        const prevAnalysis = await AnalysisService.analyzeResponses(
+          previousForm.responses || [],
+          prevQuestionTypeMap
+        );
+
+        previousYearData = {
+          formId: previousForm._id,
+          title: previousForm.title,
+          date: previousForm.createdAt,
+          sentiment: prevAnalysis.sentimentBreakdown,
+          insights: prevAnalysis.insights || [],
+          // Calculate summary stats
+          totalResponses: (previousForm.responses || []).length,
+        };
+      }
+    } catch (err) {
+      console.warn("Failed to process previous year data:", err);
+      // Fail silently, just don't show comparison
+    }
+    // -------------------------------------
 
     // Filter by sentiment if specified
     let filteredTextResponses = textResponses;
@@ -696,6 +794,7 @@ const getDynamicQualitativeData = async (req, res) => {
         endDate,
         limit,
       },
+      previousYearData, // <--- Include in response
       lastUpdated: new Date().toISOString(),
     };
 
@@ -1395,7 +1494,7 @@ function processYearlyDataFromForm(form, responses) {
  * Process year level breakdown (1st year, 2nd year, etc.) from attendee list
  * Maps attendee emails to responses and counts by year level, separated by calendar year
  */
-function processYearLevelBreakdown(form, responses) {
+function processYearLevelBreakdown(form, responses, previousForm = null, previousResponses = []) {
   const currentYear = new Date().getFullYear();
   const previousYear = currentYear - 1;
 
@@ -1502,25 +1601,54 @@ function processYearLevelBreakdown(form, responses) {
     };
   });
 
-  // Count responses
+  // 1. Count current year responses using current form's attendee metadata
   responses.forEach((response) => {
     const email = response.respondentEmail?.toLowerCase();
     const meta = attendeeMetadata[email];
     if (!meta) return;
 
     const { yearLevel, department } = meta;
-    const responseYear = new Date(response.submittedAt).getFullYear();
+    // For the current report, we show it in the current year bucket
+    departmentData[department].currentYear.counts[yearLevel] =
+      (departmentData[department].currentYear.counts[yearLevel] || 0) + 1;
+    departmentData[department].currentYear.total++;
+  });
 
-    if (responseYear === currentYear) {
-      departmentData[department].currentYear.counts[yearLevel] =
-        (departmentData[department].currentYear.counts[yearLevel] || 0) + 1;
-      departmentData[department].currentYear.total++;
-    } else if (responseYear === previousYear) {
+  // 2. Count previous year responses if previous form provided
+  if (previousForm && previousResponses.length > 0) {
+    const prevAttendeeMetadata = {};
+    const prevAttendeeList = previousForm.attendeeList || [];
+    
+    prevAttendeeList.forEach((attendee) => {
+      if (attendee.email) {
+        const department = attendee.department || "Higher Education";
+        const normalizedLevel = normalizeYearLevel(attendee.yearLevel, department);
+        if (normalizedLevel) {
+          prevAttendeeMetadata[attendee.email.toLowerCase()] = {
+            yearLevel: normalizedLevel,
+            department: department,
+          };
+          if (!departmentData[department]) {
+            departmentData[department] = {
+              currentYear: { year: currentYear, counts: {}, total: 0 },
+              previousYear: { year: previousYear, counts: {}, total: 0 },
+            };
+          }
+        }
+      }
+    });
+
+    previousResponses.forEach((response) => {
+      const email = response.respondentEmail?.toLowerCase();
+      const meta = prevAttendeeMetadata[email];
+      if (!meta) return;
+
+      const { yearLevel, department } = meta;
       departmentData[department].previousYear.counts[yearLevel] =
         (departmentData[department].previousYear.counts[yearLevel] || 0) + 1;
       departmentData[department].previousYear.total++;
-    }
-  });
+    });
+  }
 
   // Convert to final structure
   const result = {

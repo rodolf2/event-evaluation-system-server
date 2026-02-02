@@ -88,6 +88,7 @@ const tagalogPositive = {
   impressive: 1.2,
   recommend: 1,
   recommended: 1,
+  forward: 0.5,
 };
 
 // Tagalog negative words with weights
@@ -226,6 +227,10 @@ const positivePhrases = [
   "ayos na ayos",
   "sarap ng",
   "ang sarap",
+  "looking forward",
+  "next one",
+  "next year",
+  "next event",
 ];
 
 // Negative phrases (higher weight)
@@ -267,6 +272,9 @@ const negativePhrases = [
   "needs improvement",
   "could be better",
   "room for improvement",
+  "medyo magulo",
+  "medyo matagal",
+  "medyo mainit",
 ];
 
 // Neutral indicators

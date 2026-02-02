@@ -39,7 +39,7 @@ const reportSchema = new mongoose.Schema(
     },
     thumbnail: {
       type: String,
-      default: "/thumbnails/default-report.png",
+      default: "/api/thumbnails/default-report.png",
     },
     lastUpdated: {
       type: Date,

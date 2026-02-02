@@ -94,12 +94,12 @@ const getAllForms = async (req, res) => {
       pageNum < 1 ||
       isNaN(limitNum) ||
       limitNum < 1 ||
-      limitNum > 100
+      limitNum > 1000
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Invalid pagination parameters. Page must be >= 1, limit must be 1-100",
+          "Invalid pagination parameters. Page must be >= 1, limit must be 1-1000",
       });
     }
 
