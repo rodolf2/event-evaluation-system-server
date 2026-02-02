@@ -1399,116 +1399,200 @@ function processYearLevelBreakdown(form, responses) {
   const currentYear = new Date().getFullYear();
   const previousYear = currentYear - 1;
 
-  // Initialize counts for both years
-  const createYearLevelCounts = () => ({
-    "First Year": 0,
-    "Second Year": 0,
-    "Third Year": 0,
-    "Fourth Year": 0,
-  });
-
-  const currentYearCounts = createYearLevelCounts();
-  const previousYearCounts = createYearLevelCounts();
-
   // Helper to normalize year level values
-  const normalizeYearLevel = (yearLevel) => {
+  const normalizeYearLevel = (yearLevel, department) => {
     if (!yearLevel) return null;
     const normalized = yearLevel.toString().toLowerCase().trim();
 
+    // Handle Higher Education / College
     if (
-      normalized === "1" ||
-      normalized === "1st" ||
-      normalized === "first" ||
-      normalized === "first year" ||
-      normalized === "1st year"
+      !department ||
+      department.toLowerCase().includes("higher") ||
+      department.toLowerCase().includes("college")
     ) {
-      return "First Year";
-    } else if (
-      normalized === "2" ||
-      normalized === "2nd" ||
-      normalized === "second" ||
-      normalized === "second year" ||
-      normalized === "2nd year"
-    ) {
-      return "Second Year";
-    } else if (
-      normalized === "3" ||
-      normalized === "3rd" ||
-      normalized === "third" ||
-      normalized === "third year" ||
-      normalized === "3rd year"
-    ) {
-      return "Third Year";
-    } else if (
-      normalized === "4" ||
-      normalized === "4th" ||
-      normalized === "fourth" ||
-      normalized === "fourth year" ||
-      normalized === "4th year"
-    ) {
-      return "Fourth Year";
+      if (
+        normalized === "1" ||
+        normalized === "1st" ||
+        normalized === "first" ||
+        normalized === "first year" ||
+        normalized.includes("1st year")
+      )
+        return "1st Year";
+      if (
+        normalized === "2" ||
+        normalized === "2nd" ||
+        normalized === "second" ||
+        normalized === "second year" ||
+        normalized.includes("2nd year")
+      )
+        return "2nd Year";
+      if (
+        normalized === "3" ||
+        normalized === "3rd" ||
+        normalized === "third" ||
+        normalized === "third year" ||
+        normalized.includes("3rd year")
+      )
+        return "3rd Year";
+      if (
+        normalized === "4" ||
+        normalized === "4th" ||
+        normalized === "fourth" ||
+        normalized === "fourth year" ||
+        normalized.includes("4th year")
+      )
+        return "4th Year";
     }
-    return null;
+
+    // Handle Basic Education
+    if (
+      department &&
+      (department.toLowerCase().includes("basic") ||
+        department.toLowerCase().includes("education"))
+    ) {
+      if (normalized.startsWith("grade")) {
+        // Capitalize Grade
+        const parts = normalized.split(" ");
+        if (parts.length > 1) {
+          return "Grade " + parts[1];
+        }
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+      }
+      if (!isNaN(normalized)) {
+        return `Grade ${normalized}`;
+      }
+    }
+
+    // Fallback: just return as is but capitalized
+    return yearLevel.toString().trim();
   };
 
-  // Create a map of attendee emails to year levels
-  const attendeeYearLevels = {};
+  // Create a map of attendee emails to their metadata (year level and department)
+  const attendeeMetadata = {};
   const attendeeList = form.attendeeList || [];
+  const detectedDepartments = new Set();
+
   attendeeList.forEach((attendee) => {
-    if (attendee.email && attendee.yearLevel) {
-      const normalizedLevel = normalizeYearLevel(attendee.yearLevel);
+    if (attendee.email) {
+      // Default to Higher Education if no department specified
+      const department = attendee.department || "Higher Education";
+      const normalizedLevel = normalizeYearLevel(attendee.yearLevel, department);
+
       if (normalizedLevel) {
-        attendeeYearLevels[attendee.email.toLowerCase()] = normalizedLevel;
+        attendeeMetadata[attendee.email.toLowerCase()] = {
+          yearLevel: normalizedLevel,
+          department: department,
+        };
+        detectedDepartments.add(department);
       }
     }
   });
 
-  // Count responses by year level and calendar year
+  // If no departments detected, default to Higher Education
+  if (detectedDepartments.size === 0) {
+    detectedDepartments.add("Higher Education");
+  }
+
+  // Initialize data structure for departments
+  const departmentData = {};
+  detectedDepartments.forEach((dept) => {
+    departmentData[dept] = {
+      currentYear: { year: currentYear, counts: {}, total: 0 },
+      previousYear: { year: previousYear, counts: {}, total: 0 },
+    };
+  });
+
+  // Count responses
   responses.forEach((response) => {
     const email = response.respondentEmail?.toLowerCase();
-    const yearLevel = attendeeYearLevels[email];
-    if (!yearLevel) return;
+    const meta = attendeeMetadata[email];
+    if (!meta) return;
 
+    const { yearLevel, department } = meta;
     const responseYear = new Date(response.submittedAt).getFullYear();
 
-    if (
-      responseYear === currentYear &&
-      currentYearCounts[yearLevel] !== undefined
-    ) {
-      currentYearCounts[yearLevel]++;
-    } else if (
-      responseYear === previousYear &&
-      previousYearCounts[yearLevel] !== undefined
-    ) {
-      previousYearCounts[yearLevel]++;
+    if (responseYear === currentYear) {
+      departmentData[department].currentYear.counts[yearLevel] =
+        (departmentData[department].currentYear.counts[yearLevel] || 0) + 1;
+      departmentData[department].currentYear.total++;
+    } else if (responseYear === previousYear) {
+      departmentData[department].previousYear.counts[yearLevel] =
+        (departmentData[department].previousYear.counts[yearLevel] || 0) + 1;
+      departmentData[department].previousYear.total++;
     }
   });
 
-  // Build result arrays
-  const buildBreakdown = (counts) => {
-    const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
-    return {
-      breakdown: ["First Year", "Second Year", "Third Year", "Fourth Year"].map(
-        (level) => ({
-          name: level,
-          count: counts[level],
-          percentage: total > 0 ? Math.round((counts[level] / total) * 100) : 0,
-        }),
-      ),
-      total,
-    };
+  // Convert to final structure
+  const result = {
+    departments: Object.entries(departmentData).map(([deptName, data]) => {
+      // Determine standard labels for this department
+      let standardLabels = [];
+      const lowerDept = deptName.toLowerCase();
+
+      if (lowerDept.includes("higher") || lowerDept.includes("college")) {
+        standardLabels = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+      } else if (
+        lowerDept.includes("basic") ||
+        lowerDept.includes("high school") ||
+        lowerDept.includes("elementary")
+      ) {
+        // Collect all grades found in data
+        const allGrades = new Set([
+          ...Object.keys(data.currentYear.counts),
+          ...Object.keys(data.previousYear.counts),
+        ]);
+        standardLabels = Array.from(allGrades).sort((a, b) => {
+          const numA = parseInt(a.replace(/\D/g, ""));
+          const numB = parseInt(b.replace(/\D/g, ""));
+          // If no numbers, sort alphabetically
+          if (isNaN(numA) || isNaN(numB)) return a.localeCompare(b);
+          return numA - numB;
+        });
+      } else {
+        standardLabels = Array.from(
+          new Set([
+            ...Object.keys(data.currentYear.counts),
+            ...Object.keys(data.previousYear.counts),
+          ]),
+        ).sort();
+      }
+
+      const buildBreakdown = (yearData) => ({
+        year: yearData.year,
+        total: yearData.total,
+        breakdown: standardLabels.map((label) => ({
+          name: label,
+          count: yearData.counts[label] || 0,
+          percentage:
+            yearData.total > 0
+              ? Math.round(((yearData.counts[label] || 0) / yearData.total) * 100)
+              : 0,
+        })),
+      });
+
+      return {
+        name: deptName,
+        currentYear: buildBreakdown(data.currentYear),
+        previousYear: buildBreakdown(data.previousYear),
+      };
+    }),
   };
 
-  return {
-    currentYear: {
-      year: currentYear,
-      ...buildBreakdown(currentYearCounts),
-    },
-    previousYear: {
-      year: previousYear,
-      ...buildBreakdown(previousYearCounts),
-    },
-  };
+  // Add backward compatibility for Higher Education at the top level
+  // This ensures the current UI doesn't break while we're updating it
+  const higherEd =
+    result.departments.find(
+      (d) =>
+        d.name.toLowerCase().includes("higher") ||
+        d.name.toLowerCase().includes("college"),
+    ) || result.departments[0];
+
+  if (higherEd) {
+    result.currentYear = higherEd.currentYear;
+    result.previousYear = higherEd.previousYear;
+  }
+
+  return result;
 }
 
 /**

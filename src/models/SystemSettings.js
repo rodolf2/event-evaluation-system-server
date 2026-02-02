@@ -65,6 +65,10 @@ const SystemSettingsSchema = new mongoose.Schema(
         type: Boolean,
         default: true,
       },
+      enableMisReports: {
+        type: Boolean,
+        default: false,
+      },
     },
     // NLP Settings
     nlpSettings: {

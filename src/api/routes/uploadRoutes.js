@@ -134,11 +134,23 @@ function parseCSVText(csvText) {
 
     const student = {};
     headers.forEach((header, index) => {
-      // Always normalize email field for consistency
+      let value = values[index] ?? "";
+      
+      // Normalize email field for consistency
       if (header === "email") {
         student[header] = normalizedEmail;
+      } else if (header === "year" || header === "year level") {
+        // Normalize year to ordinal format
+        const y = value.toString().trim();
+        if (y === "1") value = "1st Year";
+        else if (y === "2") value = "2nd Year";
+        else if (y === "3") value = "3rd Year";
+        else if (y === "4") value = "4th Year";
+        else if (y === "11") value = "Grade 11";
+        else if (y === "12") value = "Grade 12";
+        student[header] = value;
       } else {
-        student[header] = values[index] ?? "";
+        student[header] = value;
       }
     });
 
@@ -201,7 +213,16 @@ async function parseExcelFile(filePath) {
         // Add any other columns
         headers.forEach((header, index) => {
           if (index !== nameIndex && index !== emailIndex && values[index]) {
-            student[header] = String(values[index]).trim();
+            let value = String(values[index]).trim();
+            if (header === "year" || header === "year level") {
+              if (value === "1") value = "1st Year";
+              else if (value === "2") value = "2nd Year";
+              else if (value === "3") value = "3rd Year";
+              else if (value === "4") value = "4th Year";
+              else if (value === "11") value = "Grade 11";
+              else if (value === "12") value = "Grade 12";
+            }
+            student[header] = value;
           }
         });
         students.push(student);

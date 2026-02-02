@@ -187,6 +187,14 @@ const formSchema = new mongoose.Schema(
           type: String,
           default: null,
         },
+        department: {
+          type: String,
+          default: null,
+        },
+        program: {
+          type: String,
+          default: null,
+        },
         hasResponded: {
           type: Boolean,
           default: false,

@@ -19,34 +19,17 @@ class NotificationService {
         type === "reminder" ||
         (relatedEntity && relatedEntity.type === "reminder");
 
-      // Filter target users based on their mute preferences
+      // Filter target users based on their mute preferences - REMOVED
+      // We now create notifications regardless of mute status, so they appear in the list.
+      // Muting only suppresses the pop-up on the client side.
       let filteredTargetUsers = targetUsers;
+      
+      /* 
+      // Previous logic removed:
       if (targetUsers.length > 0) {
-        const users = await User.find({
-          _id: { $in: targetUsers },
-        }).select("_id muteNotifications muteReminders");
-
-        filteredTargetUsers = users
-          .filter((user) => {
-            // For reminder notifications, check muteReminders
-            if (isReminderNotification) {
-              return !user.muteReminders;
-            }
-            // For regular notifications, check muteNotifications
-            return !user.muteNotifications;
-          })
-          .map((user) => user._id);
-
-        // If all target users have muted, don't create the notification
-        if (filteredTargetUsers.length === 0 && targetRoles.length === 0) {
-          console.log(
-            `[createRoleBasedNotification] Skipping notification "${title}" - all target users have muted ${
-              isReminderNotification ? "reminders" : "notifications"
-            }`
-          );
-          return null;
-        }
-      }
+        ... filtering logic ...
+      } 
+      */
 
       const notificationData = {
         title,
@@ -123,16 +106,17 @@ class NotificationService {
       );
     }
 
-    // Notify only the creator's role
+    // Notify only the creator
     const creator = await User.findById(createdBy);
     if (creator) {
       await this.createRoleBasedNotification(
         `Form Published: ${form.title}`,
         `You have successfully published the evaluation form "${form.title}".`,
-        [creator.role], // Only send to creator's role
+        [], // No role targeting, specific user only
         {
           type: "success",
           priority: "medium",
+          targetUsers: [creator._id], // Target the creator specifically
           relatedEntity: { type: "form", id: form._id },
           createdBy,
         }

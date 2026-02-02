@@ -1,4 +1,5 @@
 const SharedReport = require("../../models/SharedReport");
+const SystemSettings = require("../../models/SystemSettings");
 const User = require("../../models/User");
 const puppeteer = require("puppeteer");
 const sendEmail = require("../../utils/email");
@@ -27,6 +28,7 @@ exports.getSchoolAdmins = async (req, res) => {
           isActive: true,
         },
         { role: "mis", "permissions.canViewReports": true, isActive: true },
+        { role: "mis", position: "MIS Head", isActive: true },
       ],
     }).select("name email department position role permissions");
 
@@ -247,46 +249,124 @@ exports.getSharedReports = async (req, res) => {
     const Form = require("../../models/Form");
     const Report = require("../../models/Report");
 
-    // Find all reports shared with this user's email that haven't expired
-    const sharedReports = await SharedReport.find({
-      "sharedWith.email": userEmail,
-      $or: [
-        { expiresAt: null },
-        { expiresAt: { $exists: false } },
-        { expiresAt: { $gt: new Date() } },
-      ],
-    }).populate("sharedBy", "name email");
+    // Check for MIS special access
+    const isMis = req.user.role === "mis";
+    const isHead = req.user.position === "MIS Head";
+    
+    let reportsToDisplay = [];
 
-    // Fetch the actual form/report data for each shared report
-    const reportsWithDetails = await Promise.all(
-      sharedReports.map(async (sharedReport) => {
-        const form = await Form.findById(sharedReport.reportId).select(
-          "title description eventName status createdAt updatedAt",
+    if (isMis) {
+      const settings = await SystemSettings.findOne();
+      const enableMisReports = settings?.generalSettings?.enableMisReports;
+
+      if (isHead || enableMisReports) {
+        // Find ALL available reports
+        const allReports = await Report.find({
+          status: { $in: ["published", "active"] }
+        }).sort({ createdAt: -1 });
+
+        // Merge with shared info if any
+        reportsToDisplay = await Promise.all(
+          allReports.map(async (report) => {
+            const form = await Form.findById(report.formId).select(
+              "title description eventName status createdAt updatedAt",
+            );
+
+            // Check if it was specifically shared to get sharedBy info
+            const sharedInfo = await SharedReport.findOne({ reportId: report.formId });
+
+            return {
+              id: report.formId,
+              formId: report.formId,
+              title: report.title || form?.title || form?.eventName || "Report",
+              description: form?.description || "",
+              thumbnail: report.thumbnail || null,
+              status: report.status || "published",
+              sharedBy: sharedInfo?.sharedBy || null,
+              sharedAt: sharedInfo?.sharedAt || report.createdAt,
+              eventDate: report.eventDate || form?.createdAt,
+              lastUpdated: report.updatedAt || form?.updatedAt,
+              isShared: !!sharedInfo,
+            };
+          })
         );
+      } else {
+        // Fallback to only specifically shared reports
+        const sharedReports = await SharedReport.find({
+          "sharedWith.email": userEmail,
+          $or: [
+            { expiresAt: null },
+            { expiresAt: { $exists: false } },
+            { expiresAt: { $gt: new Date() } },
+          ],
+        }).populate("sharedBy", "name email");
 
-        // Try to get thumbnail from the Report model
-        const report = await Report.findOne({
-          formId: sharedReport.reportId,
-        }).select("thumbnail");
+        reportsToDisplay = await Promise.all(
+          sharedReports.map(async (sharedReport) => {
+            const form = await Form.findById(sharedReport.reportId).select(
+              "title description eventName status createdAt updatedAt",
+            );
 
-        return {
-          id: sharedReport.reportId,
-          formId: sharedReport.reportId,
-          title: form?.title || form?.eventName || "Shared Report",
-          description: form?.description || "",
-          thumbnail: report?.thumbnail || null,
-          status: form?.status || "shared",
-          sharedBy: sharedReport.sharedBy,
-          sharedAt: sharedReport.sharedAt,
-          eventDate: form?.createdAt,
-          lastUpdated: form?.updatedAt,
-          isShared: true,
-        };
-      }),
-    );
+            const report = await Report.findOne({
+              formId: sharedReport.reportId,
+            }).select("thumbnail title status eventDate updatedAt");
+
+            return {
+              id: sharedReport.reportId,
+              formId: sharedReport.reportId,
+              title: report?.title || form?.title || form?.eventName || "Shared Report",
+              description: form?.description || "",
+              thumbnail: report?.thumbnail || null,
+              status: report?.status || "shared",
+              sharedBy: sharedReport.sharedBy,
+              sharedAt: sharedReport.sharedAt,
+              eventDate: report?.eventDate || form?.createdAt,
+              lastUpdated: report?.updatedAt || form?.updatedAt,
+              isShared: true,
+            };
+          })
+        );
+      }
+    } else {
+      // Logic for non-MIS users (School Admins, etc.)
+      const sharedReports = await SharedReport.find({
+        "sharedWith.email": userEmail,
+        $or: [
+          { expiresAt: null },
+          { expiresAt: { $exists: false } },
+          { expiresAt: { $gt: new Date() } },
+        ],
+      }).populate("sharedBy", "name email");
+
+      reportsToDisplay = await Promise.all(
+        sharedReports.map(async (sharedReport) => {
+          const form = await Form.findById(sharedReport.reportId).select(
+            "title description eventName status createdAt updatedAt",
+          );
+
+          const report = await Report.findOne({
+            formId: sharedReport.reportId,
+          }).select("thumbnail title status eventDate updatedAt");
+
+          return {
+            id: sharedReport.reportId,
+            formId: sharedReport.reportId,
+            title: report?.title || form?.title || form?.eventName || "Shared Report",
+            description: form?.description || "",
+            thumbnail: report?.thumbnail || null,
+            status: report?.status || "shared",
+            sharedBy: sharedReport.sharedBy,
+            sharedAt: sharedReport.sharedAt,
+            eventDate: report?.eventDate || form?.createdAt,
+            lastUpdated: report?.updatedAt || form?.updatedAt,
+            isShared: true,
+          };
+        }),
+      );
+    }
 
     // Filter out any reports where the form was not found
-    const validReports = reportsWithDetails.filter((r) => r.title);
+    const validReports = reportsToDisplay.filter((r) => r.title);
 
     res.status(200).json({
       success: true,

@@ -55,6 +55,11 @@ class MultilingualSentimentAnalyzer:
             'disaster': -1.5, 'terrible': -1.5, 'horrible': -1.5, 'awful': -1.5,
             'waited': -1, 'waiting': -0.8, 'antay': -1, 'hintay': -1, 'naghintay': -1,
             'pila': -0.5, 'hours': -0.6, 'oras': -0.6, 'dalawa': -0.3,
+            # Physical discomfort/Environmental
+            'mainit': -1, 'init': -1, 'maingay': -1, 'ingay': -1,
+            'mausok': -1, 'usok': -1, 'siksikan': -1, 'crowded': -1,
+            'madumi': -1, 'dumi': -1, 'mabaho': -1, 'baho': -1,
+            'sira': -1, 'broken': -1, 'gutom': -1, 'starving': -1,
             # Additional strong negative words
             'hassle': -1, 'inconvenient': -1, 'uncomfortable': -0.8,
             'unacceptable': -1.2, 'ridiculous': -1, 'absurd': -1,
@@ -269,7 +274,9 @@ class MultilingualSentimentAnalyzer:
                 'shortened': -0.3, 'shorter': -0.2, 'improvement': -0.2, 'improve': -0.2,
                 'lacking': -0.5, 'needs': -0.15, 'could': -0.1, 'should': -0.1,
                 'disaster': -1.0, 'waited': -0.5, 'waiting': -0.4, 'hours': -0.3,
-                'long': -0.3, 'hassle': -0.6, 'annoying': -0.6, 'annoyed': -0.6
+                'long': -0.3, 'hassle': -0.6, 'annoying': -0.6, 'annoyed': -0.6,
+                'angry': -0.8, 'mad': -0.7, 'furious': -0.9,
+                'starving': -2.0, 'hungry': -2.0
             }
             
             # English positive words with weights

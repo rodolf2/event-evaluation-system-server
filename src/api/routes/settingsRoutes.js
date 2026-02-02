@@ -41,6 +41,14 @@ router.put(
         securitySettings,
         nlpSettings,
       } = req.body;
+      
+      // RESTRICTION: Only MIS Head can update general settings
+      if (generalSettings && req.user.position !== "MIS Head") {
+        return res.status(403).json({
+          success: false,
+          message: "Only the MIS Head can modify general system settings",
+        });
+      }
 
       const settings = await SystemSettings.updateSettings(
         {
@@ -191,6 +199,14 @@ router.put(
   async (req, res) => {
     try {
       const generalSettings = req.body;
+      
+      // RESTRICTION: Only MIS Head can update general settings
+      if (req.user.position !== "MIS Head") {
+        return res.status(403).json({
+          success: false,
+          message: "Only the MIS Head can modify general system settings",
+        });
+      }
 
       const settings = await SystemSettings.updateSettings(
         { generalSettings },

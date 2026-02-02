@@ -242,6 +242,17 @@ const updateUser = async (req, res) => {
       });
     }
 
+    // Check for MIS Head status change restriction
+    const isChangingToHead = updates.position === "MIS Head";
+    const isRemovingHead = user.position === "MIS Head" && updates.position !== "MIS Head" && updates.position !== undefined;
+    
+    if ((isChangingToHead || isRemovingHead) && req.user.position !== "MIS Head") {
+      return res.status(403).json({
+        success: false,
+        message: "Only the MIS Head can manage Head status for other staff members",
+      });
+    }
+
     // Check for email conflicts if email is being updated
     if (updates.email && updates.email !== user.email) {
       const existingUser = await User.findOne({ email: updates.email });
