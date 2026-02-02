@@ -698,6 +698,7 @@ const generateQuantitativeReport = async (eventId) => {
       ratings: previousYearFeedbacks
         .map((fb) => fb.rating)
         .filter((r) => r != null),
+      previousEventId: previousEvent._id,
       responseCount: previousYearFeedbacks.length,
     };
   }
@@ -865,12 +866,14 @@ async function analyzeResponses(responses, questionTypeMap = null) {
         neutral: { count: 0, percentage: 0 },
         negative: { count: 0, percentage: 0 },
       },
+      questionBreakdown: []
     };
   }
 
   try {
     // Extract text content from responses (only text-based questions, not ratings)
     const textContents = [];
+    const textMetadata = [];
 
     responses.forEach((response) => {
       if (response.responses && Array.isArray(response.responses)) {
@@ -879,7 +882,7 @@ async function analyzeResponses(responses, questionTypeMap = null) {
           // Skip if answer is a number (scale/rating)
           if (typeof q.answer === "number") return;
 
-          // Skip if answer is a short numeric string (1-5 rating stored as string)
+          // Skip if answer is a string
           if (typeof q.answer === "string") {
             const trimmed = q.answer.trim();
             // Skip pure numbers or very short responses (likely ratings)
@@ -887,21 +890,19 @@ async function analyzeResponses(responses, questionTypeMap = null) {
             // Skip if too short to be meaningful text (less than 3 characters)
             if (trimmed.length < 3) return;
 
-            // This is actual text content
-            if (questionTypeMap) {
-              const qType =
-                questionTypeMap[q.questionId] ||
-                questionTypeMap[q.questionTitle];
-              if (qType === "paragraph" || qType === "short_answer") {
-                textContents.push(trimmed);
-              }
-            } else {
+            const qType = questionTypeMap ? (questionTypeMap[q.questionId] || questionTypeMap[q.questionTitle]) : "paragraph";
+
+            // Only analyze paragraph and short_answer for sentiment
+            if (qType === "paragraph" || qType === "short_answer") {
               textContents.push(trimmed);
+              textMetadata.push({
+                questionId: q.questionId,
+                questionTitle: q.questionTitle,
+                questionType: qType,
+                text: trimmed
+              });
             }
           }
-
-          // Handle array answers (multiple choice selections - skip for sentiment)
-          // We don't analyze multiple choice for sentiment
         });
       }
     });
@@ -913,6 +914,7 @@ async function analyzeResponses(responses, questionTypeMap = null) {
           neutral: { count: 0, percentage: 0 },
           negative: { count: 0, percentage: 0 },
         },
+        questionBreakdown: []
       };
     }
 
@@ -954,9 +956,40 @@ async function analyzeResponses(responses, questionTypeMap = null) {
     });
 
     if (pythonResult.success) {
+      // Map analyzed comments back to questions
+      const analyzedFeedbacks = pythonResult.analyzed_feedbacks || [];
+      const questionMap = new Map();
+
+      analyzedFeedbacks.forEach((analysis, index) => {
+        const meta = textMetadata[index];
+        if (!meta) return;
+
+        const qId = meta.questionId || meta.questionTitle;
+        if (!questionMap.has(qId)) {
+          questionMap.set(qId, {
+            questionId: meta.questionId,
+            questionTitle: meta.questionTitle,
+            questionType: meta.questionType,
+            responseCount: 0,
+            responses: []
+          });
+        }
+
+        const qData = questionMap.get(qId);
+        qData.responseCount++;
+        qData.responses.push({
+          text: meta.text,
+          sentiment: analysis.analysis?.sentiment || "neutral",
+          confidence: analysis.analysis?.confidence || 0,
+          label: analysis.analysis?.label || "neutral"
+        });
+      });
+
       return {
         sentimentBreakdown: pythonResult.summary,
-        analyzed_responses: pythonResult.analyzed_feedbacks,
+        analyzed_responses: analyzedFeedbacks,
+        categorizedComments: pythonResult.categorized_comments,
+        questionBreakdown: Array.from(questionMap.values()),
         method: "python_advanced",
       };
     } else {

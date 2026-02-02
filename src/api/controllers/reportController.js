@@ -1,6 +1,7 @@
 const Form = require("../../models/Form");
 const Report = require("../../models/Report");
 const SystemSettings = require("../../models/SystemSettings");
+const User = require("../../models/User");
 
 const AnalysisService = require("../../services/analysis/analysisService");
 const ThumbnailService = require("../../services/thumbnail/thumbnailService");
@@ -243,7 +244,43 @@ const getDynamicQuantitativeData = async (req, res) => {
       console.error("[LINKING] Error fetching previous form for breakdown:", err);
     }
 
-    const yearLevelBreakdown = processYearLevelBreakdown(form, responses, previousForm, previousResponses);
+    // --- NEW: Augment Attendee List for Missing Users ---
+    // Some respondents (e.g. Basic Ed students) might not be in the original attendee list
+    // We fetch their User details to get department/yearLevel info
+    let augmentedForm = form;
+    try {
+      const existingEmails = new Set((form.attendeeList || []).map(a => a.email?.toLowerCase()).filter(Boolean));
+      const missingEmails = responses
+        .map(r => r.respondentEmail?.toLowerCase())
+        .filter(email => email && !existingEmails.has(email));
+      
+      if (missingEmails.length > 0) {
+        // Fetch users for these emails
+        const foundUsers = await User.find({ email: { $in: missingEmails } }).select('email name department yearLevel role');
+        
+        if (foundUsers.length > 0) {
+          const extraAttendees = foundUsers.map(u => ({
+            email: u.email,
+            department: u.department,
+            yearLevel: u.yearLevel,
+            name: u.name,
+            role: u.role
+          }));
+          
+          // Create a plain object copy of form with augmented attendee list
+          // mapping to ensure we don't mutate the original mongoose doc if it's being tracked
+          const plainForm = form.toObject ? form.toObject() : { ...form };
+          plainForm.attendeeList = [...(plainForm.attendeeList || []), ...extraAttendees];
+          augmentedForm = plainForm;
+          console.log(`[REPORT] Augmented attendee list with ${extraAttendees.length} users for breakdown.`);
+        }
+      }
+    } catch (augmentError) {
+      console.error("[REPORT] Failed to augment attendee list:", augmentError);
+      // Fallback to original form
+    }
+
+    const yearLevelBreakdown = processYearLevelBreakdown(augmentedForm, responses, previousForm, previousResponses);
 
     // Calculate metrics
     const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
@@ -381,11 +418,12 @@ const getDynamicQualitativeData = async (req, res) => {
           success: true,
           data: {
             sentimentBreakdown: snapshot.analytics.sentimentBreakdown,
-            categorizedComments: {
+            categorizedComments: snapshot.analytics.categorizedComments || {
               positive: [],
               neutral: [],
               negative: [],
             },
+            questionBreakdown: snapshot.analytics.questionBreakdown || [],
             totalComments: (snapshot.textResponses || []).length,
             formInfo: {
               title: form.title,
@@ -853,6 +891,8 @@ const getDynamicCommentsData = async (req, res) => {
       limit = 20,
     } = req.query;
 
+    const userId = req.user._id;
+
     // Find the form
     const form = await Form.findById(reportId).populate(
       "createdBy",
@@ -865,76 +905,84 @@ const getDynamicCommentsData = async (req, res) => {
       });
     }
 
-    // Build base filter for responses
-    let responses = form.responses || [];
+    // Build question type map for filtering
+    const questionTypeMap = {};
+    (form.questions || []).forEach((q) => {
+      questionTypeMap[q._id.toString()] = q.type;
+      questionTypeMap[q.title] = q.type;
+    });
 
-    // Apply filters
+    // Extract all individual text responses first
+    let allComments = extractTextResponses(form.responses || [], questionTypeMap);
+
+    // Apply sentiment filter (type)
+    if (type !== "all") {
+      const analysisPromises = allComments.map(async (comment) => {
+        const sentimentResult = await AnalysisService.analyzeCommentSentiment(comment.answer);
+        return { ...comment, sentiment: sentimentResult.sentiment };
+      });
+      const analyzedComments = await Promise.all(analysisPromises);
+      allComments = analyzedComments.filter(c => c.sentiment === type);
+    } else {
+      // Still need sentiment for the UI
+      const analysisPromises = allComments.map(async (comment) => {
+        const sentimentResult = await AnalysisService.analyzeCommentSentiment(comment.answer);
+        return { ...comment, sentiment: sentimentResult.sentiment };
+      });
+      allComments = await Promise.all(analysisPromises);
+    }
+
+    // Apply Search filter
     if (searchTerm) {
-      responses = responses.filter((response) =>
-        (response.answer || "")
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()),
+      const term = searchTerm.toLowerCase();
+      allComments = allComments.filter(c => 
+        (c.answer || "").toLowerCase().includes(term) ||
+        (c.questionTitle || "").toLowerCase().includes(term) ||
+        (c.respondentName || "").toLowerCase().includes(term)
       );
     }
 
+    // Apply Date Range filter
     if (dateRange) {
       const [start, end] = dateRange.split(",");
       if (start && end) {
-        responses = responses.filter((response) => {
-          const submittedAt = new Date(response.submittedAt);
-          return submittedAt >= new Date(start) && submittedAt <= new Date(end);
+        const startDateObj = new Date(start);
+        const endDateObj = new Date(end);
+        allComments = allComments.filter(c => {
+          const commentDate = new Date(c.submittedAt);
+          return commentDate >= startDateObj && commentDate <= endDateObj;
         });
       }
     }
 
-    // Get total count for pagination
-    const totalCount = responses.length;
+    // Apply Role filter
+    if (role && form.attendeeList) {
+      allComments = allComments.filter(c => {
+        const attendee = form.attendeeList.find(a => a.email === c.respondentEmail);
+        return attendee && attendee.role === role;
+      });
+    }
 
-    // Sort responses
-    responses.sort((a, b) => {
-      const aValue = a[sortBy] || a.submittedAt;
-      const bValue = b[sortBy] || b.submittedAt;
-      return sortOrder === "asc"
-        ? new Date(aValue) - new Date(bValue)
-        : new Date(bValue) - new Date(aValue);
+    // Sort comments
+    allComments.sort((a, b) => {
+      const aVal = sortBy === "date" ? new Date(a.submittedAt) : (a[sortBy] || "");
+      const bVal = sortBy === "date" ? new Date(b.submittedAt) : (b[sortBy] || "");
+      
+      if (sortOrder === "asc") {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
     });
 
-    // Paginate results
+    // Calculate pagination
+    const totalCount = allComments.length;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const paginatedResponses = responses.slice(skip, skip + parseInt(limit));
+    const paginatedComments = allComments.slice(skip, skip + parseInt(limit));
 
-    // Process comments based on type using centralized sentiment analysis
-    let processedComments = paginatedResponses;
-    if (type !== "all") {
-      // Analyze all comments first (async)
-      const analysisPromises = paginatedResponses.map(async (response) => {
-        const text = response.answer || "";
-        const sentimentResult =
-          await AnalysisService.analyzeCommentSentiment(text);
-        return { response, sentiment: sentimentResult.sentiment };
-      });
-
-      const analyzedComments = await Promise.all(analysisPromises);
-
-      // Filter by the requested type
-      processedComments = analyzedComments
-        .filter(({ sentiment }) => sentiment === type)
-        .map(({ response }) => response);
-    }
-
-    // Filter by role if specified (using attendee list)
-    if (role && form.attendeeList) {
-      processedComments = processedComments.filter((response) => {
-        const attendee = form.attendeeList.find(
-          (a) => a.email === response.respondentEmail,
-        );
-        return attendee && attendee.userId && attendee.userId.role === role;
-      });
-    }
-
-    const comments = processedComments.map((response) => {
-      let name = response.respondentName || "Anonymous";
-      let email = response.respondentEmail;
+    const comments = paginatedComments.map((c) => {
+      let name = c.respondentName || "Anonymous";
+      let email = c.respondentEmail;
 
       if (isAnonymousMode) {
         name = "Anonymous";
@@ -942,12 +990,13 @@ const getDynamicCommentsData = async (req, res) => {
       }
 
       return {
-        id: response.id,
-        comment: response.answer,
+        id: c.id,
+        comment: c.answer,
         user: name,
         email: email,
-        questionTitle: response.questionTitle,
-        submittedAt: response.submittedAt,
+        questionTitle: c.questionTitle,
+        submittedAt: c.submittedAt,
+        sentiment: c.sentiment
       };
     });
 
@@ -1296,6 +1345,47 @@ const generateReport = async (req, res) => {
     const statusBreakdown = processStatusBreakdownFromForm(form);
     const responseTrends = processResponseTrendsFromForm(form.responses || []);
 
+    // --- NEW: Fetch Previous Year Data for Breakdown ---
+    let previousForm = null;
+    let previousResponses = [];
+    try {
+      previousForm = await findPreviousYearForm(form);
+      if (previousForm) {
+        previousResponses = previousForm.responses || [];
+      }
+    } catch (err) {
+      console.error("[LINKING] Error fetching previous form for breakdown:", err);
+    }
+
+    // --- NEW: Augment Attendee List for Missing Users ---
+    let augmentedForm = form;
+    try {
+      const existingEmails = new Set((form.attendeeList || []).map(a => a.email?.toLowerCase()).filter(Boolean));
+      const missingEmails = (form.responses || [])
+        .map(r => r.respondentEmail?.toLowerCase())
+        .filter(email => email && !existingEmails.has(email));
+      
+      if (missingEmails.length > 0) {
+        const foundUsers = await User.find({ email: { $in: missingEmails } }).select('email name department yearLevel role');
+        if (foundUsers.length > 0) {
+          const extraAttendees = foundUsers.map(u => ({
+            email: u.email,
+            department: u.department,
+            yearLevel: u.yearLevel,
+            name: u.name,
+            role: u.role
+          }));
+          const plainForm = form.toObject ? form.toObject() : { ...form };
+          plainForm.attendeeList = [...(plainForm.attendeeList || []), ...extraAttendees];
+          augmentedForm = plainForm;
+        }
+      }
+    } catch (augmentError) {
+      console.error("[REPORT] Failed to augment attendee list in generateReport:", augmentError);
+    }
+
+    const yearLevelBreakdown = processYearLevelBreakdown(augmentedForm, form.responses || [], previousForm, previousResponses);
+
     // Generate thumbnail
     const thumbnail = await ThumbnailService.generateReportThumbnail(
       form._id,
@@ -1332,6 +1422,7 @@ const generateReport = async (req, res) => {
           ratingDistribution,
           statusBreakdown,
           responseTrends,
+          yearLevelBreakdown, // Include in static snapshot
         },
       },
       // Create frozen snapshot of all data at generation time
@@ -1352,7 +1443,10 @@ const generateReport = async (req, res) => {
             ratingDistribution,
             statusBreakdown,
             responseTrends,
+            yearLevelBreakdown, // Include in static snapshot
           },
+          categorizedComments: responseAnalysis.categorizedComments,
+          questionBreakdown: responseAnalysis.questionBreakdown,
         },
         metadata: {
           description: form.description,
@@ -1573,8 +1667,20 @@ function processYearLevelBreakdown(form, responses, previousForm = null, previou
 
   attendeeList.forEach((attendee) => {
     if (attendee.email) {
-      // Default to Higher Education if no department specified
-      const department = attendee.department || "Higher Education";
+      let department = attendee.department;
+      const rawYear = attendee.yearLevel || "";
+
+      // Infer or Correct department based on year level
+      // 1. If missing, infer check
+      // 2. If "Higher Education" (default) but year is clearly Basic Ed (Grade/Kinder), override it
+      const isDefaultOrMissing = !department || department === "Higher Education";
+      if (isDefaultOrMissing && rawYear) {
+        const lowerYear = rawYear.toString().toLowerCase();
+        if (lowerYear.includes("grade") || lowerYear.includes("kinder") || lowerYear.includes("nursery") || (!isNaN(lowerYear) && parseInt(lowerYear) > 4)) {
+          department = "Basic Education";
+        }
+      }
+      department = department || "Higher Education";
       const normalizedLevel = normalizeYearLevel(attendee.yearLevel, department);
 
       if (normalizedLevel) {
@@ -1658,7 +1764,14 @@ function processYearLevelBreakdown(form, responses, previousForm = null, previou
       const lowerDept = deptName.toLowerCase();
 
       if (lowerDept.includes("higher") || lowerDept.includes("college")) {
-        standardLabels = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+        const presets = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+        // Include any other keys found in data (e.g. if misclassified)
+        const allKeys = new Set([
+            ...Object.keys(data.currentYear.counts),
+            ...Object.keys(data.previousYear.counts)
+        ]);
+        const extras = Array.from(allKeys).filter(k => !presets.includes(k)).sort();
+        standardLabels = [...presets, ...extras];
       } else if (
         lowerDept.includes("basic") ||
         lowerDept.includes("high school") ||

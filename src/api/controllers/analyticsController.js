@@ -190,6 +190,13 @@ const getFormAnalytics = async (req, res) => {
           count: negative.count || 0,
         },
       },
+      categorizedComments: responseAnalysis.categorizedComments || {
+        positive: [],
+        neutral: [],
+        negative: [],
+      },
+      analyzedResponses: responseAnalysis.analyzed_responses || [],
+      questionBreakdown: responseAnalysis.questionBreakdown || [],
       responseOverview,
       formInfo: {
         title: form.title,
