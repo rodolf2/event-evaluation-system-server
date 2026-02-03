@@ -8,7 +8,7 @@ const { requireAuth, requireRole } = require("../../middlewares/auth");
 router.get(
   "/",
   requireAuth,
-  requireRole(["mis", "superadmin"]),
+  requireRole(["mis", "superadmin", "psas"]),
   async (req, res) => {
     try {
       const settings = await SystemSettings.getSettings();
@@ -31,7 +31,7 @@ router.get(
 router.put(
   "/",
   requireAuth,
-  requireRole(["mis", "superadmin"]),
+  requireRole(["mis", "superadmin", "psas"]),
   async (req, res) => {
     try {
       const {
@@ -42,11 +42,13 @@ router.put(
         nlpSettings,
       } = req.body;
       
-      // RESTRICTION: Only MIS Head can update general settings
-      if (generalSettings && req.user.position !== "MIS Head") {
+      // RESTRICTION: Only MIS Head or PSAS Head can update general/security settings
+      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head";
+
+      if ((generalSettings || securitySettings || nlpSettings) && !isAuthorizedHead) {
         return res.status(403).json({
           success: false,
-          message: "Only the MIS Head can modify general system settings",
+          message: "Only the MIS Head or PSAS Head can modify system configuration",
         });
       }
 
@@ -88,6 +90,9 @@ router.put(
     }
   }
 );
+
+// ... (skipping guest routes) ...
+
 
 // GET /api/settings/guest - Get guest settings only
 router.get(
@@ -172,7 +177,7 @@ router.put(
 router.get(
   "/general",
   requireAuth,
-  requireRole(["mis", "superadmin"]),
+  requireRole(["mis", "superadmin", "psas"]),
   async (req, res) => {
     try {
       const settings = await SystemSettings.getSettings();
@@ -195,16 +200,18 @@ router.get(
 router.put(
   "/general",
   requireAuth,
-  requireRole(["mis", "superadmin"]),
+  requireRole(["mis", "superadmin", "psas"]),
   async (req, res) => {
     try {
       const generalSettings = req.body;
       
-      // RESTRICTION: Only MIS Head can update general settings
-      if (req.user.position !== "MIS Head") {
+      // RESTRICTION: Only MIS Head or PSAS Head can update general settings
+      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head";
+
+      if (!isAuthorizedHead) {
         return res.status(403).json({
           success: false,
-          message: "Only the MIS Head can modify general system settings",
+          message: "Only the MIS Head or PSAS Head can modify general system settings",
         });
       }
 
@@ -245,7 +252,7 @@ router.put(
 router.get(
   "/security",
   requireAuth,
-  requireRole(["mis", "superadmin"]),
+  requireRole(["mis", "superadmin", "psas"]),
   async (req, res) => {
     try {
       const settings = await SystemSettings.getSettings();
@@ -268,10 +275,21 @@ router.get(
 router.put(
   "/security",
   requireAuth,
-  requireRole(["mis", "superadmin"]),
+  requireRole(["mis", "superadmin", "psas"]),
   async (req, res) => {
     try {
       const securitySettings = req.body;
+      
+      // RESTRICTION: Only MIS Head or PSAS Head can update security settings
+      // Note: Assuming PSAS Head gets security settings access too based on "Global parameters" request
+      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head";
+
+      if (!isAuthorizedHead) {
+        return res.status(403).json({
+          success: false,
+          message: "Only the MIS Head or PSAS Head can modify security settings",
+        });
+      }
 
       const settings = await SystemSettings.updateSettings(
         { securitySettings },

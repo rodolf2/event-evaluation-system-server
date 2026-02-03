@@ -164,17 +164,109 @@ class FormsService {
         fileName,
       });
 
+      // Special handling for CSV/Excel: Try to parse rows as responses
+      const fileExt = fileName.split(".").pop()?.toLowerCase();
+      let responses = [];
+      let questions = extractedData.questions;
+
+      if (['csv', 'xlsx', 'xls'].includes(fileExt)) {
+         try {
+             // Re-read file to get full rows
+             let rows = [];
+             if (fileExt === 'csv') {
+                 rows = await new Promise((resolve) => {
+                     const r = [];
+                     fs.createReadStream(filePath)
+                       .pipe(csv())
+                       .on('data', (data) => r.push(data))
+                       .on('end', () => resolve(r));
+                 });
+             } else {
+                 const workbook = new ExcelJS.Workbook();
+                 await workbook.xlsx.readFile(filePath);
+                 const worksheet = workbook.worksheets[0];
+                 const headers = [];
+                 worksheet.eachRow((row, rowNumber) => {
+                     if (rowNumber === 1) {
+                         row.eachCell((cell, colNumber) => headers[colNumber - 1] = String(cell.value || "").trim());
+                     } else {
+                         const rowObj = {};
+                         row.eachCell((cell, colNumber) => rowObj[headers[colNumber - 1] || `col${colNumber}`] = cell.value);
+                         rows.push(rowObj);
+                     }
+                 });
+             }
+
+             if (rows.length > 0) {
+                 const headers = Object.keys(rows[0]);
+                 
+                 // Smart detection of metadata vs potential questions
+                 const metadataKeywords = ['name', 'email', 'year', 'grade', 'level', 'dept', 'department', 'college', 'program', 'course', 'uploaded', 'timestamp'];
+                 
+                 const potentialQuestionHeaders = headers.filter(h => {
+                     const lowerH = h.toLowerCase();
+                     // If header contains "feedback" or "comment", it's likely a question even if it contains "year" (e.g. "Year End Feedback")
+                     if (lowerH.includes('feedback') || lowerH.includes('comment') || lowerH.includes('suggestion')) return true;
+                     
+                     // Otherwise, exclude known metadata fields
+                     return !metadataKeywords.some(keyword => lowerH.includes(keyword));
+                 });
+
+                 if (potentialQuestionHeaders.length > 0) {
+                     // 1. Generate Questions from Headers
+                     questions = potentialQuestionHeaders.map(header => ({
+                         _id: new mongoose.Types.ObjectId(), // Pre-allocate ID
+                         title: header,
+                         type: 'short_answer', // Default to text
+                         required: false,
+                         options: []
+                     }));
+
+                     // 2. Map Rows to Responses
+                     responses = rows.map(row => {
+                         const emailKey = headers.find(h => h.toLowerCase().includes('email'));
+                         const nameKey = headers.find(h => h.toLowerCase().includes('name'));
+                         
+                         const respondentEmail = emailKey ? row[emailKey] : null;
+                         const respondentName = nameKey ? row[nameKey] : (respondentEmail ? respondentEmail.split('@')[0] : 'Anonymous');
+
+                         const userResponses = questions.map(q => ({
+                             questionId: q._id, // Use pre-allocated ID
+                             questionTitle: q.title,
+                             answer: row[q.title] || "N/A", // Map header to answer
+                             sectionId: "main"
+                         }));
+
+                         return {
+                             respondentEmail: respondentEmail ? respondentEmail.toLowerCase().trim() : null,
+                             respondentName: respondentName ? respondentName.trim() : 'Anonymous',
+                             responses: userResponses,
+                             submittedAt: new Date()
+                         };
+                     });
+                     
+                     console.log(`[CSV Import] Parsed ${questions.length} questions and ${responses.length} responses.`);
+                 }
+             }
+
+         } catch (parseError) {
+             console.error("Error parsing CSV rows as responses:", parseError);
+         }
+      }
+
       // Assign a guaranteed unique googleFormId
       const googleFormId =
         "uploaded__" + new mongoose.Types.ObjectId().toHexString();
       const form = new Form({
         title: extractedData.title,
         description: extractedData.description,
-        questions: extractedData.questions,
+        questions: questions, // Use potentially new questions
         status: "draft",
         createdBy: createdBy,
         googleFormId: googleFormId,
         uploadedFiles: extractedData.uploadedFiles,
+        responses: responses, // Populate responses!
+        responseCount: responses.length // Update count
       });
       await form.save();
       return form;
@@ -1288,7 +1380,11 @@ class FormsService {
                   key.toLowerCase() === "year" ||
                   key.toLowerCase().includes("year level") ||
                   key.toLowerCase().includes("year_level") ||
-                  key.toLowerCase().includes("yearlevel"),
+                  key.toLowerCase().includes("yearlevel") ||
+                  key.toLowerCase().includes("grade") ||
+                  key.toLowerCase().includes("student year") ||
+                  key.toLowerCase() === "level" ||
+                  key.toLowerCase() === "yr"
               );
 
               const name = nameKeys.length > 0 ? data[nameKeys[0]]?.trim() : "";
@@ -1298,10 +1394,12 @@ class FormsService {
                 yearKeys.length > 0 ? data[yearKeys[0]]?.trim() : null;
 
               if (name && email) {
-                results.push({ name, email: email.toLowerCase(), yearLevel });
+                // Return FULL data object combined with normalized fields
+                results.push({ ...data, name, email: email.toLowerCase(), yearLevel });
               } else if (email) {
                 // If only email is present, use email as name
                 results.push({
+                  ...data,
                   name: email.split("@")[0],
                   email: email.toLowerCase(),
                   yearLevel,
@@ -1366,7 +1464,11 @@ class FormsService {
               key.toLowerCase() === "year" ||
               key.toLowerCase().includes("year level") ||
               key.toLowerCase().includes("year_level") ||
-              key.toLowerCase().includes("yearlevel"),
+              key.toLowerCase().includes("yearlevel") ||
+              key.toLowerCase().includes("grade") ||
+              key.toLowerCase().includes("student year") ||
+              key.toLowerCase() === "level" ||
+              key.toLowerCase() === "yr"
           );
 
           const name =
@@ -1377,10 +1479,12 @@ class FormsService {
             yearKeys.length > 0 ? String(row[yearKeys[0]] || "").trim() : null;
 
           if (name && email) {
-            results.push({ name, email: email.toLowerCase(), yearLevel });
+             // Return FULL data object combined with normalized fields
+            results.push({ ...row, name, email: email.toLowerCase(), yearLevel });
           } else if (email) {
             // If only email is present, use email username as name
             results.push({
+              ...row,
               name: email.split("@")[0],
               email: email.toLowerCase(),
               yearLevel,

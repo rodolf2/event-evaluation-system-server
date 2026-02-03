@@ -295,6 +295,31 @@ const createBlankForm = async (req, res) => {
       selectedStudents.length > 0
     ) {
       try {
+        // Extract all unique column names from selected students for dynamic reporting
+        const allColumns = new Set();
+        selectedStudents.forEach(student => {
+          Object.keys(student).forEach(key => {
+            allColumns.add(key);
+          });
+        });
+        
+        // Store column metadata in the form
+        savedForm.csvColumns = Array.from(allColumns);
+        savedForm.csvColumnMetadata = {};
+        
+        // Analyze each column for metadata
+        allColumns.forEach(column => {
+          const values = selectedStudents.map(s => s[column]).filter(v => v !== undefined && v !== null);
+          const uniqueValues = new Set(values);
+          
+          savedForm.csvColumnMetadata[column] = {
+            type: values.every(v => !isNaN(v)) ? 'numeric' : 'text',
+            uniqueCount: uniqueValues.size,
+            sampleValues: Array.from(uniqueValues).slice(0, 5),
+            totalCount: values.length
+          };
+        });
+        
         // Convert selected students to attendeeList format
         const attendeeList = await Promise.all(
           selectedStudents.map(async (student) => {
@@ -351,16 +376,54 @@ const createBlankForm = async (req, res) => {
               }
             }
 
-            return {
+            // Helper to case-insensitively find a property with trimming
+            const findProp = (obj, ...candidates) => {
+              const keys = Object.keys(obj);
+              // Debug log to see keys
+              console.log('Student Keys:', keys);
+              
+              for (const candidate of candidates) {
+                // Try strict match first (trimmed)
+                let match = keys.find(k => k.trim().toLowerCase() === candidate.toLowerCase());
+                if (!match) {
+                    // Try includes fallback
+                    match = keys.find(k => k.toLowerCase().includes(candidate.toLowerCase()));
+                }
+                
+                if (match) {
+                    console.log(`Found match for ${candidate}: ${match} -> ${obj[match]}`);
+                    return obj[match];
+                }
+              }
+              return null;
+            };
+
+            // Expanded candidates list
+            const yearVal = findProp(student, 'year', 'yearLevel', 'year_level', 'year level', 'level', 'grade', 'yr', 'student year');
+            const deptVal = findProp(student, 'department', 'dept', 'department name', 'college', 'course', 'program', 'strand', 'track', 'branch');
+            const progVal = findProp(student, 'program', 'course', 'major', 'specialization');
+
+            // Preserve all columns dynamically
+            const attendeeData = {
               userId: user._id,
               name: student.name ? student.name.trim() : user.name,
               email: normalizedEmail,
-              yearLevel: student.year || student.yearLevel || null,
-              department: student.department || null,
-              program: student.program || null,
+              // Map found values to schema fields
+              yearLevel: yearVal || null,
+              department: deptVal || null,
+              program: progVal || null,
               hasResponded: false,
               uploadedAt: new Date(),
             };
+            
+            // Add all other columns from student data dynamically
+            Object.keys(student).forEach(key => {
+              if (key !== 'name' && key !== 'email') {
+                attendeeData[key] = student[key];
+              }
+            });
+            
+            return attendeeData;
           }),
         );
 
@@ -402,6 +465,31 @@ const createBlankForm = async (req, res) => {
                 await formsService.parseAttendeeFile(fullPath);
 
               if (parsedAttendees.length > 0) {
+                // Extract all unique column names from CSV for dynamic reporting
+                const allColumns = new Set();
+                parsedAttendees.forEach(attendee => {
+                  Object.keys(attendee).forEach(key => {
+                    allColumns.add(key);
+                  });
+                });
+                
+                // Store column metadata in the form
+                savedForm.csvColumns = Array.from(allColumns);
+                savedForm.csvColumnMetadata = {};
+                
+                // Analyze each column for metadata
+                allColumns.forEach(column => {
+                  const values = parsedAttendees.map(a => a[column]).filter(v => v !== undefined && v !== null);
+                  const uniqueValues = new Set(values);
+                  
+                  savedForm.csvColumnMetadata[column] = {
+                    type: values.every(v => !isNaN(v)) ? 'numeric' : 'text',
+                    uniqueCount: uniqueValues.size,
+                    sampleValues: Array.from(uniqueValues).slice(0, 5),
+                    totalCount: values.length
+                  };
+                });
+                
                 // Convert parsed attendees to attendeeList format with user creation
                 const attendeeList = await Promise.all(
                   parsedAttendees.map(async (attendee) => {
@@ -460,16 +548,53 @@ const createBlankForm = async (req, res) => {
                       }
                     }
 
-                    return {
+                    // Helper to case-insensitively find a property with trimming
+                    const findProp = (obj, ...candidates) => {
+                      const keys = Object.keys(obj);
+                      console.log('Attendee Keys:', keys);
+                      
+                      for (const candidate of candidates) {
+                        // Try strict match first (trimmed)
+                        let match = keys.find(k => k.trim().toLowerCase() === candidate.toLowerCase());
+                        if (!match) {
+                            // Try includes fallback
+                            match = keys.find(k => k.toLowerCase().includes(candidate.toLowerCase()));
+                        }
+                        
+                        if (match) {
+                            console.log(`Found match for ${candidate}: ${match} -> ${obj[match]}`);
+                            return obj[match];
+                        }
+                      }
+                      return null;
+                    };
+
+                    // Expanded candidates list
+                    const yearVal = findProp(attendee, 'year', 'yearLevel', 'year import', 'year_level', 'year level', 'level', 'grade', 'yr');
+                    const deptVal = findProp(attendee, 'department', 'dept', 'department name', 'college', 'course', 'program', 'strand', 'track');
+                    const progVal = findProp(attendee, 'program', 'course', 'major');
+
+                    // Preserve all CSV columns dynamically
+                    const attendeeData = {
                       userId: user._id,
                       name: attendee.name ? attendee.name.trim() : user.name,
                       email: normalizedEmail,
-                      yearLevel: attendee.year || attendee.yearLevel || null,
-                      department: attendee.department || null,
-                      program: attendee.program || null,
+                      // Map found values to schema fields
+                      yearLevel: yearVal || null,
+                      department: deptVal || null,
+                      program: progVal || null,
                       hasResponded: false,
                       uploadedAt: new Date(),
                     };
+                    
+                    // Add all other columns from CSV dynamically
+                    Object.keys(attendee).forEach(key => {
+                      if (key !== 'name' && key !== 'email') {
+                        attendeeData[key] = attendee[key];
+                      }
+                    });
+                    
+                    return attendeeData;
                   }),
                 );
 

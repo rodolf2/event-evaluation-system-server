@@ -133,4 +133,36 @@ router.post(
   reportController.generateReport,
 );
 
+// GET /api/analytics/reports/:reportId/dynamic-breakdown/:columnName - Get dynamic column breakdown
+router.get(
+  "/reports/:reportId/dynamic-breakdown/:columnName",
+  requireRole([
+    "psas",
+    "club-officer",
+    "school-admin",
+    "senior-management",
+    "club-adviser",
+    "mis",
+    "evaluator",
+    "guest-speaker",
+  ]),
+  reportController.getDynamicColumnBreakdown,
+);
+
+// GET /api/analytics/reports/:reportId/column-suggestions - Get column suggestions
+router.get(
+  "/reports/:reportId/column-suggestions",
+  requireRole([
+    "psas",
+    "club-officer",
+    "school-admin",
+    "senior-management",
+    "club-adviser",
+    "mis",
+    "evaluator",
+    "guest-speaker",
+  ]),
+  reportController.getColumnSuggestions,
+);
+
 module.exports = router;

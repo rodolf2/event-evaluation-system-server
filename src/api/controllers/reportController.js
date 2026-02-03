@@ -5,6 +5,7 @@ const User = require("../../models/User");
 
 const AnalysisService = require("../../services/analysis/analysisService");
 const ThumbnailService = require("../../services/thumbnail/thumbnailService");
+const DynamicCSVReportService = require("../../services/reports/dynamicCSVReportService");
 const SharedReport = require("../../models/SharedReport");
 const mongoose = require("mongoose");
 const { cache, invalidateCache } = require("../../utils/cache");
@@ -282,6 +283,11 @@ const getDynamicQuantitativeData = async (req, res) => {
 
     const yearLevelBreakdown = processYearLevelBreakdown(augmentedForm, responses, previousForm, previousResponses);
 
+    // --- NEW: Dynamic CSV column processing using service ---
+    const dynamicCSVData = DynamicCSVReportService.processDynamicColumns(form.attendeeList);
+    const dynamicColumns = dynamicCSVData.columns;
+    const dynamicData = dynamicCSVData.data;
+
     // Calculate metrics
     const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
     const totalResponses = responses.length;
@@ -310,6 +316,8 @@ const getDynamicQuantitativeData = async (req, res) => {
           statusBreakdown,
           responseTrends,
           yearLevelBreakdown,
+          dynamicColumns,
+          dynamicData,
         },
         rawData: filteredScaleResponses,
         formInfo: {
@@ -460,13 +468,14 @@ const getDynamicQualitativeData = async (req, res) => {
       questionTypeMap[q.title] = q.type;
     });
 
-    // Extract text responses with type filtering
-    const textResponses = extractTextResponses(responses, questionTypeMap);
+    // Extract text responses with type filtering AND MC option filtering
+    const textResponses = extractTextResponses(responses, questionTypeMap, form.questions || []);
 
-    // Perform sentiment analysis with type filtering
+    // Perform sentiment analysis with type filtering AND orphan data protection
     const analysis = await AnalysisService.analyzeResponses(
       responses,
       questionTypeMap,
+      form.questions || []
     );
 
     // --- NEW: Fetch Previous Year Data ---
@@ -1317,12 +1326,13 @@ const generateReport = async (req, res) => {
     const questionTypeMap = {};
     (form.questions || []).forEach((q) => {
       questionTypeMap[q._id.toString()] = q.type;
-      questionTypeMap[q.title] = q.type;
+      questionTypeMap[q.title] = q.type; 
     });
 
     const responseAnalysis = await AnalysisService.analyzeResponses(
       form.responses || [],
       questionTypeMap,
+      form.questions || []
     );
     const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
       positive: { count: 0, percentage: 0 },
@@ -1429,7 +1439,7 @@ const generateReport = async (req, res) => {
       dataSnapshot: {
         responses: form.responses || [],
         scaleResponses: scaleResponses,
-        textResponses: extractTextResponses(form.responses || [], questionTypeMap),
+        textResponses: extractTextResponses(form.responses || [], questionTypeMap, form.questions || []),
         analytics: {
           sentimentBreakdown,
           quantitativeData: {
@@ -1446,7 +1456,11 @@ const generateReport = async (req, res) => {
             yearLevelBreakdown, // Include in static snapshot
           },
           categorizedComments: responseAnalysis.categorizedComments,
-          questionBreakdown: responseAnalysis.questionBreakdown,
+          questionBreakdown: processCompleteQuestionBreakdown(
+            form, 
+            form.responses || [], 
+            responseAnalysis.questionBreakdown || []
+          ),
         },
         metadata: {
           description: form.description,
@@ -1530,8 +1544,21 @@ function extractScaleResponses(responses) {
 /**
  * Extract text responses from form responses
  */
-function extractTextResponses(responses, questionTypeMap = null) {
+function extractTextResponses(responses, questionTypeMap = null, questionsSource = []) {
   const textResponses = [];
+
+  // Build a map of Title -> Set of Options to detect collision
+  const titleToOptionsMap = {};
+  if (Array.isArray(questionsSource)) {
+    questionsSource.forEach(q => {
+      if (q.options && Array.isArray(q.options) && q.title) {
+        if (!titleToOptionsMap[q.title]) {
+          titleToOptionsMap[q.title] = new Set();
+        }
+        q.options.forEach(opt => titleToOptionsMap[q.title].add(String(opt).trim()));
+      }
+    });
+  }
 
   responses.forEach((response) => {
     if (response.responses) {
@@ -1546,6 +1573,14 @@ function extractTextResponses(responses, questionTypeMap = null) {
 
         // Check if this is a text response
         if (typeof item.answer === "string" && item.answer.trim().length > 0) {
+          const trimmed = item.answer.trim();
+
+          // Safety Check: Is this "text" actually a known option for a question with this title?
+          // This handles cases where an MC question shares a title with a Text question (especially with orphaned IDs)
+          if (titleToOptionsMap[item.questionTitle] && titleToOptionsMap[item.questionTitle].has(trimmed)) {
+            return; // Skip: This is an MC option masquerading as text
+          }
+
           textResponses.push({
             id: response.id || Math.random().toString(36).substr(2, 9),
             answer: item.answer,
@@ -1764,14 +1799,22 @@ function processYearLevelBreakdown(form, responses, previousForm = null, previou
       const lowerDept = deptName.toLowerCase();
 
       if (lowerDept.includes("higher") || lowerDept.includes("college")) {
-        const presets = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
-        // Include any other keys found in data (e.g. if misclassified)
+        // Dynamic keys only - no forced presets
         const allKeys = new Set([
-            ...Object.keys(data.currentYear.counts),
-            ...Object.keys(data.previousYear.counts)
+          ...Object.keys(data.currentYear.counts),
+          ...Object.keys(data.previousYear.counts),
         ]);
-        const extras = Array.from(allKeys).filter(k => !presets.includes(k)).sort();
-        standardLabels = [...presets, ...extras];
+        
+        // Custom sort for Higher Ed years
+        const sortOrder = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"];
+        standardLabels = Array.from(allKeys).sort((a, b) => {
+          const idxA = sortOrder.indexOf(a);
+          const idxB = sortOrder.indexOf(b);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return a.localeCompare(b);
+        });
       } else if (
         lowerDept.includes("basic") ||
         lowerDept.includes("high school") ||
@@ -2002,6 +2045,260 @@ const getSavedReports = async (req, res) => {
   }
 };
 
+/**
+ * Get dynamic column breakdown for a specific column
+ * GET /api/reports/:reportId/dynamic-breakdown/:columnName
+ */
+const getDynamicColumnBreakdown = async (req, res) => {
+  try {
+    const { reportId, columnName } = req.params;
+    const { includeResponses = "false" } = req.query;
+
+    // Check shared access if necessary
+    const hasAccess = await checkSharedReportAccess(reportId, req.user);
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to view this report or it has expired",
+      });
+    }
+
+    // Find the form
+    const form = await Form.findById(reportId);
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: "Form not found",
+      });
+    }
+
+    // Get responses if requested
+    let responses = [];
+    if (includeResponses === "true") {
+      responses = form.responses || [];
+    }
+
+    // Generate breakdown for the specified column
+    const breakdown = DynamicCSVReportService.generateColumnBreakdown(
+      form.attendeeList,
+      columnName,
+      responses
+    );
+
+    // Get column metadata if available
+    const columnMetadata = form.csvColumnMetadata?.[columnName] || null;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        columnName,
+        breakdown,
+        metadata: columnMetadata,
+        totalAttendees: form.attendeeList?.length || 0,
+        totalResponses: responses.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching dynamic column breakdown:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch dynamic column breakdown",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get column suggestions for filtering and analysis
+ * GET /api/reports/:reportId/column-suggestions
+ */
+const getColumnSuggestions = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+
+    // Check shared access if necessary
+    const hasAccess = await checkSharedReportAccess(reportId, req.user);
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to view this report or it has expired",
+      });
+    }
+
+    // Find the form
+    const form = await Form.findById(reportId);
+    if (!form) {
+      return res.status(404).json({
+        success: false,
+        message: "Form not found",
+      });
+    }
+
+    // Get column suggestions
+    const suggestions = DynamicCSVReportService.getColumnSuggestions(
+      form.attendeeList
+    );
+
+    res.status(200).json({
+      success: true,
+      data: suggestions,
+    });
+  } catch (error) {
+    console.error("Error fetching column suggestions:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch column suggestions",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Process complete question breakdown for all question types
+ * Merges text analysis results with computed stats for scale/MC questions
+ */
+function processCompleteQuestionBreakdown(form, responses, textBreakdown) {
+  const breakdownMap = new Map();
+
+  // 1. Initialize with all questions from the form
+  if (form.questions && Array.isArray(form.questions)) {
+    form.questions.forEach(q => {
+      // Logic for Scale questions
+      if (q.type === 'scale') {
+        breakdownMap.set(q._id.toString(), {
+          questionId: q._id.toString(),
+          questionTitle: q.title,
+          questionType: 'scale',
+          responseCount: 0,
+          scaleMax: q.high || 5,
+          ratingDistribution: [], // To be populated
+          averageRating: 0
+        });
+      }
+      // Logic for Multiple Choice questions
+      else if (q.type === 'multiple_choice') {
+        breakdownMap.set(q._id.toString(), {
+          questionId: q._id.toString(),
+          questionTitle: q.title,
+          questionType: 'multiple_choice',
+          responseCount: 0,
+          optionDistribution: [] // To be populated
+        });
+      }
+    });
+  }
+
+  // 2. Process responses to populate stats
+  responses.forEach(response => {
+    if (response.responses && Array.isArray(response.responses)) {
+      response.responses.forEach(answer => {
+        // Try fitting by ID first, then Title (as fallback)
+        let qData = breakdownMap.get(answer.questionId);
+        
+        // If not found by ID, try finding by title in our map map
+        // If not found by ID, try finding by title in our map (Robust Fallback)
+        if (!qData) {
+           for (const [key, val] of breakdownMap.entries()) {
+             if (val.questionTitle === answer.questionTitle) {
+               // SMART FALLBACK: Only match if the data types align
+               // This prevents merging "Scale" answers into "Multiple Choice" questions with the same name
+               
+               const isScaleAnswer = !isNaN(Number(answer.answer));
+               const isTextAnswer = typeof answer.answer === 'string';
+
+               if (val.questionType === 'scale' && isScaleAnswer) {
+                  qData = val;
+                  break;
+               } 
+               else if (val.questionType === 'multiple_choice' && isTextAnswer) {
+                  qData = val;
+                  break;
+               }
+             }
+           }
+        }
+        if (qData) {
+          // Robust check for scale answers (can be number or numeric string)
+          if (qData.questionType === 'scale') {
+             const val = Number(answer.answer);
+             if (!isNaN(val)) {
+                qData.responseCount++;
+                // Initialize distribution if empty
+                if (qData.ratingDistribution.length === 0) {
+                    const max = qData.scaleMax || 5;
+                    for(let i=1; i<=max; i++) {
+                      qData.ratingDistribution.push({ name: `${i} Star`, value: 0, count: 0 });
+                    }
+                }
+                
+                // Update count
+                const ratingIndex = Math.floor(val) - 1;
+                if (ratingIndex >= 0 && ratingIndex < qData.ratingDistribution.length) {
+                  qData.ratingDistribution[ratingIndex].count++;
+                }
+             }
+          }
+          // Robust check for multiple choice (ensure it is a string)
+          else if (qData.questionType === 'multiple_choice' && answer.answer) {
+             const answerText = String(answer.answer); // Force to string
+             qData.responseCount++;
+             const existingOption = qData.optionDistribution.find(o => o.name === answerText);
+             if (existingOption) {
+               existingOption.count++;
+             } else {
+               qData.optionDistribution.push({ name: answerText, count: 1, value: 0 });
+             }
+          }
+        }
+      });
+    }
+  });
+
+  // 3. Post-process: Calculate percentages and averages
+  for (const qData of breakdownMap.values()) {
+     if (qData.questionType === 'scale') {
+        let sum = 0;
+        let total = qData.responseCount;
+        
+        qData.ratingDistribution.forEach(dist => {
+           // Provide safe calc for percentage
+           dist.value = total > 0 ? Math.round((dist.count / total) * 100) : 0;
+           // Hacky way to get rating value from name "5 Star" -> 5
+           const ratingVal = parseInt(dist.name); 
+           if (!isNaN(ratingVal)) {
+              sum += ratingVal * dist.count;
+           }
+        });
+        
+        qData.averageRating = total > 0 ? sum / total : 0;
+     } 
+     else if (qData.questionType === 'multiple_choice') {
+        let total = qData.responseCount;
+        qData.optionDistribution.forEach(dist => {
+           dist.value = total > 0 ? Math.round((dist.count / total) * 100) : 0;
+        });
+     }
+  }
+
+  // 4. Merge text analysis breakdown
+  // Convert map to array and append text breakdown
+  const combinedBreakdown = [...Array.from(breakdownMap.values())];
+  
+  if (textBreakdown && Array.isArray(textBreakdown)) {
+    textBreakdown.forEach(item => {
+      // Check if already exists (unlikely for text vs scale, but good safety)
+      const existing = combinedBreakdown.find(
+         x => x.questionId === item.questionId || x.questionTitle === item.questionTitle
+      );
+      if (!existing) {
+        combinedBreakdown.push(item);
+      }
+    });
+  }
+
+  return combinedBreakdown;
+}
+
 module.exports = {
   getDynamicQuantitativeData,
   getDynamicQualitativeData,
@@ -2009,4 +2306,6 @@ module.exports = {
   getAllReportsWithLiveData,
   getSavedReports,
   generateReport,
+  getDynamicColumnBreakdown,
+  getColumnSuggestions,
 };

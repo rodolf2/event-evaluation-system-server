@@ -26,8 +26,8 @@ const {
 } = require("../controllers/securityController");
 
 // All MIS routes require mis role
-// All MIS routes require mis, superadmin, or admin role
-router.use(requireRole(["mis", "superadmin", "admin"]));
+// All MIS routes require mis, superadmin, admin, or psas role (specifically for PSAS Head security controls)
+router.use(requireRole(["mis", "superadmin", "admin", "psas"]));
 
 // ============================================
 // DASHBOARD STATS

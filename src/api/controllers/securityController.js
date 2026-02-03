@@ -1,5 +1,6 @@
 const User = require("../../models/User");
 const GuestToken = require("../../models/GuestToken");
+const EvaluatorToken = require("../../models/EvaluatorToken");
 const AuditLog = require("../../models/AuditLog");
 
 /**
@@ -7,33 +8,62 @@ const AuditLog = require("../../models/AuditLog");
  */
 const getActiveSessions = async (req, res) => {
   try {
-    // Define "Active" as accessed within the last 24 hours
-    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const now = new Date();
 
-    const activeGuests = await GuestToken.find({
-      accessedAt: { $gte: last24Hours },
+    // Fetch Guest Speakers (Report Viewers)
+    const activeSpeakers = await GuestToken.find({
       revoked: false,
-      expiresAt: { $gt: now }, // Token must not be expired
+      expiresAt: { $gt: now },
     })
-      .select("name email accessedAt expiresAt reportId")
+      .select("name email accessedAt expiresAt reportId createdAt")
       .populate("reportId", "title")
-      .sort({ accessedAt: -1 })
-      .limit(50); // Limit to 50 for performance
+      .sort({ accessedAt: -1, createdAt: -1 })
+      .limit(50);
 
-    const sessions = activeGuests.map((guest) => ({
+    // Fetch Guest Evaluators (Survey Participants)
+    const activeEvaluators = await EvaluatorToken.find({
+      revoked: false,
+      expiresAt: { $gt: now },
+    })
+      .select("name email accessedAt expiresAt formId createdAt")
+      .populate("formId", "title")
+      .sort({ accessedAt: -1, createdAt: -1 })
+      .limit(50);
+
+    // Map Speakers
+    const speakerSessions = activeSpeakers.map((guest) => ({
+      id: guest._id,
+      userName: guest.name,
+      role: "Guest Speaker",
+      email: guest.email,
+      lastAccess: guest.accessedAt,
+      expiresAt: guest.expiresAt,
+      formTitle: guest.reportId?.title || "Unknown Form",
+      status: "Active",
+      type: "speaker"
+    }));
+
+    // Map Evaluators
+    const evaluatorSessions = activeEvaluators.map((guest) => ({
       id: guest._id,
       userName: guest.name,
       role: "Guest Evaluator",
       email: guest.email,
       lastAccess: guest.accessedAt,
-      formTitle: guest.reportId?.title || "Unknown Form",
+      expiresAt: guest.expiresAt,
+      formTitle: guest.formId?.title || "Unknown Form",
       status: "Active",
+      type: "evaluator"
     }));
+
+    // Merge and Sort by last access
+    const combinedSessions = [...speakerSessions, ...evaluatorSessions].sort(
+      (a, b) => new Date(b.lastAccess) - new Date(a.lastAccess)
+    );
 
     res.json({
       success: true,
-      data: sessions,
+      data: combinedSessions,
     });
   } catch (error) {
     console.error("Error fetching active sessions:", error);
@@ -45,13 +75,22 @@ const getActiveSessions = async (req, res) => {
 };
 
 /**
- * Revoke a guest's session
+ * Revoke a guest's session (Speaker or Evaluator)
  */
 const revokeSession = async (req, res) => {
   try {
-    const { userId } = req.params; // This is now the GuestToken ID
+    const { userId } = req.params;
 
-    const guestToken = await GuestToken.findById(userId);
+    // Check GuestToken collection first
+    let guestToken = await GuestToken.findById(userId);
+    let tokenType = "Guest Speaker";
+
+    // If not found, check EvaluatorToken collection
+    if (!guestToken) {
+      guestToken = await EvaluatorToken.findById(userId);
+      tokenType = "Guest Evaluator";
+    }
+
     if (!guestToken) {
       return res.status(404).json({
         success: false,
@@ -59,7 +98,7 @@ const revokeSession = async (req, res) => {
       });
     }
 
-    // Revoke the guest token
+    // Revoke the token
     await guestToken.revokeToken(req.user._id);
 
     // Log the action
@@ -69,19 +108,20 @@ const revokeSession = async (req, res) => {
       userName: req.user.name,
       action: "GUEST_SESSION_REVOKED",
       category: "security",
-      description: `Revoked guest session for ${guestToken.email}`,
+      description: `Revoked ${tokenType} session for ${guestToken.email}`,
       severity: "warning",
       metadata: {
         targetId: guestToken._id,
-        targetType: "GuestToken",
+        targetType: tokenType === "Guest Speaker" ? "GuestToken" : "EvaluatorToken",
         guestEmail: guestToken.email,
         guestName: guestToken.name,
+        role: tokenType
       },
     });
 
     res.json({
       success: true,
-      message: "Guest session revoked successfully",
+      message: `${tokenType} session revoked successfully`,
     });
   } catch (error) {
     console.error("Error revoking session:", error);

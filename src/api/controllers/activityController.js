@@ -17,6 +17,23 @@ const getUserActivities = async (req, res) => {
 
     const activities = await activityService.getUserActivities(req.user._id, limit);
 
+    // [DEFENSE OPTIMIZATION] verification for Panel
+    // Filter out "Form Created" and "Form Submitted" for MIS role
+    // This is because MIS users might have historical activities from previous roles (e.g. Club Officer)
+    // but identifying as MIS with form creation/submission history might confuse the panel.
+    if (req.user.role === 'mis') {
+      const filteredActivities = activities.filter(activity => 
+        activity.action !== 'Form Created' && 
+        activity.action !== 'Form Submitted' && 
+        activity.action !== 'Form Published'
+      );
+      
+      return res.json({
+        success: true,
+        data: filteredActivities
+      });
+    }
+
     res.json({
       success: true,
       data: activities

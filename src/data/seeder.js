@@ -33,6 +33,7 @@ const users = [
     email: "mis.user@example.com",
     googleId: "googleid05",
     role: "mis",
+    position: "MIS Head", // Bootstrapped Admin
   },
 ];
 

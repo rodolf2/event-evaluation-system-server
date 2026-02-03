@@ -108,6 +108,7 @@ const getFormAnalytics = async (req, res) => {
       responseAnalysis = await AnalysisService.analyzeResponses(
         form.responses || [],
         questionTypeMap,
+        form.questions || []
       );
       console.log(
         `[ANALYTICS] Response analysis completed:`,

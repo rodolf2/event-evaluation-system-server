@@ -20,6 +20,14 @@ const createUser = async (req, res) => {
       });
     }
 
+    // [SECURITY] Only MIS Head can create new users
+    if (req.user.position !== "MIS Head") {
+      return res.status(403).json({
+        success: false,
+        message: "Only the MIS Head can create new users",
+      });
+    }
+
     // Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -157,7 +165,12 @@ const getAllUsers = async (req, res) => {
     }
 
     if (role) {
-      filter.role = role;
+      const roles = role.split(",");
+      if (roles.length > 1) {
+        filter.role = { $in: roles };
+      } else {
+        filter.role = role;
+      }
     }
 
     if (isActive !== undefined) {
@@ -242,15 +255,41 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // Check for MIS Head status change restriction
-    const isChangingToHead = updates.position === "MIS Head";
-    const isRemovingHead = user.position === "MIS Head" && updates.position !== "MIS Head" && updates.position !== undefined;
-    
-    if ((isChangingToHead || isRemovingHead) && req.user.position !== "MIS Head") {
-      return res.status(403).json({
-        success: false,
-        message: "Only the MIS Head can manage Head status for other staff members",
-      });
+    // [SECURITY] Check for PBOO (Club Officer) management permissions
+    const isChangingToPBOO = updates.role === "club-officer";
+    const isRemovingPBOO = user.role === "club-officer" && updates.role && updates.role !== "club-officer";
+
+    if (isChangingToPBOO || isRemovingPBOO) {
+      // Only PSAS Head can manage PBOO roles
+      if (req.user.position !== "PSAS Head") {
+         return res.status(403).json({
+          success: false,
+          message: "Only the PSAS Head can manage PBOO (Club Officer) roles",
+        });
+      }
+    } else {
+      // For all OTHER updates, ensure user is MIS (PSAS Head can only touch PBOO roles)
+      // This prevents PSAS users from updating arbitrary fields or other roles
+      if (req.user.role !== "mis" && !isChangingToPBOO && !isRemovingPBOO) {
+         return res.status(403).json({
+          success: false,
+          message: "You do not have permission to perform this update",
+        });
+      }
+    }
+
+    // Check for Head status change restriction
+    const isChangingToHead = updates.position?.includes("Head");
+    const isRemovingHead = user.position?.includes("Head") && updates.position && !updates.position.includes("Head");
+
+    if (isChangingToHead || isRemovingHead) {
+      // STRICTLY limit Head/ITSS position management to MIS Head only
+      if (req.user.position !== "MIS Head") {
+        return res.status(403).json({
+          success: false,
+          message: "Only the MIS Head can manage Head/ITSS positions",
+        });
+      }
     }
 
     // Check for email conflicts if email is being updated
@@ -541,6 +580,51 @@ const provisionUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Email and role are required",
+      });
+    }
+
+    // [SECURITY] Check permissions for provisioning
+    const isMis = req.user.role === "mis";
+    const isMisHead = isMis && req.user.position === "MIS Head";
+    const isItss = req.user.role === "psas" && req.user.position === "ITSS";
+
+    if (!isMis && !isItss) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to provision users",
+      });
+    }
+
+    // [SECURITY] Role restrictions
+    if (isItss) {
+      if (role !== "student") {
+        return res.status(403).json({
+          success: false,
+          message: "ITSS can only provision Student accounts",
+        });
+      }
+    } else if (isMis) {
+      // MIS Staff restrictions
+      if (role === "student") {
+        return res.status(403).json({
+          success: false,
+          message:
+            "MIS users cannot provision Student accounts. Please ask the ITSS.",
+        });
+      }
+      if (role === "mis" && !isMisHead) {
+        return res.status(403).json({
+          success: false,
+          message: "Only the MIS Head can provision other MIS Staff accounts",
+        });
+      }
+    }
+
+    // [VALIDATION] Enforce email domain for students
+    if (role === "student" && !email.endsWith("@student.laverdad.edu.ph")) {
+      return res.status(400).json({
+        success: false,
+        message: "Student emails must end with @student.laverdad.edu.ph",
       });
     }
 

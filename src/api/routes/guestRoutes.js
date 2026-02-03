@@ -99,15 +99,6 @@ router.post(
         });
       }
 
-      // expirationDays is now hours (48-168 hours range)
-      const expirationHours = parseInt(expirationDays);
-      if (expirationHours < 48 || expirationHours > 168) {
-        return res.status(400).json({
-          success: false,
-          message: "Access duration must be between 48 and 168 hours",
-        });
-      }
-
       // Verify report exists
       const report = await Form.findById(reportId);
       if (!report) {
@@ -117,10 +108,32 @@ router.post(
         });
       }
 
+      // Handle dynamic durations (6 months, 1 year)
+      // Base the expiration on the event end date if it's in the future, otherwise use now.
+      const now = new Date();
+      let baseDate = new Date();
+      
+      if (report.eventEndDate && new Date(report.eventEndDate) > now) {
+        baseDate = new Date(report.eventEndDate);
+      }
+
+      let expiresAt = new Date(baseDate);
+      let totalDays = 0;
+
+      if (expirationDays === "6m") {
+        expiresAt.setMonth(expiresAt.getMonth() + 6);
+        totalDays = 180;
+      } else if (expirationDays === "1y") {
+        expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+        totalDays = 365;
+      } else {
+        const expirationHours = parseInt(expirationDays) || 48;
+        expiresAt.setTime(expiresAt.getTime() + expirationHours * 60 * 60 * 1000);
+        totalDays = Math.ceil(expirationHours / 24);
+      }
+
       // Generate token
       const token = GuestToken.generateToken();
-      const expiresAt = new Date();
-      expiresAt.setTime(expiresAt.getTime() + expirationHours * 60 * 60 * 1000);
 
       const guestToken = new GuestToken({
         token,
@@ -129,7 +142,7 @@ router.post(
         reportId,
         eventId: report.eventId,
         expiresAt,
-        expirationDays: Math.ceil(expirationHours / 24), // Store as days for display
+        expirationDays: totalDays,
         createdBy: req.user._id,
       });
 
@@ -815,27 +828,32 @@ router.post("/evaluator/submit/:token", async (req, res) => {
     const { token } = req.params;
     const { responses } = req.body;
 
-    const evaluatorToken = await EvaluatorToken.findOne({ token }).populate(
-      "formId",
-    );
+    // Use an atomic update to "claim" the submission slot.
+    // This prevents two people from submitting at the exact same time.
+    const evaluatorToken = await EvaluatorToken.findOneAndUpdate(
+      { 
+        token, 
+        completed: false, 
+        revoked: false,
+        expiresAt: { $gt: new Date() }
+      },
+      { $set: { accessedAt: new Date() } }, // Minor update to trigger the lock
+      { new: true }
+    ).populate("formId");
 
     if (!evaluatorToken) {
-      return res.status(404).json({
-        success: false,
-        message: "Invalid access token",
-      });
-    }
-
-    if (!evaluatorToken.canSubmit()) {
-      if (evaluatorToken.completed) {
+      // Check if it's already completed to give a better error message
+      const existingToken = await EvaluatorToken.findOne({ token });
+      if (existingToken && existingToken.completed) {
         return res.status(403).json({
           success: false,
           message: "You have already submitted your evaluation",
         });
       }
+      
       return res.status(403).json({
         success: false,
-        message: "This access link is no longer valid",
+        message: "Invalid, expired, or revoked access token",
       });
     }
 

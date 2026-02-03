@@ -36,20 +36,6 @@ passport.use(
           googleEmail.toLowerCase().endsWith(domain.toLowerCase()),
         );
 
-        // HARDCODED ADMIN CHECK
-        const HARDCODED_ADMIN_EMAILS = (process.env.SYSTEM_ADMIN_EMAIL || "")
-          .split(",")
-          .map((e) => e.trim())
-          .filter((e) => e);
-          
-        const isHardcodedAdmin = HARDCODED_ADMIN_EMAILS.includes(googleEmail);
-
-        if (!isAllowedDomain && !isHardcodedAdmin) {
-          return done(null, false, {
-            message: "Access denied. Use your school account.",
-          });
-        }
-
         // Check if user exists with the Google ID
         let user = await User.findOne({ googleId: profile.id });
 
@@ -67,29 +53,6 @@ passport.use(
           }
           if (profile.displayName) {
             user.name = profile.displayName;
-          }
-
-          // Force update for hardcoded admin
-          if (isHardcodedAdmin) {
-            console.log(`🚀 Admin login detected: Promoting ${googleEmail} to MIS Head`);
-            user.role = "mis";
-            user.position = "MIS Head";
-            user.permissions = {
-              canViewReports: true,
-              canViewAnalytics: true,
-              manage_users: true,
-              manage_roles_provisioning: true,
-              access_system_configuration: true,
-              view_audit_logs: true
-            };
-            // Ensure permissions Map is also updated if using Map structure in model
-            if (user.permissions instanceof Map) {
-              user.permissions.set("canViewReports", true);
-              user.permissions.set("manage_roles_provisioning", true);
-              user.permissions.set("access_system_configuration", true);
-              user.permissions.set("manage_users", true);
-              user.permissions.set("view_audit_logs", true);
-            }
           }
 
           await user.save();
@@ -116,57 +79,8 @@ passport.use(
             user.name = profile.displayName;
           }
 
-          // Force update for hardcoded admin
-          if (isHardcodedAdmin) {
-            console.log(`🚀 Admin login detected: Promoting ${googleEmail} to MIS Head`);
-            user.role = "mis";
-            user.position = "MIS Head";
-            // Set basic MIS permissions
-             user.permissions = {
-              canViewReports: true,
-              canViewAnalytics: true,
-              manage_users: true,
-              manage_roles_provisioning: true,
-              access_system_configuration: true,
-              view_audit_logs: true
-            };
-             if (user.permissions instanceof Map) {
-              user.permissions.set("canViewReports", true);
-              user.permissions.set("manage_roles_provisioning", true);
-              user.permissions.set("access_system_configuration", true);
-              user.permissions.set("manage_users", true);
-              user.permissions.set("view_audit_logs", true);
-            }
-          }
-
           await user.save();
           return done(null, user);
-        }
-
-        // User not found in the system - reject login
-        // UNLESS it's the hardcoded admin
-        if (isHardcodedAdmin) {
-           console.log(`🚀 Admin login detected: Creating new MIS Head account for ${googleEmail}`);
-           user = new User({
-             email: googleEmail,
-             googleId: profile.id,
-             name: profile.displayName || "Admin User",
-             profilePicture: profile.photos && profile.photos[0] ? profile.photos[0].value : "",
-             role: "mis",
-             position: "MIS Head",
-             department: "MIS",
-             isActive: true, // Auto-activate
-             permissions: {
-                canViewReports: true,
-                canViewAnalytics: true,
-                manage_users: true,
-                manage_roles_provisioning: true,
-                access_system_configuration: true,
-                view_audit_logs: true
-             }
-           });
-           await user.save();
-           return done(null, user);
         }
 
         // Only pre-registered users can log in

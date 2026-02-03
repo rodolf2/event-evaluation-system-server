@@ -858,54 +858,63 @@ function generateRecommendations(analysisResult) {
  * @param {Object} questionTypeMap - Map of question IDs/titles to types
  * @returns {Object} Analysis results with sentiment breakdown
  */
-async function analyzeResponses(responses, questionTypeMap = null) {
-  if (!responses || responses.length === 0) {
-    return {
-      sentimentBreakdown: {
-        positive: { count: 0, percentage: 0 },
-        neutral: { count: 0, percentage: 0 },
-        negative: { count: 0, percentage: 0 },
-      },
-      questionBreakdown: []
-    };
-  }
-
-  try {
-    // Extract text content from responses (only text-based questions, not ratings)
-    const textContents = [];
-    const textMetadata = [];
-
-    responses.forEach((response) => {
-      if (response.responses && Array.isArray(response.responses)) {
-        // Extract text from text-based questions only
-        response.responses.forEach((q) => {
-          // Skip if answer is a number (scale/rating)
-          if (typeof q.answer === "number") return;
-
-          // Skip if answer is a string
-          if (typeof q.answer === "string") {
-            const trimmed = q.answer.trim();
-            // Skip pure numbers or very short responses (likely ratings)
-            if (/^\d+$/.test(trimmed) && trimmed.length <= 2) return;
-            // Skip if too short to be meaningful text (less than 3 characters)
-            if (trimmed.length < 3) return;
-
-            const qType = questionTypeMap ? (questionTypeMap[q.questionId] || questionTypeMap[q.questionTitle]) : "paragraph";
-
-            // Only analyze paragraph and short_answer for sentiment
-            if (qType === "paragraph" || qType === "short_answer") {
-              textContents.push(trimmed);
-              textMetadata.push({
-                questionId: q.questionId,
-                questionTitle: q.questionTitle,
-                questionType: qType,
-                text: trimmed
-              });
+async function analyzeResponses(responses, questionTypeMap, questionsSource = []) {
+    try {
+      // Build a map of Title -> Set of Options to detect collision
+      const titleToOptionsMap = {};
+      if (Array.isArray(questionsSource)) {
+          questionsSource.forEach(q => {
+            if (q.options && Array.isArray(q.options) && q.title) {
+               if (!titleToOptionsMap[q.title]) {
+                 titleToOptionsMap[q.title] = new Set();
+               }
+               q.options.forEach(opt => titleToOptionsMap[q.title].add(String(opt).trim()));
             }
-          }
-        });
+          });
       }
-    });
+
+      // Extract text content from responses (only text-based questions, not ratings)
+      const textContents = [];
+      const textMetadata = [];
+  
+      responses.forEach((response) => {
+        if (response.responses && Array.isArray(response.responses)) {
+          // Extract text from text-based questions only
+          response.responses.forEach((q) => {
+            // Skip if answer is a number (scale/rating)
+            if (typeof q.answer === "number") return;
+  
+            // Skip if answer is a string
+            if (typeof q.answer === "string") {
+              const trimmed = q.answer.trim();
+              // Skip pure numbers or very short responses (likely ratings)
+              if (/^\d+$/.test(trimmed) && trimmed.length <= 2) return;
+              // Skip if too short to be meaningful text (less than 3 characters)
+              if (trimmed.length < 3) return;
+  
+              const qType = questionTypeMap ? (questionTypeMap[q.questionId] || questionTypeMap[q.questionTitle]) : null;
+  
+              // Only analyze paragraph and short_answer for sentiment
+              if (qType === "paragraph" || qType === "short_answer") {
+                 // Safety Check: Is this "text" actually a known option for a question with this title?
+                 // This handles the case where "Untitled Question" (Text) overlaps with "Untitled Question" (MC)
+                 if (titleToOptionsMap[q.questionTitle] && titleToOptionsMap[q.questionTitle].has(trimmed)) {
+                    return; // Skip: This is an MC option masquerading as text due to ID mismatch
+                 }
+
+                textContents.push(trimmed);
+                textMetadata.push({
+                  questionId: q.questionId,
+                  questionTitle: q.questionTitle,
+                  questionType: qType,
+                  text: trimmed
+                });
+              }
+            }
+          });
+        }
+      });
+
 
     if (textContents.length === 0) {
       return {
@@ -984,6 +993,31 @@ async function analyzeResponses(responses, questionTypeMap = null) {
           label: analysis.analysis?.label || "neutral"
         });
       });
+
+      // Calculate sentiment breakdown per question
+      for (const qData of questionMap.values()) {
+        const breakdown = {
+          positive: { count: 0, percentage: 0 },
+          neutral: { count: 0, percentage: 0 },
+          negative: { count: 0, percentage: 0 }
+        };
+
+        qData.responses.forEach(r => {
+          const sentiment = r.sentiment || 'neutral';
+          if (breakdown[sentiment]) {
+            breakdown[sentiment].count++;
+          }
+        });
+
+        const total = qData.responseCount;
+        if (total > 0) {
+          breakdown.positive.percentage = Math.round((breakdown.positive.count / total) * 100);
+          breakdown.neutral.percentage = Math.round((breakdown.neutral.count / total) * 100);
+          breakdown.negative.percentage = Math.round((breakdown.negative.count / total) * 100);
+        }
+
+        qData.sentimentBreakdown = breakdown;
+      }
 
       return {
         sentimentBreakdown: pythonResult.summary,
