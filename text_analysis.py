@@ -25,12 +25,14 @@ class MultilingualSentimentAnalyzer:
             'maayos': 1, 'ayos': 1, 'linis': 1, 'malinis': 1,
             'effective': 1, 'efficient': 1, 'successful': 1, 'tagumpay': 1,
             'productive': 1, 'organized': 1, 'smooth': 1, 'professional': 1,
+            'eksperto': 1, 'expert': 1, 'knowledgeable': 1, 'matalino': 1,
             'natuto': 1, 'natutunan': 1, 'nakatulong': 1, 'helpful': 1,
             'satisfied': 1, 'fun': 1, 'interesting': 1, 'educational': 1,
             'useful': 1, 'motivating': 1, 'solid': 1, 'swabe': 1,
             'oks': 0.5, 'goods': 1, 'nice': 1, 'yes': 1, 'oo': 1,
-            'sige': 0.5, 'salamat': 1, 'grateful': 1, 'appreciate': 1,
-            'appreciated': 1, 'thankful': 1
+            'grateful': 1, 'appreciate': 1, 'appreciated': 1, 'thankful': 1,
+            'informative': 1, 'amazing': 1, 'excellent': 1, 'great': 1,
+            'karanasan': 0.5, 'experience': 0.5, 'malinaw': 1, 'clear': 1
         }
 
         self.tagalog_negative = {
@@ -62,6 +64,11 @@ class MultilingualSentimentAnalyzer:
             'sira': -1, 'broken': -1, 'gutom': -1, 'starving': -1,
             # Additional strong negative words
             'hassle': -1, 'inconvenient': -1, 'uncomfortable': -0.8,
+            'outdated': -1, 'uma': -1, 'luma': -1, 'old': -0.8,
+            'mess': -1, 'kalat': -1, 'sabog': -1, 'labo': -1, 'malabo': -1,
+            'regret': -1.5, 'sisi': -1.5, 'maintindihan': -0.5, # Usually negated
+            'unclear': -1, 'confusing': -1, 'nakakalito': -1,
+            'hassle': -1, 'inconvenient': -1, 'uncomfortable': -0.8,
             'unacceptable': -1.2, 'ridiculous': -1, 'absurd': -1,
             'annoying': -1, 'annoyed': -1, 'irritating': -1, 'irritated': -1,
             'stressful': -1, 'stressed': -0.8, 'tiring': -0.7, 'exhausting': -0.8,
@@ -79,7 +86,10 @@ class MultilingualSentimentAnalyzer:
             'napakasaya', 'sobrang saya', 'sobra saya', 'ang saya',
             'napakaayos', 'sobrang ayos', 'ang husay', 'napakatahimik',
             'well-organized', 'well-prepared', 'well-managed', 'well-planned',
-            'looking forward', 'expecting more', 'next year', 'next event'
+            'looking forward', 'expecting more', 'next year', 'next event',
+            'magandang karanasan', 'good experience', 'great experience',
+            'very informative', 'sobrang informative', 'amazing speakers',
+            'ang galing', 'ang husay', 'tunay na eksperto', 'real experts'
         ]
 
         self.negative_phrases = [
@@ -97,7 +107,11 @@ class MultilingualSentimentAnalyzer:
             'dalawang oras', 'isang oras', 'nag-antay', 'naghintay',
             'was a disaster', 'total disaster', 'complete disaster',
             'could have been better', 'needs improvement', 'room for improvement',
-            'medyo magulo', 'medyo matagal', 'medyo mainit'
+            'medyo magulo', 'medyo matagal', 'medyo mainit',
+            'complete mess', 'hindi maintindihan', 'di maintindihan',
+            'audio quality', 'poor audio', 'bad audio', 'outdated content',
+            'old material', 'lumang material', 'complete disaster',
+            'total mess', 'regret coming', 'waste of money'
         ]
 
         # Neutral words that might indicate mixed sentiment
@@ -128,7 +142,7 @@ class MultilingualSentimentAnalyzer:
         
         # Negation words
         self.negations = [
-            'not', 'no', 'never', 'hindi', 'wala', 'walang', 'di', 'di ko', 'hinde'
+            'not', 'no', 'never', 'hindi', 'wala', 'walang', 'di', 'di ko', 'hinde', 'none', 'neither'
         ]
         
         # Intensifiers and diminishers
@@ -278,7 +292,9 @@ class MultilingualSentimentAnalyzer:
                 'disaster': -1.0, 'waited': -0.5, 'waiting': -0.4, 'hours': -0.3,
                 'long': -0.3, 'hassle': -0.6, 'annoying': -0.6, 'annoyed': -0.6,
                 'angry': -0.8, 'mad': -0.7, 'furious': -0.9,
-                'starving': -2.0, 'hungry': -2.0, 'basic': -0.3, 'unprepared': -0.5
+                'starving': -2.0, 'hungry': -2.0, 'basic': -0.3, 'unprepared': -0.5,
+                'mess': -1.0, 'messy': -0.8, 'regret': -1.5, 'regretted': -1.5,
+                'outdated': -0.8, 'old': -0.4, 'failed': -1.0
             }
             
             # English positive words with weights
@@ -300,6 +316,12 @@ class MultilingualSentimentAnalyzer:
             # Check for criticism patterns
             has_criticism_pattern = 'i feel like' in text_lower or 'could have been' in text_lower or 'should have been' in text_lower
             
+            # Check for comparisons (often neutral/mixed context)
+            has_comparison = 'better than' in text_lower or 'worse than' in text_lower or 'compared to' in text_lower
+            
+            # Use improved negation check including "none"
+            negation_words = {'none', 'neither', 'nor', 'not', 'no', 'never'}
+            
             # Intensifiers
             intensifiers = {'very', 'really', 'extremely', 'so', 'too', 'way', 'incredibly', 'absolutely'}
             
@@ -307,12 +329,20 @@ class MultilingualSentimentAnalyzer:
             custom_score = 0
             for i, word in enumerate(words):
                 multiplier = 1.5 if (i > 0 and words[i-1] in intensifiers) else 1.0
+                # Improved negation check
+                # Check for "None of..." or standard negation
+                is_negated = (i > 0 and words[i-1] in negation_words) or \
+                            (i > 1 and words[i-2] in negation_words) or \
+                            ('none' in words and word in english_positive_words) # "None of the topics were relevant"
+
                 if i > 0 and words[i-1] == 'too' and word in english_positive_words:
                     custom_score -= 0.3 * multiplier
                 elif word in english_negative_words:
-                    custom_score += english_negative_words[word] * multiplier
+                    val = english_negative_words[word] * multiplier
+                    custom_score += -val if is_negated else val
                 elif word in english_positive_words:
-                    custom_score += english_positive_words[word] * multiplier
+                    val = english_positive_words[word] * multiplier
+                    custom_score += -val * 0.5 if is_negated else val # Penalty for negated positive
             
             # Combine TextBlob polarity with custom score
             if abs(polarity) < 0.1 and abs(custom_score) > 0.2:
@@ -324,13 +354,19 @@ class MultilingualSentimentAnalyzer:
             combined_polarity = max(-1, min(1, combined_polarity))
 
             # Apply contrast penalty
-            if has_contrast or has_criticism_pattern:
-                combined_polarity *= 0.4
+            # If "but" is present, heavily suppress the score towards neutral
+            if has_contrast:
+                combined_polarity *= 0.3 # Stronger reduction (was 0.4)
+                
+            # If "okay" or "ok" is present with "better than", force closer to neutral
+            is_okay_start = 'okay' in text_lower or 'ok' in text_lower
+            if is_okay_start and has_comparison:
+                combined_polarity *= 0.2
             
             # Classification
-            if combined_polarity > 0.1: # Lowered from 0.15
+            if combined_polarity > 0.15: # Raised back to 0.15 for stricter positive
                 sentiment = "positive"
-            elif combined_polarity < -0.1: # Lowered from -0.15
+            elif combined_polarity < -0.15: # Raised back to -0.15
                 sentiment = "negative"
             else:
                 sentiment = "neutral"
@@ -542,6 +578,11 @@ class MultilingualSentimentAnalyzer:
                 positive_score += emoticon_score
             elif emoticon_score < 0:
                 negative_score += abs(emoticon_score)
+
+            # Special case depending on phrase dominance
+            # If "hindi maintindihan" is found, weight it heavily
+            if 'hindi maintindihan' in text_lower or 'di maintindihan' in text_lower:
+                negative_score += 2.0
 
             # Analyze sentence balance
             positive_sentences = sum(1 for s in sentence_sentiments if s['balance'] > 0.5)
