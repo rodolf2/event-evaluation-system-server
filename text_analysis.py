@@ -54,7 +54,7 @@ class MultilingualSentimentAnalyzer:
             # Queue/waiting complaints (stronger weights)
             'disaster': -1.5, 'terrible': -1.5, 'horrible': -1.5, 'awful': -1.5,
             'waited': -1, 'waiting': -0.8, 'antay': -1, 'hintay': -1, 'naghintay': -1,
-            'pila': -0.5, 'hours': -0.6, 'oras': -0.6, 'dalawa': -0.3,
+            'pila': -0.5, 'hours': -0.6, 'horas': -0.6, 'oras': -0.1, 'dalawa': -0.3,
             # Physical discomfort/Environmental
             'mainit': -1, 'init': -1, 'maingay': -1, 'ingay': -1,
             'mausok': -1, 'usok': -1, 'siksikan': -1, 'crowded': -1,
@@ -278,7 +278,7 @@ class MultilingualSentimentAnalyzer:
                 'disaster': -1.0, 'waited': -0.5, 'waiting': -0.4, 'hours': -0.3,
                 'long': -0.3, 'hassle': -0.6, 'annoying': -0.6, 'annoyed': -0.6,
                 'angry': -0.8, 'mad': -0.7, 'furious': -0.9,
-                'starving': -2.0, 'hungry': -2.0
+                'starving': -2.0, 'hungry': -2.0, 'basic': -0.3, 'unprepared': -0.5
             }
             
             # English positive words with weights
@@ -289,7 +289,8 @@ class MultilingualSentimentAnalyzer:
                 'helpful': 0.5, 'informative': 0.5, 'organized': 0.5, 'smooth': 0.5,
                 'relevant': 0.4, 'good': 0.4, 'nice': 0.4, 'satisfied': 0.5,
                 'happy': 0.5, 'glad': 0.5, 'pleased': 0.5, 'impressed': 0.6,
-                'forward': 0.5, 'waiting': 0.2
+                'forward': 0.5, 'waiting': 0.2, 'exceeded': 0.7, 'expectations': 0.5,
+                'practical': 0.5, 'learnings': 0.4, 'inspiring': 0.6, 'productive': 0.5
             }
             
             # Contrast words that indicate mixed/neutral sentiment
@@ -327,9 +328,9 @@ class MultilingualSentimentAnalyzer:
                 combined_polarity *= 0.4
             
             # Classification
-            if combined_polarity > 0.15:
+            if combined_polarity > 0.1: # Lowered from 0.15
                 sentiment = "positive"
-            elif combined_polarity < -0.15:
+            elif combined_polarity < -0.1: # Lowered from -0.15
                 sentiment = "negative"
             else:
                 sentiment = "neutral"
@@ -567,10 +568,10 @@ class MultilingualSentimentAnalyzer:
             elif has_mixed_sentiment and (constructive_criticism_count >= 2 or has_significant_negative):
                 sentiment = "neutral"
                 confidence = 0.8
-            elif total_score >= 0.7: # Lowered threshold slightly for Tagalog
+            elif total_score >= 0.5: # Lowered threshold from 0.7
                 sentiment = "positive"
                 confidence = min(0.6 + (total_score / 10), 0.95)
-            elif total_score <= -0.7:
+            elif total_score <= -0.5:
                 sentiment = "negative"
                 confidence = min(0.6 + (abs(total_score) / 10), 0.95)
             else:

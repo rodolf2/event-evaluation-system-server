@@ -354,5 +354,9 @@ const formSchema = new mongoose.Schema(
 // Index for efficient queries
 formSchema.index({ createdBy: 1, status: 1 });
 formSchema.index({ createdBy: 1, createdAt: -1 });
+// Performance indexes for large datasets
+formSchema.index({ _id: 1, "responses.submittedAt": 1 });
+formSchema.index({ createdBy: 1, status: 1, "responses.0": 1 });
+formSchema.index({ "attendeeList.email": 1 });
 
 module.exports = mongoose.model("Form", formSchema);

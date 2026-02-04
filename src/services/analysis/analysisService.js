@@ -584,6 +584,29 @@ const generateQualitativeReport = async (eventId) => {
     );
   }
 
+  // Quick check: is Python available?
+  const { execSync } = require("child_process");
+  let pythonAvailable = false;
+  try {
+    const pythonPath = getPythonPath();
+    execSync(`${pythonPath} --version`, { stdio: "pipe" });
+    pythonAvailable = true;
+    console.log(`✅ Python is available at: ${pythonPath}`);
+  } catch (err) {
+    console.warn(
+      `⚠️ Python is NOT available on this system. Will use JavaScript fallback.`,
+    );
+    pythonAvailable = false;
+  }
+
+  // If Python is not available, skip to fallback immediately
+  if (!pythonAvailable) {
+    console.log(
+      "[SKIP PYTHON] Using JavaScript fallback for sentiment analysis",
+    );
+    throw new Error("Python not available - using fallback");
+  }
+
   try {
     // Call Python script for advanced multilingual sentiment analysis
     const pythonResult = await new Promise((resolve, reject) => {
@@ -597,7 +620,26 @@ const generateQualitativeReport = async (eventId) => {
 
       const pyshell = new PythonShell(scriptName, options);
 
+      // Set a SHORTER timeout for local (10s), longer for Render (30s)
+      const isLocal =
+        !process.env.RENDER && !process.cwd().includes("/opt/render");
+      const timeoutMs = isLocal ? 10000 : 30000;
+
+      console.log(
+        `[PYTHON] Starting sentiment analysis (timeout: ${timeoutMs}ms, local: ${isLocal})`,
+      );
+
+      let hasStarted = false;
+      const pythonTimeout = setTimeout(() => {
+        console.warn(
+          `[TIMEOUT] Python taking too long (>${timeoutMs}ms), terminating process...`,
+        );
+        pyshell.kill("SIGKILL");
+        reject(new Error(`Python timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+
       // Send data to Python script
+      console.log(`[PYTHON] Sending ${comments.length} comments to Python...`);
       pyshell.send(
         JSON.stringify({
           action: "generate_report",
@@ -610,28 +652,39 @@ const generateQualitativeReport = async (eventId) => {
       let errorOutput = "";
 
       pyshell.on("message", (message) => {
+        hasStarted = true;
+        console.log(`[PYTHON] Message received (${message.length} bytes)`);
         result += message;
       });
 
       pyshell.on("stderr", (stderr) => {
+        console.log("[PYTHON] stderr:", stderr.substring(0, 100));
         errorOutput += stderr;
-        console.log("Python stderr:", stderr);
       });
 
       pyshell.end((err) => {
+        clearTimeout(pythonTimeout);
+        console.log(
+          `[PYTHON] Process ended. Error: ${err ? err.message : "none"}, Started: ${hasStarted}`,
+        );
+
         if (err) {
-          console.error("Python script error:", err);
-          console.error("Python stderr output:", errorOutput);
+          console.error("Python script error:", err.message);
           reject(err);
         } else {
           try {
+            if (!result || result.trim() === "") {
+              throw new Error("Python returned empty result");
+            }
             const parsedResult = JSON.parse(result);
-            console.log("Python analysis completed successfully");
-            console.log("Analysis summary:", parsedResult.summary);
+            console.log("✅ Python analysis completed successfully");
             resolve(parsedResult);
           } catch (parseErr) {
-            console.error("Failed to parse Python result:", parseErr);
-            console.error("Raw result:", result);
+            console.error(
+              "❌ Failed to parse Python result:",
+              parseErr.message,
+            );
+            console.error("Raw result length:", result.length);
             reject(parseErr);
           }
         }
@@ -654,9 +707,64 @@ const generateQualitativeReport = async (eventId) => {
   } catch (error) {
     console.error(
       "Error calling Python script for qualitative analysis:",
-      error,
+      error.message,
     );
-    throw error;
+    console.warn(
+      "[FALLBACK] Using JavaScript sentiment analysis instead of Python",
+    );
+
+    // FALLBACK: Use JavaScript sentiment analysis
+    // This prevents the page from hanging when Python is unavailable
+    try {
+      const categorizedComments = {
+        positive: [],
+        neutral: [],
+        negative: [],
+      };
+
+      comments.forEach((comment) => {
+        const text = comment.answer || comment.comment || "";
+        const analysis = sentimentLib.analyze(text);
+
+        if (analysis.score > 0) {
+          categorizedComments.positive.push(text);
+        } else if (analysis.score < 0) {
+          categorizedComments.negative.push(text);
+        } else {
+          categorizedComments.neutral.push(text);
+        }
+      });
+
+      return {
+        summary: {
+          total_comments: comments.length,
+          positive_count: categorizedComments.positive.length,
+          neutral_count: categorizedComments.neutral.length,
+          negative_count: categorizedComments.negative.length,
+          positive_percentage: (
+            (categorizedComments.positive.length / comments.length) *
+            100
+          ).toFixed(2),
+          neutral_percentage: (
+            (categorizedComments.neutral.length / comments.length) *
+            100
+          ).toFixed(2),
+          negative_percentage: (
+            (categorizedComments.negative.length / comments.length) *
+            100
+          ).toFixed(2),
+        },
+        insights: ["Using fallback JavaScript sentiment analysis"],
+        recommendations: [],
+        comments: categorizedComments,
+        analyzed_feedbacks: [],
+        language_breakdown: {},
+        warning: "Python sentiment analysis unavailable - using fallback",
+      };
+    } catch (fallbackError) {
+      console.error("Fallback analysis also failed:", fallbackError);
+      throw error; // Throw original error
+    }
   }
 };
 
@@ -858,63 +966,74 @@ function generateRecommendations(analysisResult) {
  * @param {Object} questionTypeMap - Map of question IDs/titles to types
  * @returns {Object} Analysis results with sentiment breakdown
  */
-async function analyzeResponses(responses, questionTypeMap, questionsSource = []) {
-    try {
-      // Build a map of Title -> Set of Options to detect collision
-      const titleToOptionsMap = {};
-      if (Array.isArray(questionsSource)) {
-          questionsSource.forEach(q => {
-            if (q.options && Array.isArray(q.options) && q.title) {
-               if (!titleToOptionsMap[q.title]) {
-                 titleToOptionsMap[q.title] = new Set();
-               }
-               q.options.forEach(opt => titleToOptionsMap[q.title].add(String(opt).trim()));
-            }
-          });
-      }
-
-      // Extract text content from responses (only text-based questions, not ratings)
-      const textContents = [];
-      const textMetadata = [];
-  
-      responses.forEach((response) => {
-        if (response.responses && Array.isArray(response.responses)) {
-          // Extract text from text-based questions only
-          response.responses.forEach((q) => {
-            // Skip if answer is a number (scale/rating)
-            if (typeof q.answer === "number") return;
-  
-            // Skip if answer is a string
-            if (typeof q.answer === "string") {
-              const trimmed = q.answer.trim();
-              // Skip pure numbers or very short responses (likely ratings)
-              if (/^\d+$/.test(trimmed) && trimmed.length <= 2) return;
-              // Skip if too short to be meaningful text (less than 3 characters)
-              if (trimmed.length < 3) return;
-  
-              const qType = questionTypeMap ? (questionTypeMap[q.questionId] || questionTypeMap[q.questionTitle]) : null;
-  
-              // Only analyze paragraph and short_answer for sentiment
-              if (qType === "paragraph" || qType === "short_answer") {
-                 // Safety Check: Is this "text" actually a known option for a question with this title?
-                 // This handles the case where "Untitled Question" (Text) overlaps with "Untitled Question" (MC)
-                 if (titleToOptionsMap[q.questionTitle] && titleToOptionsMap[q.questionTitle].has(trimmed)) {
-                    return; // Skip: This is an MC option masquerading as text due to ID mismatch
-                 }
-
-                textContents.push(trimmed);
-                textMetadata.push({
-                  questionId: q.questionId,
-                  questionTitle: q.questionTitle,
-                  questionType: qType,
-                  text: trimmed
-                });
-              }
-            }
-          });
+async function analyzeResponses(
+  responses,
+  questionTypeMap,
+  questionsSource = [],
+) {
+  try {
+    // Build a map of Title -> Set of Options to detect collision
+    const titleToOptionsMap = {};
+    if (Array.isArray(questionsSource)) {
+      questionsSource.forEach((q) => {
+        if (q.options && Array.isArray(q.options) && q.title) {
+          if (!titleToOptionsMap[q.title]) {
+            titleToOptionsMap[q.title] = new Set();
+          }
+          q.options.forEach((opt) =>
+            titleToOptionsMap[q.title].add(String(opt).trim()),
+          );
         }
       });
+    }
 
+    // Extract text content from responses (only text-based questions, not ratings)
+    const textContents = [];
+    const textMetadata = [];
+
+    responses.forEach((response) => {
+      if (response.responses && Array.isArray(response.responses)) {
+        // Extract text from text-based questions only
+        response.responses.forEach((q) => {
+          // Skip if answer is a number (scale/rating)
+          if (typeof q.answer === "number") return;
+
+          // Skip if answer is a string
+          if (typeof q.answer === "string") {
+            const trimmed = q.answer.trim();
+            // Skip pure numbers or very short responses (likely ratings)
+            if (/^\d+$/.test(trimmed) && trimmed.length <= 2) return;
+            // Skip if too short to be meaningful text (less than 3 characters)
+            if (trimmed.length < 3) return;
+
+            const qType = questionTypeMap
+              ? questionTypeMap[q.questionId] ||
+                questionTypeMap[q.questionTitle]
+              : null;
+
+            // Only analyze paragraph and short_answer for sentiment
+            if (qType === "paragraph" || qType === "short_answer") {
+              // Safety Check: Is this "text" actually a known option for a question with this title?
+              // This handles the case where "Untitled Question" (Text) overlaps with "Untitled Question" (MC)
+              if (
+                titleToOptionsMap[q.questionTitle] &&
+                titleToOptionsMap[q.questionTitle].has(trimmed)
+              ) {
+                return; // Skip: This is an MC option masquerading as text due to ID mismatch
+              }
+
+              textContents.push(trimmed);
+              textMetadata.push({
+                questionId: q.questionId,
+                questionTitle: q.questionTitle,
+                questionType: qType,
+                text: trimmed,
+              });
+            }
+          }
+        });
+      }
+    });
 
     if (textContents.length === 0) {
       return {
@@ -923,7 +1042,7 @@ async function analyzeResponses(responses, questionTypeMap, questionsSource = []
           neutral: { count: 0, percentage: 0 },
           negative: { count: 0, percentage: 0 },
         },
-        questionBreakdown: []
+        questionBreakdown: [],
       };
     }
 
@@ -980,7 +1099,7 @@ async function analyzeResponses(responses, questionTypeMap, questionsSource = []
             questionTitle: meta.questionTitle,
             questionType: meta.questionType,
             responseCount: 0,
-            responses: []
+            responses: [],
           });
         }
 
@@ -990,7 +1109,7 @@ async function analyzeResponses(responses, questionTypeMap, questionsSource = []
           text: meta.text,
           sentiment: analysis.analysis?.sentiment || "neutral",
           confidence: analysis.analysis?.confidence || 0,
-          label: analysis.analysis?.label || "neutral"
+          label: analysis.analysis?.label || "neutral",
         });
       });
 
@@ -999,11 +1118,11 @@ async function analyzeResponses(responses, questionTypeMap, questionsSource = []
         const breakdown = {
           positive: { count: 0, percentage: 0 },
           neutral: { count: 0, percentage: 0 },
-          negative: { count: 0, percentage: 0 }
+          negative: { count: 0, percentage: 0 },
         };
 
-        qData.responses.forEach(r => {
-          const sentiment = r.sentiment || 'neutral';
+        qData.responses.forEach((r) => {
+          const sentiment = r.sentiment || "neutral";
           if (breakdown[sentiment]) {
             breakdown[sentiment].count++;
           }
@@ -1011,9 +1130,15 @@ async function analyzeResponses(responses, questionTypeMap, questionsSource = []
 
         const total = qData.responseCount;
         if (total > 0) {
-          breakdown.positive.percentage = Math.round((breakdown.positive.count / total) * 100);
-          breakdown.neutral.percentage = Math.round((breakdown.neutral.count / total) * 100);
-          breakdown.negative.percentage = Math.round((breakdown.negative.count / total) * 100);
+          breakdown.positive.percentage = Math.round(
+            (breakdown.positive.count / total) * 100,
+          );
+          breakdown.neutral.percentage = Math.round(
+            (breakdown.neutral.count / total) * 100,
+          );
+          breakdown.negative.percentage = Math.round(
+            (breakdown.negative.count / total) * 100,
+          );
         }
 
         qData.sentimentBreakdown = breakdown;
@@ -1192,8 +1317,9 @@ function getPythonOptions(scriptPath) {
   const env = { ...process.env };
 
   // Detect if running on Render
-  const isRender = process.env.RENDER === "true" || process.cwd().includes("/opt/render");
-  
+  const isRender =
+    process.env.RENDER === "true" || process.cwd().includes("/opt/render");
+
   // Only inject PYTHONPATH if we are NOT using a venv
   // (If using venv, libraries are already in path)
   const isVenv = pythonPath.includes("venv");
@@ -1201,18 +1327,20 @@ function getPythonOptions(scriptPath) {
   if (!isVenv) {
     const pythonLibs = path.resolve(__dirname, "../../../python_libs");
     const renderLibs = "/opt/render/project/src/python_libs";
-    const userSitePackages = isRender 
-      ? "/opt/render/.local/lib/python3.11/site-packages"  // Render user site-packages
+    const userSitePackages = isRender
+      ? "/opt/render/.local/lib/python3.11/site-packages" // Render user site-packages
       : "";
 
     let pythonPathEnv = process.env.PYTHONPATH || "";
-    
+
     // Add user site-packages for Render (pip install --user)
     if (isRender && userSitePackages) {
       pythonPathEnv = `${userSitePackages}${path.delimiter}${pythonPathEnv}`;
-      console.log(`🔧 Injecting PYTHONPATH (Render user site): ${userSitePackages}`);
+      console.log(
+        `🔧 Injecting PYTHONPATH (Render user site): ${userSitePackages}`,
+      );
     }
-    
+
     if (require("fs").existsSync(pythonLibs)) {
       pythonPathEnv = `${pythonLibs}${path.delimiter}${pythonPathEnv}`;
       console.log(`🔧 Injecting PYTHONPATH (Local libs): ${pythonLibs}`);
@@ -1225,11 +1353,11 @@ function getPythonOptions(scriptPath) {
 
   // Set NLTK_DATA correctly based on environment
   const localNltkData = path.resolve(__dirname, "../../../nltk_data");
-  
+
   // Render deployment logs show NLTK data is in home dir: /opt/render/nltk_data
   const renderHomeNltkData = "/opt/render/nltk_data";
   const renderProjectNltkData = "/opt/render/project/src/nltk_data";
-  
+
   if (isRender) {
     // Check if data exists in home dir first (most likely based on logs)
     if (require("fs").existsSync(renderHomeNltkData)) {
@@ -1286,10 +1414,10 @@ async function analyzeCommentSentiment(text) {
   try {
     // Fetch custom lexicon from DB (MIS lexicon management)
     // Only send minimal data: { word, sentiment } to reduce payload size
-    const dbLexicon = await Lexicon.find().select('word sentiment').lean();
-    const minimalLexicon = dbLexicon.map(entry => ({
+    const dbLexicon = await Lexicon.find().select("word sentiment").lean();
+    const minimalLexicon = dbLexicon.map((entry) => ({
       word: entry.word,
-      sentiment: entry.sentiment
+      sentiment: entry.sentiment,
     }));
 
     const pythonPromise = analyzeSingleWithPython(cleanText, minimalLexicon);
@@ -1300,7 +1428,9 @@ async function analyzeCommentSentiment(text) {
     );
 
     result = await Promise.race([pythonPromise, timeoutPromise]);
-    console.log(`✅ Python analysis succeeded for: "${cleanText.substring(0, 30)}..."`);
+    console.log(
+      `✅ Python analysis succeeded for: "${cleanText.substring(0, 30)}..."`,
+    );
   } catch (error) {
     console.error(`❌ Python analysis failed: ${error.message}`);
     throw error; // No fallback - Python should work with optimized memory usage

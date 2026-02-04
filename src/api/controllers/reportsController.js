@@ -180,6 +180,7 @@ exports.shareReport = async (req, res) => {
 
 // Generate PDF report
 exports.generatePDFReport = async (req, res) => {
+  let browser = null;
   try {
     const { reportId } = req.params;
     const { html, title, headerTemplate, footerTemplate } = req.body;
@@ -190,51 +191,111 @@ exports.generatePDFReport = async (req, res) => {
       });
     }
 
+    console.log("[PDF Generation] Starting PDF generation...");
+    console.log("[PDF Generation] HTML length:", html.length);
+
     // Launch puppeteer browser
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    try {
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
+      console.log("[PDF Generation] Browser launched successfully");
+    } catch (launchError) {
+      console.error(
+        "[PDF Generation] Failed to launch browser:",
+        launchError.message,
+      );
+      return res.status(500).json({
+        message: "Failed to initialize PDF generator",
+        error: "Browser launch failed: " + launchError.message,
+      });
+    }
 
     const page = await browser.newPage();
+    console.log("[PDF Generation] Page created");
 
     // Use the complete HTML sent from client (already includes styles)
     const fullHTML = html;
 
-    await page.setContent(fullHTML, {
-      waitUntil: "networkidle0",
-      timeout: 30000,
-    });
+    try {
+      await page.setContent(fullHTML, {
+        waitUntil: "networkidle0",
+        timeout: 30000,
+      });
+      console.log("[PDF Generation] Content set successfully");
+    } catch (contentError) {
+      console.error(
+        "[PDF Generation] Failed to set page content:",
+        contentError.message,
+      );
+      await browser.close();
+      return res.status(500).json({
+        message: "Failed to process HTML content",
+        error: contentError.message,
+      });
+    }
 
     // Generate PDF
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: {
-        top: "80px", // Header height only
-        right: "15px",
-        bottom: "50px", // Footer height only
-        left: "15px",
-      },
-      preferCSSPageSize: false,
-      displayHeaderFooter: !!(headerTemplate || footerTemplate),
-      headerTemplate: headerTemplate || "<div></div>",
-      footerTemplate: footerTemplate || "<div></div>",
-    });
+    try {
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: {
+          top: "80px", // Header height only
+          right: "15px",
+          bottom: "50px", // Footer height only
+          left: "15px",
+        },
+        preferCSSPageSize: false,
+        displayHeaderFooter: !!(headerTemplate || footerTemplate),
+        headerTemplate: headerTemplate || "<div></div>",
+        footerTemplate: footerTemplate || "<div></div>",
+      });
+      console.log(
+        "[PDF Generation] PDF generated successfully, size:",
+        pdfBuffer.length,
+      );
 
-    await browser.close();
+      await browser.close();
 
-    // Set response headers for file download
-    const filename = `evaluation-report-${new Date().toISOString().split("T")[0]
+      // Set response headers for file download
+      const filename = `evaluation-report-${
+        new Date().toISOString().split("T")[0]
       }.pdf`;
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.setHeader("Content-Length", pdfBuffer.length);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
+      res.setHeader("Content-Length", pdfBuffer.length);
 
-    // Send the PDF buffer
-    res.send(pdfBuffer);
+      // Send the PDF buffer
+      res.send(pdfBuffer);
+      console.log("[PDF Generation] PDF sent to client successfully");
+    } catch (pdfError) {
+      console.error(
+        "[PDF Generation] Failed to generate PDF:",
+        pdfError.message,
+      );
+      await browser.close();
+      return res.status(500).json({
+        message: "Failed to generate PDF",
+        error: pdfError.message,
+      });
+    }
   } catch (error) {
-    console.error("Error generating PDF report:", error);
+    console.error("[PDF Generation] Unexpected error:", error);
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error(
+          "[PDF Generation] Error closing browser:",
+          closeError.message,
+        );
+      }
+    }
     res.status(500).json({
       message: "Failed to generate PDF report",
       error: error.message,
@@ -252,7 +313,7 @@ exports.getSharedReports = async (req, res) => {
     // Check for MIS special access
     const isMis = req.user.role === "mis";
     const isHead = req.user.position === "MIS Head";
-    
+
     let reportsToDisplay = [];
 
     if (isMis) {
@@ -262,7 +323,7 @@ exports.getSharedReports = async (req, res) => {
       if (isHead || enableMisReports) {
         // Find ALL available reports
         const allReports = await Report.find({
-          status: { $in: ["published", "active"] }
+          status: { $in: ["published", "active"] },
         }).sort({ createdAt: -1 });
 
         // Merge with shared info if any
@@ -273,7 +334,9 @@ exports.getSharedReports = async (req, res) => {
             );
 
             // Check if it was specifically shared to get sharedBy info
-            const sharedInfo = await SharedReport.findOne({ reportId: report.formId });
+            const sharedInfo = await SharedReport.findOne({
+              reportId: report.formId,
+            });
 
             return {
               id: report.formId,
@@ -288,7 +351,7 @@ exports.getSharedReports = async (req, res) => {
               lastUpdated: report.updatedAt || form?.updatedAt,
               isShared: !!sharedInfo,
             };
-          })
+          }),
         );
       } else {
         // Fallback to only specifically shared reports
@@ -314,7 +377,11 @@ exports.getSharedReports = async (req, res) => {
             return {
               id: sharedReport.reportId,
               formId: sharedReport.reportId,
-              title: report?.title || form?.title || form?.eventName || "Shared Report",
+              title:
+                report?.title ||
+                form?.title ||
+                form?.eventName ||
+                "Shared Report",
               description: form?.description || "",
               thumbnail: report?.thumbnail || null,
               status: report?.status || "shared",
@@ -324,7 +391,7 @@ exports.getSharedReports = async (req, res) => {
               lastUpdated: report?.updatedAt || form?.updatedAt,
               isShared: true,
             };
-          })
+          }),
         );
       }
     } else {
@@ -351,7 +418,11 @@ exports.getSharedReports = async (req, res) => {
           return {
             id: sharedReport.reportId,
             formId: sharedReport.reportId,
-            title: report?.title || form?.title || form?.eventName || "Shared Report",
+            title:
+              report?.title ||
+              form?.title ||
+              form?.eventName ||
+              "Shared Report",
             description: form?.description || "",
             thumbnail: report?.thumbnail || null,
             status: report?.status || "shared",

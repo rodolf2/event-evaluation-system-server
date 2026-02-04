@@ -31,8 +31,8 @@ const app = express();
 
 // Trust proxy for production environments (Railway, Render, etc.)
 // This is required for express-rate-limit to work correctly behind a proxy
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
 }
 
 // Middleware
@@ -78,21 +78,28 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
-          "https://fonts.googleapis.com",
-        ],
+        scriptSrc: ["'self'", "https://fonts.googleapis.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         connectSrc: ["'self'", ...allowedOrigins],
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        upgradeInsecureRequests:
+          process.env.NODE_ENV === "production" ? [] : undefined,
       },
     },
     crossOriginEmbedderPolicy: false, // Allow loading external resources
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: { action: "deny" },
+    noSniff: true,
+    xssFilter: true,
   }),
 );
 
@@ -392,7 +399,7 @@ const server = app.listen(PORT, () => {
   try {
     const { initRoleDemotionCron } = require("./jobs/roleDemotionCron");
     initRoleDemotionCron();
-    
+
     // Initialize reminder cron
     const { initReminderCron } = require("./jobs/reminderCron");
     initReminderCron();

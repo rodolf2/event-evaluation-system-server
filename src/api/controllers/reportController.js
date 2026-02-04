@@ -56,7 +56,7 @@ const findPreviousYearForm = async (currentForm) => {
     const currentYear = new Date(currentForm.createdAt).getFullYear();
     const targetYear = currentYear - 1;
 
-    // 1. Clean the title: 
+    // 1. Clean the title:
     // - Remove 4-digit year (e.g., "Gala 2024" -> "Gala")
     // - Remove ordinal prefixes (e.g., "1st", "2nd", "3rd", "4th", "10th", "21st")
     // - Trim and escape special regex characters
@@ -74,7 +74,9 @@ const findPreviousYearForm = async (currentForm) => {
 
     console.log(`[LINKING] Searching for previous event:`);
     console.log(`- Base Title: "${cleanTitle}"`);
-    console.log(`- Target Year: ${targetYear} (${startDate.toISOString()} - ${endDate.toISOString()})`);
+    console.log(
+      `- Target Year: ${targetYear} (${startDate.toISOString()} - ${endDate.toISOString()})`,
+    );
 
     const previousForms = await Form.find({
       status: { $in: ["published", "closed"] }, // Include closed forms
@@ -85,7 +87,9 @@ const findPreviousYearForm = async (currentForm) => {
 
     console.log(`[LINKING] Found ${previousForms.length} matches.`);
     if (previousForms.length > 0) {
-       console.log(`[LINKING] Match: "${previousForms[0].title}" (${previousForms[0]._id})`);
+      console.log(
+        `[LINKING] Match: "${previousForms[0].title}" (${previousForms[0]._id})`,
+      );
     }
 
     if (previousForms.length === 0) return null;
@@ -108,6 +112,21 @@ const getDynamicQuantitativeData = async (req, res) => {
       req.query;
 
     const userId = req.user._id;
+
+    // Check cache for quantitative data (skip if useSnapshot or specific filters)
+    if (useSnapshot !== "true" && !startDate && !endDate && !ratingFilter) {
+      const cacheKey = `quantitative_${reportId}`;
+      const cachedData = cache.get(cacheKey);
+      if (cachedData) {
+        console.log(`[REPORT] Cache HIT for quantitative data: ${reportId}`);
+        return res.status(200).json({
+          success: true,
+          data: cachedData,
+          cached: true,
+        });
+      }
+      console.log(`[REPORT] Cache MISS for quantitative data: ${reportId}`);
+    }
 
     // Check shared access if necessary
     const hasAccess = await checkSharedReportAccess(reportId, req.user);
@@ -242,7 +261,10 @@ const getDynamicQuantitativeData = async (req, res) => {
         previousResponses = previousForm.responses || [];
       }
     } catch (err) {
-      console.error("[LINKING] Error fetching previous form for breakdown:", err);
+      console.error(
+        "[LINKING] Error fetching previous form for breakdown:",
+        err,
+      );
     }
 
     // --- NEW: Augment Attendee List for Missing Users ---
@@ -250,30 +272,41 @@ const getDynamicQuantitativeData = async (req, res) => {
     // We fetch their User details to get department/yearLevel info
     let augmentedForm = form;
     try {
-      const existingEmails = new Set((form.attendeeList || []).map(a => a.email?.toLowerCase()).filter(Boolean));
+      const existingEmails = new Set(
+        (form.attendeeList || [])
+          .map((a) => a.email?.toLowerCase())
+          .filter(Boolean),
+      );
       const missingEmails = responses
-        .map(r => r.respondentEmail?.toLowerCase())
-        .filter(email => email && !existingEmails.has(email));
-      
+        .map((r) => r.respondentEmail?.toLowerCase())
+        .filter((email) => email && !existingEmails.has(email));
+
       if (missingEmails.length > 0) {
         // Fetch users for these emails
-        const foundUsers = await User.find({ email: { $in: missingEmails } }).select('email name department yearLevel role');
-        
+        const foundUsers = await User.find({
+          email: { $in: missingEmails },
+        }).select("email name department yearLevel role");
+
         if (foundUsers.length > 0) {
-          const extraAttendees = foundUsers.map(u => ({
+          const extraAttendees = foundUsers.map((u) => ({
             email: u.email,
             department: u.department,
             yearLevel: u.yearLevel,
             name: u.name,
-            role: u.role
+            role: u.role,
           }));
-          
+
           // Create a plain object copy of form with augmented attendee list
           // mapping to ensure we don't mutate the original mongoose doc if it's being tracked
           const plainForm = form.toObject ? form.toObject() : { ...form };
-          plainForm.attendeeList = [...(plainForm.attendeeList || []), ...extraAttendees];
+          plainForm.attendeeList = [
+            ...(plainForm.attendeeList || []),
+            ...extraAttendees,
+          ];
           augmentedForm = plainForm;
-          console.log(`[REPORT] Augmented attendee list with ${extraAttendees.length} users for breakdown.`);
+          console.log(
+            `[REPORT] Augmented attendee list with ${extraAttendees.length} users for breakdown.`,
+          );
         }
       }
     } catch (augmentError) {
@@ -281,10 +314,17 @@ const getDynamicQuantitativeData = async (req, res) => {
       // Fallback to original form
     }
 
-    const yearLevelBreakdown = processYearLevelBreakdown(augmentedForm, responses, previousForm, previousResponses);
+    const yearLevelBreakdown = processYearLevelBreakdown(
+      augmentedForm,
+      responses,
+      previousForm,
+      previousResponses,
+    );
 
     // --- NEW: Dynamic CSV column processing using service ---
-    const dynamicCSVData = DynamicCSVReportService.processDynamicColumns(form.attendeeList);
+    const dynamicCSVData = DynamicCSVReportService.processDynamicColumns(
+      form.attendeeList,
+    );
     const dynamicColumns = dynamicCSVData.columns;
     const dynamicData = dynamicCSVData.data;
 
@@ -301,42 +341,50 @@ const getDynamicQuantitativeData = async (req, res) => {
       averageRating:
         filteredScaleResponses.length > 0
           ? filteredScaleResponses.reduce((sum, r) => sum + r.value, 0) /
-          filteredScaleResponses.length
+            filteredScaleResponses.length
           : 0,
       lastUpdated: new Date().toISOString(),
     };
 
+    const responseData = {
+      metrics,
+      charts: {
+        yearData,
+        ratingDistribution,
+        statusBreakdown,
+        responseTrends,
+        yearLevelBreakdown,
+        dynamicColumns,
+        dynamicData,
+      },
+      rawData: filteredScaleResponses,
+      formInfo: {
+        title: form.title,
+        description: form.description,
+        status: form.status,
+        eventStartDate: form.eventStartDate,
+        eventEndDate: form.eventEndDate,
+        publishedAt: form.publishedAt,
+      },
+      filters: {
+        startDate,
+        endDate,
+        ratingFilter,
+        responseLimit,
+      },
+      isSnapshot: false,
+      snapshotDate: null,
+    };
+
+    // Cache the response (5-minute TTL) - only if no custom filters
+    if (useSnapshot !== "true" && !startDate && !endDate && !ratingFilter) {
+      const cacheKey = `quantitative_${reportId}`;
+      cache.set(cacheKey, responseData, 300);
+    }
+
     res.status(200).json({
       success: true,
-      data: {
-        metrics,
-        charts: {
-          yearData,
-          ratingDistribution,
-          statusBreakdown,
-          responseTrends,
-          yearLevelBreakdown,
-          dynamicColumns,
-          dynamicData,
-        },
-        rawData: filteredScaleResponses,
-        formInfo: {
-          title: form.title,
-          description: form.description,
-          status: form.status,
-          eventStartDate: form.eventStartDate,
-          eventEndDate: form.eventEndDate,
-          publishedAt: form.publishedAt,
-        },
-        filters: {
-          startDate,
-          endDate,
-          ratingFilter,
-          responseLimit,
-        },
-        isSnapshot: false,
-        snapshotDate: null,
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error("Error fetching dynamic quantitative data:", error);
@@ -389,8 +437,9 @@ const getDynamicQualitativeData = async (req, res) => {
 
     // Check cache for live data requests (not snapshot)
     if (req.query.useSnapshot !== "true") {
-      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${startDate || ""
-        }_${endDate || ""}_${limit}`;
+      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${
+        startDate || ""
+      }_${endDate || ""}_${limit}`;
       const cachedData = cache.get(cacheKey);
       if (cachedData) {
         console.log(`[REPORT] Cache HIT for qualitative data: ${reportId}`);
@@ -469,13 +518,17 @@ const getDynamicQualitativeData = async (req, res) => {
     });
 
     // Extract text responses with type filtering AND MC option filtering
-    const textResponses = extractTextResponses(responses, questionTypeMap, form.questions || []);
+    const textResponses = extractTextResponses(
+      responses,
+      questionTypeMap,
+      form.questions || [],
+    );
 
     // Perform sentiment analysis with type filtering AND orphan data protection
     const analysis = await AnalysisService.analyzeResponses(
       responses,
       questionTypeMap,
-      form.questions || []
+      form.questions || [],
     );
 
     // --- NEW: Fetch Previous Year Data ---
@@ -490,11 +543,22 @@ const getDynamicQualitativeData = async (req, res) => {
           prevQuestionTypeMap[q.title] = q.type;
         });
 
-        // Analyze previous form responses
-        // We only need the summary, so this is lightweight enough
+        // OPTIMIZATION: Sample previous year responses for analysis (max 100)
+        // For comparison view, we only need representative sentiment data, not all 500+ responses
+        const prevResponses = previousForm.responses || [];
+        const sampledPrevResponses =
+          prevResponses.length > 100
+            ? prevResponses
+                .filter(
+                  (_, i) => i % Math.ceil(prevResponses.length / 100) === 0,
+                )
+                .slice(0, 100)
+            : prevResponses;
+
+        // Analyze sampled previous form responses
         const prevAnalysis = await AnalysisService.analyzeResponses(
-          previousForm.responses || [],
-          prevQuestionTypeMap
+          sampledPrevResponses,
+          prevQuestionTypeMap,
         );
 
         previousYearData = {
@@ -503,8 +567,8 @@ const getDynamicQualitativeData = async (req, res) => {
           date: previousForm.createdAt,
           sentiment: prevAnalysis.sentimentBreakdown,
           insights: prevAnalysis.insights || [],
-          // Calculate summary stats
-          totalResponses: (previousForm.responses || []).length,
+          // Calculate summary stats using ACTUAL total, not sampled count
+          totalResponses: prevResponses.length,
         };
       }
     } catch (err) {
@@ -709,9 +773,9 @@ const getDynamicQualitativeData = async (req, res) => {
         const avgRating =
           responseCount > 0
             ? questionResponses.reduce(
-              (sum, r) => sum + (parseInt(r.answer) || 0),
-              0,
-            ) / responseCount
+                (sum, r) => sum + (parseInt(r.answer) || 0),
+                0,
+              ) / responseCount
             : 0;
 
         questionBreakdown.push({
@@ -742,7 +806,8 @@ const getDynamicQualitativeData = async (req, res) => {
           if (!answer.trim()) continue;
 
           // USE ADVANCED SENTIMENT ANALYSIS (PYTHON)
-          const sentimentResult = await AnalysisService.analyzeCommentSentiment(answer);
+          const sentimentResult =
+            await AnalysisService.analyzeCommentSentiment(answer);
           const sentiment = sentimentResult.sentiment;
 
           if (sentiment === "positive") positiveCount++;
@@ -767,15 +832,18 @@ const getDynamicQualitativeData = async (req, res) => {
         const sentimentBreakdown = {
           positive: {
             count: positiveCount,
-            percentage: total > 0 ? Math.round((positiveCount / total) * 100) : 0,
+            percentage:
+              total > 0 ? Math.round((positiveCount / total) * 100) : 0,
           },
           neutral: {
             count: neutralCount,
-            percentage: total > 0 ? Math.round((neutralCount / total) * 100) : 0,
+            percentage:
+              total > 0 ? Math.round((neutralCount / total) * 100) : 0,
           },
           negative: {
             count: negativeCount,
-            percentage: total > 0 ? Math.round((negativeCount / total) * 100) : 0,
+            percentage:
+              total > 0 ? Math.round((negativeCount / total) * 100) : 0,
           },
         };
 
@@ -847,8 +915,9 @@ const getDynamicQualitativeData = async (req, res) => {
 
     // Cache the qualitative data for 10 minutes (600 seconds)
     if (req.query.useSnapshot !== "true") {
-      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${startDate || ""
-        }_${endDate || ""}_${limit}`;
+      const cacheKey = `qualitative_${reportId}_${sentiment}_${keyword || ""}_${
+        startDate || ""
+      }_${endDate || ""}_${limit}`;
       cache.set(cacheKey, responseData, 600);
       console.log(`[REPORT] Cached qualitative data for: ${reportId}`);
     }
@@ -902,6 +971,19 @@ const getDynamicCommentsData = async (req, res) => {
 
     const userId = req.user._id;
 
+    // Check cache for comments data (5-minute TTL)
+    const cacheKey = `comments_${reportId}_${type}_${searchTerm || ""}_${dateRange || ""}_${ratingRange || ""}_${page}_${limit}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      console.log(`[REPORT] Cache HIT for comments data: ${reportId}`);
+      return res.status(200).json({
+        success: true,
+        data: cachedData,
+        cached: true,
+      });
+    }
+    console.log(`[REPORT] Cache MISS for comments data: ${reportId}`);
+
     // Find the form
     const form = await Form.findById(reportId).populate(
       "createdBy",
@@ -922,20 +1004,27 @@ const getDynamicCommentsData = async (req, res) => {
     });
 
     // Extract all individual text responses first
-    let allComments = extractTextResponses(form.responses || [], questionTypeMap);
+    let allComments = extractTextResponses(
+      form.responses || [],
+      questionTypeMap,
+    );
 
     // Apply sentiment filter (type)
     if (type !== "all") {
       const analysisPromises = allComments.map(async (comment) => {
-        const sentimentResult = await AnalysisService.analyzeCommentSentiment(comment.answer);
+        const sentimentResult = await AnalysisService.analyzeCommentSentiment(
+          comment.answer,
+        );
         return { ...comment, sentiment: sentimentResult.sentiment };
       });
       const analyzedComments = await Promise.all(analysisPromises);
-      allComments = analyzedComments.filter(c => c.sentiment === type);
+      allComments = analyzedComments.filter((c) => c.sentiment === type);
     } else {
       // Still need sentiment for the UI
       const analysisPromises = allComments.map(async (comment) => {
-        const sentimentResult = await AnalysisService.analyzeCommentSentiment(comment.answer);
+        const sentimentResult = await AnalysisService.analyzeCommentSentiment(
+          comment.answer,
+        );
         return { ...comment, sentiment: sentimentResult.sentiment };
       });
       allComments = await Promise.all(analysisPromises);
@@ -944,10 +1033,11 @@ const getDynamicCommentsData = async (req, res) => {
     // Apply Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      allComments = allComments.filter(c => 
-        (c.answer || "").toLowerCase().includes(term) ||
-        (c.questionTitle || "").toLowerCase().includes(term) ||
-        (c.respondentName || "").toLowerCase().includes(term)
+      allComments = allComments.filter(
+        (c) =>
+          (c.answer || "").toLowerCase().includes(term) ||
+          (c.questionTitle || "").toLowerCase().includes(term) ||
+          (c.respondentName || "").toLowerCase().includes(term),
       );
     }
 
@@ -957,7 +1047,7 @@ const getDynamicCommentsData = async (req, res) => {
       if (start && end) {
         const startDateObj = new Date(start);
         const endDateObj = new Date(end);
-        allComments = allComments.filter(c => {
+        allComments = allComments.filter((c) => {
           const commentDate = new Date(c.submittedAt);
           return commentDate >= startDateObj && commentDate <= endDateObj;
         });
@@ -966,17 +1056,21 @@ const getDynamicCommentsData = async (req, res) => {
 
     // Apply Role filter
     if (role && form.attendeeList) {
-      allComments = allComments.filter(c => {
-        const attendee = form.attendeeList.find(a => a.email === c.respondentEmail);
+      allComments = allComments.filter((c) => {
+        const attendee = form.attendeeList.find(
+          (a) => a.email === c.respondentEmail,
+        );
         return attendee && attendee.role === role;
       });
     }
 
     // Sort comments
     allComments.sort((a, b) => {
-      const aVal = sortBy === "date" ? new Date(a.submittedAt) : (a[sortBy] || "");
-      const bVal = sortBy === "date" ? new Date(b.submittedAt) : (b[sortBy] || "");
-      
+      const aVal =
+        sortBy === "date" ? new Date(a.submittedAt) : a[sortBy] || "";
+      const bVal =
+        sortBy === "date" ? new Date(b.submittedAt) : b[sortBy] || "";
+
       if (sortOrder === "asc") {
         return aVal > bVal ? 1 : -1;
       } else {
@@ -1005,36 +1099,41 @@ const getDynamicCommentsData = async (req, res) => {
         email: email,
         questionTitle: c.questionTitle,
         submittedAt: c.submittedAt,
-        sentiment: c.sentiment
+        sentiment: c.sentiment,
       };
     });
 
+    const responseData = {
+      comments,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalCount,
+        pages: Math.ceil(totalCount / parseInt(limit)),
+      },
+      formInfo: {
+        title: form.title,
+        description: form.description,
+        status: form.status,
+      },
+      filters: {
+        type,
+        searchTerm,
+        dateRange,
+        role,
+        ratingRange,
+        sortBy,
+        sortOrder,
+      },
+      lastUpdated: new Date().toISOString(),
+    };
+
+    // Cache the response (5-minute TTL)
+    cache.set(cacheKey, responseData, 300);
+
     res.status(200).json({
       success: true,
-      data: {
-        comments,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: totalCount,
-          pages: Math.ceil(totalCount / parseInt(limit)),
-        },
-        formInfo: {
-          title: form.title,
-          description: form.description,
-          status: form.status,
-        },
-        filters: {
-          type,
-          searchTerm,
-          dateRange,
-          role,
-          ratingRange,
-          sortBy,
-          sortOrder,
-        },
-        lastUpdated: new Date().toISOString(),
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error("Error fetching dynamic comments data:", error);
@@ -1169,17 +1268,17 @@ const getAllReportsWithLiveData = async (req, res) => {
         const averageRating =
           scaleResponses.length > 0
             ? scaleResponses.reduce((sum, r) => sum + r.value, 0) /
-            scaleResponses.length
+              scaleResponses.length
             : 0;
 
         // Get recent responses (last 7 days)
         const recentResponses = form.responses
           ? form.responses.filter((response) => {
-            const responseDate = new Date(response.submittedAt);
-            return (
-              responseDate >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-            );
-          }).length
+              const responseDate = new Date(response.submittedAt);
+              return (
+                responseDate >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+              );
+            }).length
           : 0;
 
         // Build question type map for filtering
@@ -1326,13 +1425,13 @@ const generateReport = async (req, res) => {
     const questionTypeMap = {};
     (form.questions || []).forEach((q) => {
       questionTypeMap[q._id.toString()] = q.type;
-      questionTypeMap[q.title] = q.type; 
+      questionTypeMap[q.title] = q.type;
     });
 
     const responseAnalysis = await AnalysisService.analyzeResponses(
       form.responses || [],
       questionTypeMap,
-      form.questions || []
+      form.questions || [],
     );
     const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
       positive: { count: 0, percentage: 0 },
@@ -1345,7 +1444,7 @@ const generateReport = async (req, res) => {
     const averageRating =
       scaleResponses.length > 0
         ? scaleResponses.reduce((sum, r) => sum + r.value, 0) /
-        scaleResponses.length
+          scaleResponses.length
         : 0;
 
     // Generate chart data
@@ -1364,37 +1463,57 @@ const generateReport = async (req, res) => {
         previousResponses = previousForm.responses || [];
       }
     } catch (err) {
-      console.error("[LINKING] Error fetching previous form for breakdown:", err);
+      console.error(
+        "[LINKING] Error fetching previous form for breakdown:",
+        err,
+      );
     }
 
     // --- NEW: Augment Attendee List for Missing Users ---
     let augmentedForm = form;
     try {
-      const existingEmails = new Set((form.attendeeList || []).map(a => a.email?.toLowerCase()).filter(Boolean));
+      const existingEmails = new Set(
+        (form.attendeeList || [])
+          .map((a) => a.email?.toLowerCase())
+          .filter(Boolean),
+      );
       const missingEmails = (form.responses || [])
-        .map(r => r.respondentEmail?.toLowerCase())
-        .filter(email => email && !existingEmails.has(email));
-      
+        .map((r) => r.respondentEmail?.toLowerCase())
+        .filter((email) => email && !existingEmails.has(email));
+
       if (missingEmails.length > 0) {
-        const foundUsers = await User.find({ email: { $in: missingEmails } }).select('email name department yearLevel role');
+        const foundUsers = await User.find({
+          email: { $in: missingEmails },
+        }).select("email name department yearLevel role");
         if (foundUsers.length > 0) {
-          const extraAttendees = foundUsers.map(u => ({
+          const extraAttendees = foundUsers.map((u) => ({
             email: u.email,
             department: u.department,
             yearLevel: u.yearLevel,
             name: u.name,
-            role: u.role
+            role: u.role,
           }));
           const plainForm = form.toObject ? form.toObject() : { ...form };
-          plainForm.attendeeList = [...(plainForm.attendeeList || []), ...extraAttendees];
+          plainForm.attendeeList = [
+            ...(plainForm.attendeeList || []),
+            ...extraAttendees,
+          ];
           augmentedForm = plainForm;
         }
       }
     } catch (augmentError) {
-      console.error("[REPORT] Failed to augment attendee list in generateReport:", augmentError);
+      console.error(
+        "[REPORT] Failed to augment attendee list in generateReport:",
+        augmentError,
+      );
     }
 
-    const yearLevelBreakdown = processYearLevelBreakdown(augmentedForm, form.responses || [], previousForm, previousResponses);
+    const yearLevelBreakdown = processYearLevelBreakdown(
+      augmentedForm,
+      form.responses || [],
+      previousForm,
+      previousResponses,
+    );
 
     // Generate thumbnail
     const thumbnail = await ThumbnailService.generateReportThumbnail(
@@ -1439,7 +1558,11 @@ const generateReport = async (req, res) => {
       dataSnapshot: {
         responses: form.responses || [],
         scaleResponses: scaleResponses,
-        textResponses: extractTextResponses(form.responses || [], questionTypeMap, form.questions || []),
+        textResponses: extractTextResponses(
+          form.responses || [],
+          questionTypeMap,
+          form.questions || [],
+        ),
         analytics: {
           sentimentBreakdown,
           quantitativeData: {
@@ -1457,9 +1580,9 @@ const generateReport = async (req, res) => {
           },
           categorizedComments: responseAnalysis.categorizedComments,
           questionBreakdown: processCompleteQuestionBreakdown(
-            form, 
-            form.responses || [], 
-            responseAnalysis.questionBreakdown || []
+            form,
+            form.responses || [],
+            responseAnalysis.questionBreakdown || [],
           ),
         },
         metadata: {
@@ -1484,14 +1607,18 @@ const generateReport = async (req, res) => {
     }
 
     // Emit socket event for real-time updates
-    emitUpdate("report-generated", {
-      reportId: report._id,
-      formId: form._id,
-      userId: userId,
-      title: form.title,
-      status: "generated",
-      createdAt: new Date()
-    }, userId);
+    emitUpdate(
+      "report-generated",
+      {
+        reportId: report._id,
+        formId: form._id,
+        userId: userId,
+        title: form.title,
+        status: "generated",
+        createdAt: new Date(),
+      },
+      userId,
+    );
 
     res.status(200).json({
       success: true,
@@ -1544,18 +1671,24 @@ function extractScaleResponses(responses) {
 /**
  * Extract text responses from form responses
  */
-function extractTextResponses(responses, questionTypeMap = null, questionsSource = []) {
+function extractTextResponses(
+  responses,
+  questionTypeMap = null,
+  questionsSource = [],
+) {
   const textResponses = [];
 
   // Build a map of Title -> Set of Options to detect collision
   const titleToOptionsMap = {};
   if (Array.isArray(questionsSource)) {
-    questionsSource.forEach(q => {
+    questionsSource.forEach((q) => {
       if (q.options && Array.isArray(q.options) && q.title) {
         if (!titleToOptionsMap[q.title]) {
           titleToOptionsMap[q.title] = new Set();
         }
-        q.options.forEach(opt => titleToOptionsMap[q.title].add(String(opt).trim()));
+        q.options.forEach((opt) =>
+          titleToOptionsMap[q.title].add(String(opt).trim()),
+        );
       }
     });
   }
@@ -1577,7 +1710,10 @@ function extractTextResponses(responses, questionTypeMap = null, questionsSource
 
           // Safety Check: Is this "text" actually a known option for a question with this title?
           // This handles cases where an MC question shares a title with a Text question (especially with orphaned IDs)
-          if (titleToOptionsMap[item.questionTitle] && titleToOptionsMap[item.questionTitle].has(trimmed)) {
+          if (
+            titleToOptionsMap[item.questionTitle] &&
+            titleToOptionsMap[item.questionTitle].has(trimmed)
+          ) {
             return; // Skip: This is an MC option masquerading as text
           }
 
@@ -1623,7 +1759,12 @@ function processYearlyDataFromForm(form, responses) {
  * Process year level breakdown (1st year, 2nd year, etc.) from attendee list
  * Maps attendee emails to responses and counts by year level, separated by calendar year
  */
-function processYearLevelBreakdown(form, responses, previousForm = null, previousResponses = []) {
+function processYearLevelBreakdown(
+  form,
+  responses,
+  previousForm = null,
+  previousResponses = [],
+) {
   const currentYear = new Date().getFullYear();
   const previousYear = currentYear - 1;
 
@@ -1708,15 +1849,24 @@ function processYearLevelBreakdown(form, responses, previousForm = null, previou
       // Infer or Correct department based on year level
       // 1. If missing, infer check
       // 2. If "Higher Education" (default) but year is clearly Basic Ed (Grade/Kinder), override it
-      const isDefaultOrMissing = !department || department === "Higher Education";
+      const isDefaultOrMissing =
+        !department || department === "Higher Education";
       if (isDefaultOrMissing && rawYear) {
         const lowerYear = rawYear.toString().toLowerCase();
-        if (lowerYear.includes("grade") || lowerYear.includes("kinder") || lowerYear.includes("nursery") || (!isNaN(lowerYear) && parseInt(lowerYear) > 4)) {
+        if (
+          lowerYear.includes("grade") ||
+          lowerYear.includes("kinder") ||
+          lowerYear.includes("nursery") ||
+          (!isNaN(lowerYear) && parseInt(lowerYear) > 4)
+        ) {
           department = "Basic Education";
         }
       }
       department = department || "Higher Education";
-      const normalizedLevel = normalizeYearLevel(attendee.yearLevel, department);
+      const normalizedLevel = normalizeYearLevel(
+        attendee.yearLevel,
+        department,
+      );
 
       if (normalizedLevel) {
         attendeeMetadata[attendee.email.toLowerCase()] = {
@@ -1759,11 +1909,14 @@ function processYearLevelBreakdown(form, responses, previousForm = null, previou
   if (previousForm && previousResponses.length > 0) {
     const prevAttendeeMetadata = {};
     const prevAttendeeList = previousForm.attendeeList || [];
-    
+
     prevAttendeeList.forEach((attendee) => {
       if (attendee.email) {
         const department = attendee.department || "Higher Education";
-        const normalizedLevel = normalizeYearLevel(attendee.yearLevel, department);
+        const normalizedLevel = normalizeYearLevel(
+          attendee.yearLevel,
+          department,
+        );
         if (normalizedLevel) {
           prevAttendeeMetadata[attendee.email.toLowerCase()] = {
             yearLevel: normalizedLevel,
@@ -1804,9 +1957,15 @@ function processYearLevelBreakdown(form, responses, previousForm = null, previou
           ...Object.keys(data.currentYear.counts),
           ...Object.keys(data.previousYear.counts),
         ]);
-        
+
         // Custom sort for Higher Ed years
-        const sortOrder = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"];
+        const sortOrder = [
+          "1st Year",
+          "2nd Year",
+          "3rd Year",
+          "4th Year",
+          "5th Year",
+        ];
         standardLabels = Array.from(allKeys).sort((a, b) => {
           const idxA = sortOrder.indexOf(a);
           const idxB = sortOrder.indexOf(b);
@@ -1849,7 +2008,9 @@ function processYearLevelBreakdown(form, responses, previousForm = null, previou
           count: yearData.counts[label] || 0,
           percentage:
             yearData.total > 0
-              ? Math.round(((yearData.counts[label] || 0) / yearData.total) * 100)
+              ? Math.round(
+                  ((yearData.counts[label] || 0) / yearData.total) * 100,
+                )
               : 0,
         })),
       });
@@ -2059,7 +2220,8 @@ const getDynamicColumnBreakdown = async (req, res) => {
     if (!hasAccess) {
       return res.status(403).json({
         success: false,
-        message: "You do not have permission to view this report or it has expired",
+        message:
+          "You do not have permission to view this report or it has expired",
       });
     }
 
@@ -2082,7 +2244,7 @@ const getDynamicColumnBreakdown = async (req, res) => {
     const breakdown = DynamicCSVReportService.generateColumnBreakdown(
       form.attendeeList,
       columnName,
-      responses
+      responses,
     );
 
     // Get column metadata if available
@@ -2121,7 +2283,8 @@ const getColumnSuggestions = async (req, res) => {
     if (!hasAccess) {
       return res.status(403).json({
         success: false,
-        message: "You do not have permission to view this report or it has expired",
+        message:
+          "You do not have permission to view this report or it has expired",
       });
     }
 
@@ -2136,7 +2299,7 @@ const getColumnSuggestions = async (req, res) => {
 
     // Get column suggestions
     const suggestions = DynamicCSVReportService.getColumnSuggestions(
-      form.attendeeList
+      form.attendeeList,
     );
 
     res.status(200).json({
@@ -2162,92 +2325,107 @@ function processCompleteQuestionBreakdown(form, responses, textBreakdown) {
 
   // 1. Initialize with all questions from the form
   if (form.questions && Array.isArray(form.questions)) {
-    form.questions.forEach(q => {
+    form.questions.forEach((q) => {
       // Logic for Scale questions
-      if (q.type === 'scale') {
+      if (q.type === "scale") {
         breakdownMap.set(q._id.toString(), {
           questionId: q._id.toString(),
           questionTitle: q.title,
-          questionType: 'scale',
+          questionType: "scale",
           responseCount: 0,
           scaleMax: q.high || 5,
           ratingDistribution: [], // To be populated
-          averageRating: 0
+          averageRating: 0,
         });
       }
       // Logic for Multiple Choice questions
-      else if (q.type === 'multiple_choice') {
+      else if (q.type === "multiple_choice") {
         breakdownMap.set(q._id.toString(), {
           questionId: q._id.toString(),
           questionTitle: q.title,
-          questionType: 'multiple_choice',
+          questionType: "multiple_choice",
           responseCount: 0,
-          optionDistribution: [] // To be populated
+          optionDistribution: [], // To be populated
         });
       }
     });
   }
 
   // 2. Process responses to populate stats
-  responses.forEach(response => {
+  responses.forEach((response) => {
     if (response.responses && Array.isArray(response.responses)) {
-      response.responses.forEach(answer => {
+      response.responses.forEach((answer) => {
         // Try fitting by ID first, then Title (as fallback)
         let qData = breakdownMap.get(answer.questionId);
-        
+
         // If not found by ID, try finding by title in our map map
         // If not found by ID, try finding by title in our map (Robust Fallback)
         if (!qData) {
-           for (const [key, val] of breakdownMap.entries()) {
-             if (val.questionTitle === answer.questionTitle) {
-               // SMART FALLBACK: Only match if the data types align
-               // This prevents merging "Scale" answers into "Multiple Choice" questions with the same name
-               
-               const isScaleAnswer = !isNaN(Number(answer.answer));
-               const isTextAnswer = typeof answer.answer === 'string';
+          for (const [key, val] of breakdownMap.entries()) {
+            if (val.questionTitle === answer.questionTitle) {
+              // SMART FALLBACK: Only match if the data types align
+              // This prevents merging "Scale" answers into "Multiple Choice" questions with the same name
 
-               if (val.questionType === 'scale' && isScaleAnswer) {
-                  qData = val;
-                  break;
-               } 
-               else if (val.questionType === 'multiple_choice' && isTextAnswer) {
-                  qData = val;
-                  break;
-               }
-             }
-           }
+              const isScaleAnswer = !isNaN(Number(answer.answer));
+              const isTextAnswer = typeof answer.answer === "string";
+
+              if (val.questionType === "scale" && isScaleAnswer) {
+                qData = val;
+                break;
+              } else if (
+                val.questionType === "multiple_choice" &&
+                isTextAnswer
+              ) {
+                qData = val;
+                break;
+              }
+            }
+          }
         }
         if (qData) {
           // Robust check for scale answers (can be number or numeric string)
-          if (qData.questionType === 'scale') {
-             const val = Number(answer.answer);
-             if (!isNaN(val)) {
-                qData.responseCount++;
-                // Initialize distribution if empty
-                if (qData.ratingDistribution.length === 0) {
-                    const max = qData.scaleMax || 5;
-                    for(let i=1; i<=max; i++) {
-                      qData.ratingDistribution.push({ name: `${i} Star`, value: 0, count: 0 });
-                    }
+          if (qData.questionType === "scale") {
+            const val = Number(answer.answer);
+            if (!isNaN(val)) {
+              qData.responseCount++;
+              // Initialize distribution if empty
+              if (qData.ratingDistribution.length === 0) {
+                const max = qData.scaleMax || 5;
+                for (let i = 1; i <= max; i++) {
+                  qData.ratingDistribution.push({
+                    name: `${i} Star`,
+                    value: 0,
+                    count: 0,
+                  });
                 }
-                
-                // Update count
-                const ratingIndex = Math.floor(val) - 1;
-                if (ratingIndex >= 0 && ratingIndex < qData.ratingDistribution.length) {
-                  qData.ratingDistribution[ratingIndex].count++;
-                }
-             }
+              }
+
+              // Update count
+              const ratingIndex = Math.floor(val) - 1;
+              if (
+                ratingIndex >= 0 &&
+                ratingIndex < qData.ratingDistribution.length
+              ) {
+                qData.ratingDistribution[ratingIndex].count++;
+              }
+            }
           }
           // Robust check for multiple choice (ensure it is a string)
-          else if (qData.questionType === 'multiple_choice' && answer.answer) {
-             const answerText = String(answer.answer); // Force to string
-             qData.responseCount++;
-             const existingOption = qData.optionDistribution.find(o => o.name === answerText);
-             if (existingOption) {
-               existingOption.count++;
-             } else {
-               qData.optionDistribution.push({ name: answerText, count: 1, value: 0 });
-             }
+          else if (qData.questionType === "multiple_choice" && answer.answer) {
+            const answerText = String(answer.answer); // Force to string
+            qData.responseCount++;
+            const existingOption = qData.optionDistribution.find(
+              (o) => o.name === answerText,
+            );
+            if (existingOption) {
+              existingOption.count++;
+            } else {
+              qData.optionDistribution.push({
+                name: answerText,
+                count: 1,
+                value: 0,
+              });
+            }
           }
         }
       });
@@ -2256,39 +2434,40 @@ function processCompleteQuestionBreakdown(form, responses, textBreakdown) {
 
   // 3. Post-process: Calculate percentages and averages
   for (const qData of breakdownMap.values()) {
-     if (qData.questionType === 'scale') {
-        let sum = 0;
-        let total = qData.responseCount;
-        
-        qData.ratingDistribution.forEach(dist => {
-           // Provide safe calc for percentage
-           dist.value = total > 0 ? Math.round((dist.count / total) * 100) : 0;
-           // Hacky way to get rating value from name "5 Star" -> 5
-           const ratingVal = parseInt(dist.name); 
-           if (!isNaN(ratingVal)) {
-              sum += ratingVal * dist.count;
-           }
-        });
-        
-        qData.averageRating = total > 0 ? sum / total : 0;
-     } 
-     else if (qData.questionType === 'multiple_choice') {
-        let total = qData.responseCount;
-        qData.optionDistribution.forEach(dist => {
-           dist.value = total > 0 ? Math.round((dist.count / total) * 100) : 0;
-        });
-     }
+    if (qData.questionType === "scale") {
+      let sum = 0;
+      let total = qData.responseCount;
+
+      qData.ratingDistribution.forEach((dist) => {
+        // Provide safe calc for percentage
+        dist.value = total > 0 ? Math.round((dist.count / total) * 100) : 0;
+        // Hacky way to get rating value from name "5 Star" -> 5
+        const ratingVal = parseInt(dist.name);
+        if (!isNaN(ratingVal)) {
+          sum += ratingVal * dist.count;
+        }
+      });
+
+      qData.averageRating = total > 0 ? sum / total : 0;
+    } else if (qData.questionType === "multiple_choice") {
+      let total = qData.responseCount;
+      qData.optionDistribution.forEach((dist) => {
+        dist.value = total > 0 ? Math.round((dist.count / total) * 100) : 0;
+      });
+    }
   }
 
   // 4. Merge text analysis breakdown
   // Convert map to array and append text breakdown
   const combinedBreakdown = [...Array.from(breakdownMap.values())];
-  
+
   if (textBreakdown && Array.isArray(textBreakdown)) {
-    textBreakdown.forEach(item => {
+    textBreakdown.forEach((item) => {
       // Check if already exists (unlikely for text vs scale, but good safety)
       const existing = combinedBreakdown.find(
-         x => x.questionId === item.questionId || x.questionTitle === item.questionTitle
+        (x) =>
+          x.questionId === item.questionId ||
+          x.questionTitle === item.questionTitle,
       );
       if (!existing) {
         combinedBreakdown.push(item);
