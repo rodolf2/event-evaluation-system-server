@@ -1753,7 +1753,9 @@ function extractTextResponses(
  * Process yearly data from form
  */
 function processYearlyDataFromForm(form, responses) {
-  const currentYear = new Date().getFullYear();
+  // Use form start date or creation date for year context
+  const dateStr = form.eventStartDate || form.createdAt || new Date();
+  const currentYear = new Date(dateStr).getFullYear();
   const lastYear = currentYear - 1;
 
   const currentYearData = { name: `${currentYear}`, value: 0 };
@@ -1781,7 +1783,9 @@ function processYearLevelBreakdown(
   previousForm = null,
   previousResponses = [],
 ) {
-  const currentYear = new Date().getFullYear();
+  // Use form start date or creation date for year context
+  const dateStr = form.eventStartDate || form.createdAt || new Date();
+  const currentYear = new Date(dateStr).getFullYear();
   const previousYear = currentYear - 1;
 
   // Helper to normalize year level values

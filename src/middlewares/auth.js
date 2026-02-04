@@ -18,9 +18,13 @@ const requireAuth = async (req, res, next) => {
   try {
     let token = req.header("Authorization")?.replace("Bearer ", "");
 
-    // Also check query parameter for token (useful for images/downloads)
-    if (!token && req.query.token) {
-      token = req.query.token;
+    // Also check query parameter (for images/downloads) or cookie (for secure auth)
+    if (!token) {
+      if (req.query.token) {
+        token = req.query.token;
+      } else if (req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+      }
     }
 
     if (!token) {
@@ -88,7 +92,11 @@ const requireAuth = async (req, res, next) => {
 // Middleware to check if user is super admin
 const requireSuperAdmin = async (req, res, next) => {
   try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
+    let token = req.header("Authorization")?.replace("Bearer ", "");
+
+    if (!token && req.cookies && req.cookies.token) {
+      token = req.cookies.token;
+    }
 
     if (!token) {
       return res.status(401).json({
@@ -136,7 +144,11 @@ const requireSuperAdmin = async (req, res, next) => {
 const requireOwnerOrAdmin = (resourceUserIdField = "userId") => {
   return async (req, res, next) => {
     try {
-      const token = req.header("Authorization")?.replace("Bearer ", "");
+      let token = req.header("Authorization")?.replace("Bearer ", "");
+
+      if (!token && req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+      }
 
       if (!token) {
         return res.status(401).json({
@@ -188,7 +200,11 @@ const requireOwnerOrAdmin = (resourceUserIdField = "userId") => {
 const requireRole = (allowedRoles) => {
   return async (req, res, next) => {
     try {
-      const token = req.header("Authorization")?.replace("Bearer ", "");
+      let token = req.header("Authorization")?.replace("Bearer ", "");
+
+      if (!token && req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+      }
 
       if (!token) {
         return res.status(401).json({

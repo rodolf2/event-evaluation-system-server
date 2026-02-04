@@ -8,29 +8,56 @@ const {
 } = require("../../utils/sharedReportEmailTemplate");
 
 // Get school admins and senior management for report sharing (accessible by PSAS/Club Officers)
+// Get school admins and senior management for report sharing (accessible by PSAS/Club Officers)
 exports.getSchoolAdmins = async (req, res) => {
   try {
-    // Return users with school-admin, senior-management roles, or MIS with canViewReports permission
-    const users = await User.find({
-      $or: [
-        {
-          role: {
-            $in: [
-              "school-admin",
-              "senior-management",
-              "club-adviser",
-              "psas",
-              "club-officer",
-              "evaluator",
-              "guest-speaker",
-            ],
+    const userRole = req.user.role;
+    let query = {};
+
+    // Define filtering logic based on requester's role
+    if (userRole === "psas") {
+      // PSAS can share with Senior Management and MIS Head
+      query = {
+        $or: [
+          { role: "senior-management", isActive: true },
+          { role: "mis", position: { $regex: /mis head/i }, isActive: true },
+        ],
+      };
+    } else if (userRole === "club-officer") {
+      // Club Officers can share with Club Advisers and PSAS Head
+      query = {
+        $or: [
+          { role: "club-adviser", isActive: true },
+          { role: "psas", position: { $regex: /psas head/i }, isActive: true },
+        ],
+      };
+    } else {
+      // MIS and others see everyone relevant
+      query = {
+        $or: [
+          {
+            role: {
+              $in: [
+                "school-admin",
+                "senior-management",
+                "club-adviser",
+                "psas",
+                "club-officer",
+                "evaluator",
+                "guest-speaker",
+              ],
+            },
+            isActive: true,
           },
-          isActive: true,
-        },
-        { role: "mis", "permissions.canViewReports": true, isActive: true },
-        { role: "mis", position: "MIS Head", isActive: true },
-      ],
-    }).select("name email department position role permissions");
+          { role: "mis", "permissions.canViewReports": true, isActive: true },
+          { role: "mis", position: { $regex: /mis head/i }, isActive: true },
+        ],
+      };
+    }
+
+    const users = await User.find(query).select(
+      "name email department position role permissions",
+    );
 
     res.status(200).json({
       success: true,
@@ -338,7 +365,7 @@ exports.getSharedReports = async (req, res) => {
       const settings = await SystemSettings.findOne();
       const enableMisReports = settings?.generalSettings?.enableMisReports;
 
-      if (isHead || enableMisReports) {
+      if (enableMisReports) {
         // Find ALL available reports
         const allReports = await Report.find({
           status: { $in: ["published", "active"] },
