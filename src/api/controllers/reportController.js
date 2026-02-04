@@ -633,47 +633,63 @@ const getDynamicQualitativeData = async (req, res) => {
       );
     }
 
-    // Categorize comments
+    // Categorize comments for stratification
+    const sentimentGroups = {
+      positive: [],
+      neutral: [],
+      negative: [],
+    };
+
+    // Slice for initial processing but do it representatively if possible
+    // We categorize first, then pick from each group to fill the limit
+    const categorizedForSampling = await Promise.all(
+      filteredTextResponses.map(async (response) => {
+        const answer = response.answer || "";
+        const sentimentResult =
+          await AnalysisService.analyzeCommentSentiment(answer);
+        return {
+          category: sentimentResult.sentiment,
+          response: response,
+          answer: answer,
+        };
+      })
+    );
+
+    categorizedForSampling.forEach((item) => {
+      sentimentGroups[item.category].push(item);
+    });
+
+    const parsedLimit = parseInt(limit) || 50;
+    const perGroup = Math.ceil(parsedLimit / 3);
+
+    // Pick a mix of sentiments to fill the limit
+    const sampledItems = [
+      ...sentimentGroups.positive.slice(0, perGroup),
+      ...sentimentGroups.neutral.slice(0, perGroup),
+      ...sentimentGroups.negative.slice(0, perGroup),
+    ].slice(0, parsedLimit);
+
+    // Final categorization for the response
     const categorizedComments = {
       positive: [],
       neutral: [],
       negative: [],
     };
 
-    // Use centralized sentiment analysis for categorization
-    const analyzePromises = filteredTextResponses
-      .slice(0, parseInt(limit))
-      .map(async (response) => {
-        const answer = response.answer || "";
+    sampledItems.forEach(({ category, response, answer }) => {
+      const identity = processRespondentIdentity(
+        response.respondentName,
+        response.respondentEmail
+      );
 
-        // Use the centralized sentiment analysis function
-        const sentimentResult =
-          await AnalysisService.analyzeCommentSentiment(answer);
-        const category = sentimentResult.sentiment;
-
-        const identity = processRespondentIdentity(
-          response.respondentName,
-          response.respondentEmail,
-        );
-
-        return {
-          category,
-          data: {
-            id: response.id,
-            comment: answer,
-            user: identity.name,
-            email: identity.email,
-            questionTitle: response.questionTitle,
-            createdAt: response.submittedAt,
-          },
-        };
+      categorizedComments[category].push({
+        id: response.id,
+        comment: answer,
+        user: identity.name,
+        email: identity.email,
+        questionTitle: response.questionTitle,
+        createdAt: response.submittedAt,
       });
-
-    const analyzedResponses = await Promise.all(analyzePromises);
-
-    // Categorize the analyzed responses
-    analyzedResponses.forEach(({ category, data }) => {
-      categorizedComments[category].push(data);
     });
 
     // NEW: Build per-question breakdown
