@@ -19,16 +19,18 @@ const googleAuthCallback = async (req, res) => {
 
     // Generate JWT token
     const token = generateToken(user);
+    
+    // Determine if we are in a secure environment (HTTPS)
+    // process.env.NODE_ENV might not be 'production', so we rely on req.secure (trusted proxy is on)
+    const isSecure = req.secure || (req.headers["x-forwarded-proto"] === "https");
 
     // Set HttpOnly cookie
-    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction, // Render/Vercel require this for SameSite: None
-      sameSite: isProduction ? "none" : "lax", // Cross-site requires 'none'
+      secure: isSecure, // Required for SameSite: None
+      sameSite: isSecure ? "none" : "lax", // Cross-site requires 'none'
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/", // Explicitly set path to root
-      domain: isProduction ? process.env.COOKIE_DOMAIN : undefined // Optional: set if needed
+      path: "/",
     });
 
     // Redirect to frontend without token in URL
