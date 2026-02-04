@@ -87,8 +87,6 @@ app.use(
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
-        upgradeInsecureRequests:
-          process.env.NODE_ENV === "production" ? [] : undefined,
       },
     },
     crossOriginEmbedderPolicy: false, // Allow loading external resources

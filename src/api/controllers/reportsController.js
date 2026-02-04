@@ -196,15 +196,33 @@ exports.generatePDFReport = async (req, res) => {
 
     // Launch puppeteer browser
     try {
-      browser = await puppeteer.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
+      if (process.env.RENDER || process.env.NODE_ENV === "production") {
+        console.log("[PDF Generation] Using production configuration (@sparticuz/chromium)");
+        const chromium = require("@sparticuz/chromium");
+        const puppeteerCore = require("puppeteer-core");
+
+        // Optional: Load a custom font if needed, though usually not strictly required for basic English
+        // await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
+
+        browser = await puppeteerCore.launch({
+          args: chromium.args,
+          defaultViewport: chromium.defaultViewport,
+          executablePath: await chromium.executablePath(),
+          headless: chromium.headless,
+          ignoreHTTPSErrors: true,
+        });
+      } else {
+        console.log("[PDF Generation] Using local configuration (puppeteer)");
+        browser = await puppeteer.launch({
+          headless: true,
+          args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+      }
       console.log("[PDF Generation] Browser launched successfully");
     } catch (launchError) {
       console.error(
         "[PDF Generation] Failed to launch browser:",
-        launchError.message,
+        launchError
       );
       return res.status(500).json({
         message: "Failed to initialize PDF generator",
