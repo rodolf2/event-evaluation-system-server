@@ -21,11 +21,14 @@ const googleAuthCallback = async (req, res) => {
     const token = generateToken(user);
 
     // Set HttpOnly cookie
+    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Secure in production
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: isProduction, // Render/Vercel require this for SameSite: None
+      sameSite: isProduction ? "none" : "lax", // Cross-site requires 'none'
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: "/", // Explicitly set path to root
+      domain: isProduction ? process.env.COOKIE_DOMAIN : undefined // Optional: set if needed
     });
 
     // Redirect to frontend without token in URL

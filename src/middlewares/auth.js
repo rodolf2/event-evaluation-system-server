@@ -18,6 +18,12 @@ const requireAuth = async (req, res, next) => {
   try {
     let token = req.header("Authorization")?.replace("Bearer ", "");
 
+    // DEBUG LOGGING FOR DEPLOYMENT COOKIE ISSUES
+    console.log("[AUTH DEBUG] Headers:", req.headers);
+    console.log("[AUTH DEBUG] Cookies:", req.cookies);
+    console.log("[AUTH DEBUG] Node Env:", process.env.NODE_ENV);
+    console.log("[AUTH DEBUG] Secure Conn:", req.secure);
+    
     // Also check query parameter (for images/downloads) or cookie (for secure auth)
     if (!token) {
       if (req.query.token) {
