@@ -19,22 +19,9 @@ const googleAuthCallback = async (req, res) => {
 
     // Generate JWT token
     const token = generateToken(user);
-    
-    // Determine if we are in a secure environment (HTTPS)
-    // process.env.NODE_ENV might not be 'production', so we rely on req.secure (trusted proxy is on)
-    const isSecure = req.secure || (req.headers["x-forwarded-proto"] === "https");
 
-    // Set HttpOnly cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: isSecure, // Required for SameSite: None
-      sameSite: isSecure ? "none" : "lax", // Cross-site requires 'none'
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/",
-    });
-
-    // Redirect to frontend without token in URL
-    res.redirect(`${process.env.CLIENT_URL}/auth/callback`);
+    // Redirect to frontend with token in URL (Rollback to previous stable version)
+    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -55,12 +42,6 @@ const googleAuthFailure = (req, res) => {
 
 // Logout user (client-side should remove token)
 const logout = (req, res) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  });
-  
   res.json({
     success: true,
     message: "Logout successful",

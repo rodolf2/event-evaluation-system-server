@@ -131,33 +131,13 @@ router.get(
       { expiresIn: "7d" },
     );
 
-    // Determine if we are in a secure environment (HTTPS)
-    const isSecure = req.secure || (req.headers["x-forwarded-proto"] === "https");
-
-    // Set HttpOnly cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: isSecure, // Required for SameSite: None
-      sameSite: isSecure ? "none" : "lax", // Cross-site requires 'none'
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/",
-    });
-
-    // Redirect to client without token in URL
-    res.redirect(`${process.env.CLIENT_URL}/auth/callback`);
+    // Redirect to client with token in URL
+    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
   },
 );
 
 // Logout route
 router.post("/logout", (req, res) => {
-  const isSecure = req.secure || (req.headers["x-forwarded-proto"] === "https");
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: isSecure,
-    sameSite: isSecure ? "none" : "lax",
-    path: "/",
-  });
-  
   res.json({
     success: true,
     message: "Logout successful",
@@ -302,21 +282,10 @@ router.post("/guest", async (req, res) => {
       status: "success",
     });
 
-    // Determine if we are in a secure environment (HTTPS)
-    const isSecure = req.secure || (req.headers["x-forwarded-proto"] === "https");
-
-    // Set HttpOnly cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: isSecure, // Required for SameSite: None
-      sameSite: isSecure ? "none" : "lax", // Cross-site requires 'none'
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/",
-    });
-
     res.json({
       success: true,
       data: {
+        token,
         user: {
           _id: user._id,
           name: user.name,
@@ -563,33 +532,6 @@ router.delete("/profile/picture", async (req, res) => {
       .status(500)
       .json({ success: false, message: "Error removing profile picture" });
   }
-});
-
-// Debug route to diagnose cookie/auth issues
-router.get("/debug", (req, res) => {
-  res.json({
-    success: true,
-    message: "Auth Debug Information",
-    debug: {
-      timestamp: new Date().toISOString(),
-      nodeEnv: process.env.NODE_ENV,
-      clientUrl: process.env.CLIENT_URL,
-      cookiesPresent: !!req.cookies,
-      tokenCookieExists: !!(req.cookies && req.cookies.token),
-      tokenCookieLength: req.cookies?.token?.length || 0,
-      headers: {
-        host: req.headers.host,
-        origin: req.headers.origin,
-        referer: req.headers.referer,
-        xForwardedProto: req.headers["x-forwarded-proto"],
-        xForwardedFor: req.headers["x-forwarded-for"],
-      },
-      reqSecure: req.secure,
-      protocol: req.protocol,
-      ip: req.ip,
-      trustProxy: req.app.get("trust proxy"),
-    }
-  });
 });
 
 module.exports = router;
