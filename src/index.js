@@ -31,9 +31,9 @@ const app = express();
 
 // Trust proxy for production environments (Railway, Render, etc.)
 // This is required for express-rate-limit to work correctly behind a proxy
-if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
-}
+// Trust proxy for production environments (Railway, Render, etc.)
+// This is required for express-rate-limit and Secure cookies to work correctly behind a proxy
+app.set("trust proxy", 1);
 
 // Middleware
 const allowedOrigins = (
