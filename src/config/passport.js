@@ -36,6 +36,13 @@ passport.use(
           googleEmail.toLowerCase().endsWith(domain.toLowerCase()),
         );
 
+        // Enforce domain whitelist
+        if (!isAllowedDomain) {
+          return done(null, false, {
+            message: "Access denied. Your email domain is not whitelisted.",
+          });
+        }
+
         // Check if user exists with the Google ID
         let user = await User.findOne({ googleId: profile.id });
 

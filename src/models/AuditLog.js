@@ -108,39 +108,98 @@ auditLogSchema.statics.getLogsWithFilters = async function (filters = {}) {
     search,
   } = filters;
 
-  const query = {};
+  const matchStage = {};
 
+  // Date filters
   if (startDate || endDate) {
-    query.createdAt = {};
-    if (startDate) query.createdAt.$gte = new Date(startDate);
-    if (endDate) query.createdAt.$lte = new Date(endDate);
+    matchStage.createdAt = {};
+    if (startDate) matchStage.createdAt.$gte = new Date(startDate);
+    if (endDate) matchStage.createdAt.$lte = new Date(endDate);
   }
 
-  if (category) query.category = category;
-  if (action) query.action = { $regex: action, $options: "i" };
-  if (userId) query.userId = userId;
-  if (severity) query.severity = severity;
+  // Direct Match filters
+  if (category) matchStage.category = category;
+  if (action) matchStage.action = { $regex: action, $options: "i" };
+  if (userId) matchStage.userId = new mongoose.Types.ObjectId(userId);
+  if (severity) matchStage.severity = severity;
 
+  const pipeline = [
+    { $match: matchStage },
+    { $sort: { createdAt: -1 } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "userId",
+        foreignField: "_id",
+        as: "userDetails",
+      },
+    },
+    {
+      $unwind: {
+        path: "$userDetails",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+  ];
+
+  // Search filter
   if (search) {
-    query.$or = [
-      { action: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
-      { userName: { $regex: search, $options: "i" } },
-      { userEmail: { $regex: search, $options: "i" } },
-    ];
+    const searchRegex = { $regex: search, $options: "i" };
+    pipeline.push({
+      $match: {
+        $or: [
+          { action: searchRegex },
+          { description: searchRegex },
+          { userName: searchRegex },
+          { userEmail: searchRegex },
+          { "userDetails.name": searchRegex },
+          { "userDetails.email": searchRegex },
+        ],
+      },
+    });
   }
 
-  const skip = (page - 1) * limit;
+  // Pagination with Facet
+  pipeline.push({
+    $facet: {
+      logs: [
+        { $skip: (page - 1) * parseInt(limit) },
+        { $limit: parseInt(limit) },
+        {
+          $project: {
+            // Reconstruct the document structure
+            _id: 1,
+            userId: {
+              _id: { $ifNull: ["$userDetails._id", "$userId"] },
+              name: { $ifNull: ["$userDetails.name", "$userName"] },
+              email: { $ifNull: ["$userDetails.email", "$userEmail"] },
+              profilePicture: "$userDetails.profilePicture",
+              avatar: "$userDetails.avatar",
+            },
+            userName: { $ifNull: ["$userDetails.name", "$userName"] },
+            userEmail: { $ifNull: ["$userDetails.email", "$userEmail"] },
+            action: 1,
+            category: 1,
+            description: 1,
+            ipAddress: 1,
+            userAgent: 1,
+            metadata: 1,
+            severity: 1,
+            status: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            userRole: "$userDetails.role",
+          },
+        },
+      ],
+      totalCount: [{ $count: "count" }],
+    },
+  });
 
-  const [logs, total] = await Promise.all([
-    this.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .populate("userId", "name email profilePicture avatar")
-      .lean(),
-    this.countDocuments(query),
-  ]);
+  const [result] = await this.aggregate(pipeline);
+
+  const logs = result.logs || [];
+  const total = result.totalCount[0] ? result.totalCount[0].count : 0;
 
   return {
     logs,

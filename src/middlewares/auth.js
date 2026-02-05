@@ -82,11 +82,19 @@ const requireAuth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    res.status(401).json({
+    console.error("Auth middleware error (requireAuth):", error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        message: error.name === "TokenExpiredError" ? "Token expired." : "Invalid token.",
+      });
+    }
+    res.status(500).json({
       success: false,
-      message: "Invalid token.",
+      message: "Internal server error during authentication.",
     });
   }
+
 };
 
 // Middleware to check if user is super admin
@@ -133,11 +141,19 @@ const requireSuperAdmin = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    res.status(401).json({
+    console.error("Auth middleware error (requireSuperAdmin):", error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        message: error.name === "TokenExpiredError" ? "Token expired." : "Invalid token.",
+      });
+    }
+    res.status(500).json({
       success: false,
-      message: "Invalid token.",
+      message: "Internal server error during authentication.",
     });
   }
+
 };
 
 // Middleware to check if user is the owner of the resource or super admin
@@ -189,11 +205,19 @@ const requireOwnerOrAdmin = (resourceUserIdField = "userId") => {
       req.user = user;
       next();
     } catch (error) {
-      res.status(401).json({
+      console.error("Auth middleware error (requireOwnerOrAdmin):", error);
+      if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+        return res.status(401).json({
+          success: false,
+          message: error.name === "TokenExpiredError" ? "Token expired." : "Invalid token.",
+        });
+      }
+      res.status(500).json({
         success: false,
-        message: "Invalid token.",
+        message: "Internal server error during authentication.",
       });
     }
+
   };
 };
 
@@ -235,11 +259,19 @@ const requireRole = (allowedRoles) => {
       req.user = user;
       next();
     } catch (error) {
-      res.status(401).json({
+      console.error("Auth middleware error (requireRole):", error);
+      if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+        return res.status(401).json({
+          success: false,
+          message: error.name === "TokenExpiredError" ? "Token expired." : "Invalid token.",
+        });
+      }
+      res.status(500).json({
         success: false,
-        message: "Invalid token.",
+        message: "Internal server error during authentication.",
       });
     }
+
   };
 };
 

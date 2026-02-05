@@ -534,6 +534,158 @@ Object.keys(tagalogNegative).forEach((word) => {
 sentimentLib.registerLanguage("tl", tagalogLanguage);
 
 /**
+ * Robust Multilingual Sentiment Analyzer (JavaScript implementation)
+ * Mirrors the logic in text_analysis.py for high accuracy fallback
+ */
+class JSSentimentAnalyzer {
+  constructor(customLexicon = []) {
+    this.positiveWords = { ...tagalogPositive };
+    this.negativeWords = { ...tagalogNegative };
+    this.positivePhrases = [...positivePhrases];
+    this.negativePhrases = [...negativePhrases];
+    this.neutralIndicators = [...neutralIndicators];
+    this.negations = [...negations];
+    this.intensifiers = [...intensifiers];
+    this.diminishers = [...diminishers];
+    this.contrastWords = [...contrastWords];
+    this.emojiScores = { ...emojiScores };
+
+    if (customLexicon && Array.isArray(customLexicon)) {
+      this.loadCustomLexicon(customLexicon);
+    }
+  }
+
+  loadCustomLexicon(lexicon) {
+    lexicon.forEach((item) => {
+      const word = (item.word || "").toLowerCase();
+      const sentiment = item.sentiment;
+      const weight = parseFloat(item.weight || 1.0);
+
+      if (sentiment === "positive") {
+        this.positiveWords[word] = weight;
+      } else if (sentiment === "negative") {
+        this.negativeWords[word] = -weight;
+      } else if (sentiment === "neutral") {
+        this.neutralIndicators.push(word);
+      }
+    });
+  }
+
+  stemTagalog(word) {
+    return stemTagalog(word);
+  }
+
+  removeEmojis(text) {
+    // Basic regex to remove common emojis
+    return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2702}-\u{27B0}\u{24C2}-\u{1F251}]/gu, '').trim();
+  }
+
+  detectLanguage(text) {
+    const textLower = text.toLowerCase();
+    const words = textLower.match(/\w+/g) || [];
+    const wordSet = new Set(words);
+
+    // Count Tagalog indicators
+    let tagalogScore = 0;
+    
+    // Check for Tagalog markers
+    const tagalogMarkers = new Set(['ang', 'ng', 'mga', 'sa', 'na', 'ay', 'ko', 'mo', 'niya', 'kami', 'tayo', 'sila', 'po', 'opo', 'ba', 'din', 'rin', 'lang', 'lamang', 'pero', 'kasi', 'kaya', 'dahil', 'para', 'naman', 'talaga', 'sobra', 'napaka', 'grabe', 'yung']);
+    
+    words.forEach(word => {
+      if (tagalogMarkers.has(word)) tagalogScore += 1;
+      if (this.positiveWords[word] || this.negativeWords[word]) tagalogScore += 0.5;
+    });
+
+    // Check for phrases
+    const hasTagalogPhrase = [...this.positivePhrases, ...this.negativePhrases].some(phrase => textLower.includes(phrase));
+    if (hasTagalogPhrase) tagalogScore += 2;
+
+    if (tagalogScore >= 2 || hasTagalogPhrase) {
+      return { language: 'tl', confidence: Math.min(0.9, 0.5 + tagalogScore * 0.1) };
+    } else if (tagalogScore >= 1) {
+      return { language: 'mixed', confidence: 0.5 };
+    } else {
+      return { language: 'en', confidence: 0.8 };
+    }
+  }
+
+  analyze(text) {
+    if (!text || !text.trim()) return { sentiment: 'neutral', confidence: 0, method: 'empty' };
+
+    const cleanedText = this.removeEmojis(text);
+    if (!cleanedText) return { sentiment: 'neutral', confidence: 0, method: 'empty_after_cleanup' };
+
+    const langInfo = this.detectLanguage(cleanedText);
+    const textLower = cleanedText.toLowerCase();
+
+    // Simplified logic: blending lexicon approach for both languages
+    let posScore = 0;
+    let negScore = 0;
+    let neutralCount = 0;
+
+    // Phrase matching (higher priority)
+    this.positivePhrases.forEach(phrase => {
+      if (textLower.includes(phrase)) posScore += 2.5;
+    });
+    this.negativePhrases.forEach(phrase => {
+      if (textLower.includes(phrase)) negScore += 2.5;
+    });
+
+    // Word matching
+    const words = textLower.match(/\w+/g) || [];
+    words.forEach((word, i) => {
+      let multiplier = 1.0;
+      if (i > 0 && this.intensifiers.includes(words[i-1])) multiplier = 1.5;
+      if (i > 0 && this.diminishers.includes(words[i-1])) multiplier = 0.5;
+
+      const isNegated = i > 0 && this.negations.includes(words[i-1]);
+      const stemmed = this.stemTagalog(word);
+
+      // Check positive
+      if (this.positiveWords[word] || this.positiveWords[stemmed]) {
+        const val = (this.positiveWords[word] || this.positiveWords[stemmed]) * multiplier;
+        if (isNegated) negScore += val;
+        else posScore += val;
+      }
+      // Check negative
+      else if (this.negativeWords[word] || this.negativeWords[stemmed]) {
+        const val = Math.abs(this.negativeWords[word] || this.negativeWords[stemmed]) * multiplier;
+        if (isNegated) posScore += val;
+        else negScore += val;
+      }
+      // Check neutral
+      if (this.neutralIndicators.includes(word)) neutralCount++;
+    });
+
+    // Contrast handling
+    const hasContrast = this.contrastWords.some(c => textLower.includes(c));
+    let totalScore = posScore - negScore;
+
+    if (hasContrast && posScore > 0 && negScore > 0) {
+      return { 
+        sentiment: 'neutral', 
+        confidence: 0.7, 
+        method: 'js_robust_mixed_contrast',
+        scores: { pos: posScore, neg: negScore }
+      };
+    }
+
+    let sentiment = 'neutral';
+    if (totalScore > 0.5) sentiment = 'positive';
+    else if (totalScore < -0.5) sentiment = 'negative';
+    else if (neutralCount > 0 && posScore < 1 && negScore < 1) sentiment = 'neutral';
+
+    return {
+      sentiment,
+      confidence: Math.min(0.95, 0.6 + Math.abs(totalScore) / 10),
+      method: 'js_robust_lexicon',
+      scores: { pos: posScore.toFixed(2), neg: negScore.toFixed(2), total: totalScore.toFixed(2) },
+      language: langInfo
+    };
+  }
+}
+
+/**
  * Calculates the average rating for a given event.
  * @param {string} eventId - The ID of the event to analyze.
  * @returns {Promise<number>} The average rating for the event.
@@ -713,26 +865,35 @@ const generateQualitativeReport = async (eventId) => {
       "[FALLBACK] Using JavaScript sentiment analysis instead of Python",
     );
 
-    // FALLBACK: Use JavaScript sentiment analysis
-    // This prevents the page from hanging when Python is unavailable
+    // FALLBACK: Use robust JavaScript multi-lingual sentiment analysis
     try {
+      console.log("[FALLBACK] Initializing Robust JS Sentiment Analyzer...");
+      const analyzer = new JSSentimentAnalyzer(dbLexicon);
+      
       const categorizedComments = {
         positive: [],
         neutral: [],
         negative: [],
       };
 
-      comments.forEach((comment) => {
-        const text = comment.answer || comment.comment || "";
-        const analysis = sentimentLib.analyze(text);
+      const analyzedFeedbacks = [];
 
-        if (analysis.score > 0) {
+      comments.forEach((comment) => {
+        const text = typeof comment === 'string' ? comment : (comment.answer || comment.comment || "");
+        const analysis = analyzer.analyze(text);
+
+        if (analysis.sentiment === "positive") {
           categorizedComments.positive.push(text);
-        } else if (analysis.score < 0) {
+        } else if (analysis.sentiment === "negative") {
           categorizedComments.negative.push(text);
         } else {
           categorizedComments.neutral.push(text);
         }
+
+        analyzedFeedbacks.push({
+          text,
+          ...analysis
+        });
       });
 
       return {
@@ -754,12 +915,12 @@ const generateQualitativeReport = async (eventId) => {
             100
           ).toFixed(2),
         },
-        insights: ["Using fallback JavaScript sentiment analysis"],
-        recommendations: [],
+        insights: ["Using robust fallback JavaScript sentiment analysis"],
+        recommendations: ["Ensure Python environment is configured for even higher accuracy (TextBlob-enhanced)"],
         comments: categorizedComments,
-        analyzed_feedbacks: [],
+        analyzed_feedbacks: analyzedFeedbacks,
         language_breakdown: {},
-        warning: "Python sentiment analysis unavailable - using fallback",
+        warning: "Python sentiment analysis unavailable - used robust JS fallback",
       };
     } catch (fallbackError) {
       console.error("Fallback analysis also failed:", fallbackError);
@@ -1433,7 +1594,16 @@ async function analyzeCommentSentiment(text) {
     );
   } catch (error) {
     console.error(`❌ Python analysis failed: ${error.message}`);
-    throw error; // No fallback - Python should work with optimized memory usage
+    console.warn(`[FALLBACK] Using robust JS analyzer for single comment...`);
+    
+    try {
+      const dbLexicon = await Lexicon.find().select("word sentiment").lean();
+      const analyzer = new JSSentimentAnalyzer(dbLexicon);
+      result = analyzer.analyze(cleanText);
+    } catch (fallbackError) {
+      console.error(`❌ Robust JS analyzer also failed: ${fallbackError.message}`);
+      throw error; // Throw original error if fallback fails
+    }
   }
 
   // Cache the result
@@ -1522,4 +1692,5 @@ module.exports = {
   analyzeResponses,
   generateResponseOverview,
   analyzeCommentSentiment,
+  JSSentimentAnalyzer,
 };

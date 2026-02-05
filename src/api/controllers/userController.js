@@ -38,6 +38,15 @@ const createUser = async (req, res) => {
       });
     }
 
+    // [VALIDATION] Enforce strict email domain for manual creation
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@laverdad\.edu\.ph$/;
+    if (!emailRegex.test(email)) {
+         return res.status(400).json({
+        success: false,
+        message: "Email must be a valid @laverdad.edu.ph address",
+      });
+    }
+
     // Create new user
     newUser = new User({
       name,
@@ -255,26 +264,50 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // [SECURITY] Check for PBOO (Club Officer) management permissions
-    const isChangingToPBOO = updates.role === "club-officer";
-    const isRemovingPBOO = user.role === "club-officer" && updates.role && updates.role !== "club-officer";
-
-    if (isChangingToPBOO || isRemovingPBOO) {
-      // Only PSAS Head can manage PBOO roles
-      if (req.user.position !== "PSAS Head") {
-         return res.status(403).json({
+    // [SECURITY] Check for ITSS Student Management (Disable/Enable)
+    const isITSS = req.user.position === "ITSS";
+    if (isITSS) {
+      if (user.role !== "student" && user.role !== "club-officer") {
+        return res.status(403).json({
           success: false,
-          message: "Only the PSAS Head can manage PBOO (Club Officer) roles",
+          message: "ITSS can only manage Student and PBOO accounts",
         });
       }
-    } else {
-      // For all OTHER updates, ensure user is MIS (PSAS Head can only touch PBOO roles)
-      // This prevents PSAS users from updating arbitrary fields or other roles
-      if (req.user.role !== "mis" && !isChangingToPBOO && !isRemovingPBOO) {
-         return res.status(403).json({
+      
+      // Ensure ITSS is only updating 'isActive'
+      const allowedUpdates = ["isActive"];
+      const updateKeys = Object.keys(updates);
+      const hasUnauthorizedUpdates = updateKeys.some(key => !allowedUpdates.includes(key));
+
+      if (hasUnauthorizedUpdates) {
+        return res.status(403).json({
           success: false,
-          message: "You do not have permission to perform this update",
+          message: "ITSS can only update the active status of students",
         });
+      }
+      // If validation passes, fall through to update logic
+    } else {
+      // [SECURITY] Check for PBOO (Club Officer) management permissions
+      const isChangingToPBOO = updates.role === "club-officer";
+      const isRemovingPBOO = user.role === "club-officer" && updates.role && updates.role !== "club-officer";
+
+      if (isChangingToPBOO || isRemovingPBOO) {
+        // Only PSAS Head can manage PBOO roles
+        if (req.user.position !== "PSAS Head") {
+           return res.status(403).json({
+            success: false,
+            message: "Only the PSAS Head can manage PBOO (Club Officer) roles",
+          });
+        }
+      } else {
+        // For all OTHER updates, ensure user is MIS (PSAS Head can only touch PBOO roles)
+        // This prevents PSAS users from updating arbitrary fields or other roles
+        if (req.user.role !== "mis" && !isChangingToPBOO && !isRemovingPBOO) {
+           return res.status(403).json({
+            success: false,
+            message: "You do not have permission to perform this update",
+          });
+        }
       }
     }
 
@@ -386,11 +419,12 @@ const updateUser = async (req, res) => {
         userName: req.user.name,
         action: isActive ? "USER_ACTIVATED" : "USER_SUSPENDED",
         category: "user",
-        description: `${isActive ? "Activated" : "Suspended"} user ${user.email}`,
+        description: `${isActive ? "Activated" : "Suspended"} user ${user.name} (${user.email})`,
         severity: "warning",
         metadata: {
           targetId: user._id,
           targetType: "User",
+          targetName: user.name,
           oldValue: oldStatus,
           newValue: isActive,
         },
@@ -571,6 +605,95 @@ const bulkUpdateUsers = async (req, res) => {
   }
 };
 
+// Bulk update user status (activate/deactivate)
+const bulkUpdateStatus = async (req, res) => {
+  try {
+    const { userIds, isActive } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "User IDs array is required",
+      });
+    }
+
+    if (isActive === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "isActive status is required",
+      });
+    }
+
+    // [SECURITY] Check permissions
+    const isMis = req.user.role === "mis";
+    const isItss = req.user.role === "psas" && req.user.position === "ITSS";
+
+    if (!isMis && !isItss) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to bulk update user status",
+      });
+    }
+
+    // Get the users to be updated to check their roles/details for logging
+    const targetUsers = await User.find({ _id: { $in: userIds } });
+
+    if (isItss) {
+      // ITSS can only manage student and club-officer (PBOO) roles
+      const invalidUsers = targetUsers.filter(u => u.role !== "student" && u.role !== "club-officer");
+      if (invalidUsers.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message: "ITSS can only bulk update Student and PBOO (Club Officer) accounts",
+        });
+      }
+    }
+
+    const result = await User.updateMany(
+      { _id: { $in: userIds } },
+      { $set: { isActive } }
+    );
+
+    // AUDIT LOGGING
+    const action = isActive ? "BULK_USER_ACTIVATED" : "BULK_USER_SUSPENDED";
+    const roleString = isItss ? "Student/PBOO" : "User";
+    
+    await AuditLog.logEvent({
+      userId: req.user._id,
+      userEmail: req.user.email,
+      userName: req.user.name,
+      action: action,
+      category: "user",
+      description: `${isActive ? "Activated" : "Suspended"} ${result.modifiedCount} ${roleString} accounts bulk`,
+      severity: "warning",
+      metadata: {
+        userIds,
+        modifiedCount: result.modifiedCount,
+        targetRoles: isItss ? ["student", "club-officer"] : "all",
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `${result.modifiedCount} users updated successfully`,
+      data: {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+      },
+    });
+
+    // Emit socket update
+    emitUpdate("users-bulk-updated", { userIds, isActive });
+  } catch (error) {
+    console.error("Error bulk updating user status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error bulk updating user status",
+      error: error.message,
+    });
+  }
+};
+
 // Provision a new user with specific permissions
 const provisionUser = async (req, res) => {
   try {
@@ -620,12 +743,32 @@ const provisionUser = async (req, res) => {
       }
     }
 
-    // [VALIDATION] Enforce email domain for students
-    if (role === "student" && !email.endsWith("@student.laverdad.edu.ph")) {
-      return res.status(400).json({
-        success: false,
-        message: "Student emails must end with @student.laverdad.edu.ph",
-      });
+    // [VALIDATION] Enforce email domain policies
+    const isValidEmail = (email) => {
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@laverdad\.edu\.ph$/;
+      return emailRegex.test(email);
+    };
+
+    const isValidStudentEmail = (email) => {
+      const studentEmailRegex = /^[a-zA-Z0-9._%+-]+@student\.laverdad\.edu\.ph$/;
+      return studentEmailRegex.test(email);
+    };
+
+    if (role === "student") {
+      if (!isValidStudentEmail(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "Student emails must be valid and end with @student.laverdad.edu.ph",
+        });
+      }
+    } else {
+      // For NON-students (MIS, PSAS, etc.), enforce @laverdad.edu.ph
+      if (!isValidEmail(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "Staff emails must be valid and end with @laverdad.edu.ph",
+        });
+      }
     }
 
     const existingUser = await User.findOne({ email });
@@ -679,5 +822,6 @@ module.exports = {
   deleteUser,
   getUserStats,
   bulkUpdateUsers,
+  bulkUpdateStatus,
   provisionUser,
 };

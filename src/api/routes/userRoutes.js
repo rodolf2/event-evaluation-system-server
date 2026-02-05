@@ -3,10 +3,13 @@ const router = express.Router();
 const User = require("../../models/User");
 const { requireRole } = require("../../middlewares/auth");
 const AuditLog = require("../../models/AuditLog");
-const { updateUser, getAllUsers, createUser, provisionUser, bulkUpdateUsers } = require("../controllers/userController");
+const { updateUser, getAllUsers, createUser, provisionUser, bulkUpdateUsers, bulkUpdateStatus } = require("../controllers/userController");
 
 // Get all users - allow MIS and PSAS
 router.get("/", requireRole(["mis", "psas"]), getAllUsers);
+
+// Bulk update user status - restricted to mis (all) and psas (ITSS only)
+router.put("/bulk-status", requireRole(["mis", "psas"]), bulkUpdateStatus);
 
 // Create new user - restricted to mis role
 router.post("/", requireRole(["mis"]), createUser);

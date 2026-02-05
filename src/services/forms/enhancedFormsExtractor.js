@@ -31,18 +31,33 @@ class EnhancedFormsExtractor {
     );
 
     // Puppeteer-only extraction (no fallback)
-    console.log(
-      `🚀 [Enhanced Extractor] Using Puppeteer extraction...`
-    );
+    console.log(`🚀 [Enhanced Extractor] Using Puppeteer extraction...`);
 
-    const puppeteerData = await puppeteerExtractor.extractForm(url);
+    let puppeteerData;
+    try {
+      puppeteerData = await puppeteerExtractor.extractForm(url);
+    } catch (puppeteerError) {
+      console.warn(
+        `⚠️ [Enhanced Extractor] Puppeteer extraction failed: ${puppeteerError.message}`
+      );
+      console.log(`🔄 [Enhanced Extractor] Triaging to static extraction...`);
+
+      try {
+        puppeteerData = await puppeteerExtractor.extractFormStatic(url);
+      } catch (staticError) {
+        console.error(
+          `❌ [Enhanced Extractor] Static extraction also failed: ${staticError.message}`
+        );
+        throw new Error(`Extraction failed: ${staticError.message}`);
+      }
+    }
 
     if (
       !puppeteerData ||
       !puppeteerData.questions ||
       puppeteerData.questions.length === 0
     ) {
-      throw new Error("Puppeteer extraction returned no questions");
+      throw new Error("Extraction returned no questions");
     }
 
     console.log(`✅ [Enhanced Extractor] Puppeteer extraction successful!`);

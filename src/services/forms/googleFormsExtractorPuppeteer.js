@@ -149,6 +149,202 @@ class GoogleFormsExtractorPuppeteer {
   }
 
   /**
+   * Static extraction fallback using axios and regex
+   * Bypasses Puppeteer for better reliability in resource-constrained environments
+   * @param {string} url - The Google Forms URL
+   * @returns {Promise<Object>} Extracted form data
+   */
+  async extractFormStatic(url) {
+    const axios = require("axios");
+    console.log(`\n🔍 [Static Extractor] Starting extraction for: ${url}`);
+    
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+        timeout: 15000
+      });
+
+      const html = response.data;
+      console.log(`✅ [Static Extractor] Fetched HTML (${html.length} bytes)`);
+
+      // Mock a 'page' like object with an evaluate function that we can run locally
+      const result = this.parseFBDataFromHTML(html);
+
+      if (result && result.questions && result.questions.length > 0) {
+        console.log(`✅ [Static Extractor] Successfully extracted ${result.questions.length} questions`);
+        return result;
+      }
+
+      throw new Error("Static extraction yielded 0 questions");
+    } catch (error) {
+      console.error(`❌ [Static Extractor] Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper to parse FB_PUBLIC_LOAD_DATA from raw HTML string
+   * This is a Node.js implementation of the logic in extractFromFBData
+   */
+  parseFBDataFromHTML(html) {
+    const result = {
+      title: "",
+      description: "",
+      questions: [],
+      sections: [],
+      debugInfo: {
+        foundFBData: false,
+        extractionMethod: "Static_HTML_Regex",
+        errors: [],
+        logs: []
+      }
+    };
+
+    // 1. Extract Title and Description from Meta/Title tags as fallback
+    const titleMatch = html.match(/<title>(.*?)<\/title>/i);
+    if (titleMatch) result.title = titleMatch[1].replace(" - Google Forms", "").trim();
+    
+    const descMatch = html.match(/<meta\s+name="description"\s+content="(.*?)"/i);
+    if (descMatch) result.description = descMatch[1];
+
+    // 2. Find FB_PUBLIC_LOAD_DATA via Regex
+    const patterns = [
+      /FB_PUBLIC_LOAD_DATA_[^=]*=\s*(\[[\s\S]*?\]);/,
+      /var\s+FB_PUBLIC_LOAD_DATA_\w+\s*=\s*(\[[\s\S]*?\]);/,
+      /FB_PUBLIC_LOAD_DATA_.*?=\s*(\[[\s\S]*?\]);/
+    ];
+
+    let jsonStr = null;
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        jsonStr = match[1];
+        break;
+      }
+    }
+
+    if (!jsonStr) {
+      result.debugInfo.errors.push("Could not find FB_PUBLIC_LOAD_DATA in HTML");
+      return result;
+    }
+
+    try {
+      const parsedData = JSON.parse(jsonStr);
+      result.debugInfo.foundFBData = true;
+
+      if (!Array.isArray(parsedData) || parsedData.length <= 1) return result;
+
+      const metaData = parsedData[1];
+      if (Array.isArray(metaData)) {
+        // Find title/desc in metaData if not already found
+        if (metaData.length > 8 && !result.title) result.title = metaData[8] || "";
+        if (metaData.length > 0 && !result.description) result.description = metaData[0] || "";
+      }
+
+      const questionTypeMap = {
+        0: "short_answer", 1: "paragraph", 2: "multiple_choice", 3: "multiple_choice", 
+        4: "multiple_choice", 5: "scale", 6: "multiple_choice", 7: "multiple_choice", 
+        8: "section_header", 9: "date", 10: "time", 18: "scale"
+      };
+
+      /**
+       * Robust recursive search mirroring extractFromFBData
+       */
+      function findQuestionsRecursively(data, depth = 0, maxDepth = 10) {
+        let found = [];
+        if (depth > maxDepth || !data || !Array.isArray(data)) return found;
+
+        for (const item of data) {
+          if (!Array.isArray(item)) continue;
+
+          // Structure check: [id, title, desc, type, ...]
+          if (item.length >= 4 && 
+              typeof item[1] === 'string' && item[1].trim() !== "" &&
+              typeof item[3] === 'number') {
+            found.push(item);
+            // Don't recurse into found question to avoid double-counting if they nest strange things
+            continue;
+          }
+
+          found.push(...findQuestionsRecursively(item, depth + 1, maxDepth));
+        }
+        return found;
+      }
+
+      const allItems = findQuestionsRecursively(parsedData);
+
+      let currentSectionId = "main";
+      let sectionCounter = 0;
+
+      for (const q of allItems) {
+        const type = q[3];
+        const id = q[0];
+        const title = (q[1] || "").trim();
+        const desc = q[2] || "";
+
+        if (type === 8) {
+          currentSectionId = String(id || `sec_${sectionCounter++}`);
+          result.sections.push({ id: currentSectionId, title: title || `Section ${sectionCounter}`, description: desc });
+          continue;
+        }
+
+        let options = [];
+        let low = 1, high = 5, lowLabel = "Poor", highLabel = "Excellent";
+
+        if (q[4] && Array.isArray(q[4])) {
+          const optData = q[4];
+          if (type === 5) {
+            if (Array.isArray(optData[0])) {
+              low = parseInt(optData[0][0]) || 1;
+              high = parseInt(optData[0][1]) || 5;
+            }
+            for (let i = 1; i < optData.length; i++) {
+              if (Array.isArray(optData[i]) && optData[i].length >= 2 && typeof optData[i][0] === 'string') {
+                lowLabel = optData[i][0];
+                highLabel = optData[i][optData[i].length - 1];
+                break;
+              }
+            }
+          } else if (type === 18) {
+             if (optData[0] && Array.isArray(optData[0][1])) {
+               const opts = optData[0][1].map(o => Array.isArray(o) ? o[0] : o).filter(v => v !== null && v !== undefined);
+               if (opts.length > 0) {
+                 const nums = opts.map(Number).filter(n => !isNaN(n)).sort((a,b)=>a-b);
+                 if (nums.length > 0) {
+                   low = nums[0]; high = nums[nums.length-1];
+                 }
+                 lowLabel = ""; highLabel = "";
+               }
+             }
+          } else {
+            optData.forEach(optGroup => {
+              if (Array.isArray(optGroup) && Array.isArray(optGroup[1])) {
+                optGroup[1].forEach(opt => {
+                  if (Array.isArray(opt) && opt[0] !== null) options.push(String(opt[0]).trim());
+                });
+              }
+            });
+          }
+        }
+
+        result.questions.push({
+          id, title, type: questionTypeMap[type] || "short_answer",
+          required: q[4] && q[4][0] && q[4][0][2] === 1,
+          options, sectionId: currentSectionId,
+          low, high, lowLabel, highLabel
+        });
+      }
+
+      return result;
+    } catch (err) {
+      result.debugInfo.errors.push(`JSON Parse Error: ${err.message}`);
+      return result;
+    }
+  }
+
+  /**
    * Extract form data from FB_PUBLIC_LOAD_DATA script variable
    * This contains ALL questions from ALL pages in one data structure
    */

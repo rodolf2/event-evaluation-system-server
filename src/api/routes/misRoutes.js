@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const User = require("../../models/User");
 const Event = require("../../models/Event");
-const Activity = require("../../models/Activity");
+const AuditLog = require("../../models/AuditLog");
 const { requireRole } = require("../../middlewares/auth");
 
 // Import controllers
@@ -41,26 +41,25 @@ router.get("/stats", async (req, res) => {
     // Get event statistics
     const totalEvents = await Event.countDocuments();
 
-    // Get recent activity (last 10 activities)
-    const recentActivity = await Activity.find()
-      .sort({ timestamp: -1 })
+    // Get recent activity (last 10 logs) from AuditLog
+    const recentLogs = await AuditLog.find({})
+      .sort({ createdAt: -1 })
       .limit(10)
-      .populate("user", "name email")
       .lean();
 
     // Format activity data
-    const formattedActivity = recentActivity.map((activity) => ({
-      user: activity.user?.name || "System",
-      type: activity.type,
-      description: activity.description,
-      timestamp: activity.timestamp,
+    const formattedActivity = recentLogs.map((log) => ({
+      user: log.userName || log.userEmail || "System",
+      type: log.action,
+      description: log.description,
+      timestamp: log.createdAt,
     }));
 
-    // Determine system health based on recent errors
+    // Determine system health based on recent errors (critical severity logs)
     let systemHealth = "Good";
-    const recentErrors = await Activity.countDocuments({
-      type: "error",
-      timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    const recentErrors = await AuditLog.countDocuments({
+      severity: "critical",
+      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
     });
 
     if (recentErrors > 5) {
@@ -84,6 +83,42 @@ router.get("/stats", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
+    });
+  }
+});
+
+// ============================================
+// RECENT ACTIVITY (New Endpoint)
+// ============================================
+router.get("/recent-activity", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    
+    // Fetch recent logs
+    const recentLogs = await AuditLog.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Format for frontend
+    const activities = recentLogs.map((log) => ({
+      _id: log._id,
+      user: log.userName || log.userEmail || "System",
+      action: log.action,
+      description: log.description,
+      createdAt: log.createdAt,
+      severity: log.severity,
+    }));
+
+    res.json({
+      success: true,
+      data: activities,
+    });
+  } catch (error) {
+    console.error("Error fetching recent activity:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching recent activity",
     });
   }
 });

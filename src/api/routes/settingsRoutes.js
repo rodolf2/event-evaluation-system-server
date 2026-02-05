@@ -4,6 +4,43 @@ const SystemSettings = require("../../models/SystemSettings");
 const AuditLog = require("../../models/AuditLog");
 const { requireAuth, requireRole } = require("../../middlewares/auth");
 
+// Helper to calculate changes between old and new settings
+const calculateChanges = (oldSettings, newSettings, prefix = "") => {
+  const changes = {};
+  
+  const compareObjects = (oldObj, newObj, path) => {
+    Object.keys(newObj).forEach(key => {
+      const currentPath = path ? `${path}.${key}` : key;
+      const oldValue = oldObj ? oldObj[key] : undefined;
+      const newValue = newObj[key];
+      
+      // Skip if values are the same
+      if (JSON.stringify(oldValue) === JSON.stringify(newValue)) return;
+      
+      // If it's a nested object (and not an array or date), recurse
+      if (
+        typeof newValue === "object" && 
+        newValue !== null && 
+        !Array.isArray(newValue) && 
+        !(newValue instanceof Date) &&
+        oldValue && 
+        typeof oldValue === "object"
+      ) {
+        compareObjects(oldValue, newValue, currentPath);
+      } else {
+        // Record change
+        changes[currentPath] = {
+          old: oldValue,
+          new: newValue
+        };
+      }
+    });
+  };
+
+  compareObjects(oldSettings, newSettings, prefix);
+  return changes;
+};
+
 // GET /api/settings - Get system settings
 router.get(
   "/",
@@ -52,6 +89,10 @@ router.put(
         });
       }
 
+      // 1. Fetch OLD settings
+      const oldSettings = await SystemSettings.getSettings();
+
+      // 2. Update settings
       const settings = await SystemSettings.updateSettings(
         {
           guestSettings,
@@ -63,6 +104,16 @@ router.put(
         req.user._id
       );
 
+      // 3. Calculate Changes
+      // We need to compare specific sections because updateSettings merges
+      const changes = {};
+      
+      if (guestSettings) Object.assign(changes, calculateChanges(oldSettings.guestSettings, guestSettings, "guestSettings"));
+      if (emailSettings) Object.assign(changes, calculateChanges(oldSettings.emailSettings, emailSettings, "emailSettings"));
+      if (generalSettings) Object.assign(changes, calculateChanges(oldSettings.generalSettings, generalSettings, "generalSettings"));
+      if (securitySettings) Object.assign(changes, calculateChanges(oldSettings.securitySettings, securitySettings, "securitySettings"));
+      if (nlpSettings) Object.assign(changes, calculateChanges(oldSettings.nlpSettings, nlpSettings, "nlpSettings"));
+
       await AuditLog.logEvent({
         userId: req.user._id,
         userName: req.user.name,
@@ -73,6 +124,9 @@ router.put(
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"],
         severity: "warning",
+        metadata: {
+          changes: changes
+        }
       });
 
       res.json({
@@ -134,6 +188,10 @@ router.put(
         allowGuestSpeakers,
       } = req.body;
 
+      // 1. Fetch OLD settings
+      const oldSettings = await SystemSettings.getSettings();
+      const oldGuestSettings = oldSettings.guestSettings.toObject();
+
       const settings = await SystemSettings.updateSettings(
         {
           guestSettings: {
@@ -145,16 +203,26 @@ router.put(
         req.user._id
       );
 
+      // 3. Calculate changes
+      const changes = calculateChanges(oldGuestSettings, {
+        defaultExpirationDays,
+        allowGuestEvaluators,
+        allowGuestSpeakers,
+      }, "guestSettings");
+
       await AuditLog.logEvent({
         userId: req.user._id,
         userName: req.user.name,
         userEmail: req.user.email,
         action: "SYSTEM_SETTINGS_UPDATE",
         category: "settings",
-        description: `Updated guest settings: Expiration ${defaultExpirationDays} days`,
+        description: `Updated guest settings`,
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"],
         severity: "info",
+        metadata: {
+          changes: changes
+        }
       });
 
       res.json({
@@ -203,7 +271,7 @@ router.put(
   requireRole(["mis", "superadmin", "psas"]),
   async (req, res) => {
     try {
-      const generalSettings = req.body;
+      const generalSettingsUpdate = req.body;
       
       // RESTRICTION: Only MIS Head or PSAS Head can update general settings
       const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head";
@@ -215,10 +283,17 @@ router.put(
         });
       }
 
+      // 1. Fetch OLD settings
+      const oldSettings = await SystemSettings.getSettings();
+      const oldGeneralSettings = oldSettings.generalSettings.toObject();
+
       const settings = await SystemSettings.updateSettings(
-        { generalSettings },
+        { generalSettings: generalSettingsUpdate },
         req.user._id
       );
+
+      // 3. Calculate changes
+      const changes = calculateChanges(oldGeneralSettings, generalSettingsUpdate, "generalSettings");
 
       await AuditLog.logEvent({
         userId: req.user._id,
@@ -230,6 +305,9 @@ router.put(
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"],
         severity: "info",
+        metadata: {
+          changes: changes
+        }
       });
 
       res.json({
@@ -278,10 +356,9 @@ router.put(
   requireRole(["mis", "superadmin", "psas"]),
   async (req, res) => {
     try {
-      const securitySettings = req.body;
+      const securitySettingsUpdate = req.body;
       
       // RESTRICTION: Only MIS Head or PSAS Head can update security settings
-      // Note: Assuming PSAS Head gets security settings access too based on "Global parameters" request
       const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head";
 
       if (!isAuthorizedHead) {
@@ -291,10 +368,17 @@ router.put(
         });
       }
 
+      // 1. Fetch OLD settings
+      const oldSettings = await SystemSettings.getSettings();
+      const oldSecuritySettings = oldSettings.securitySettings.toObject();
+
       const settings = await SystemSettings.updateSettings(
-        { securitySettings },
+        { securitySettings: securitySettingsUpdate },
         req.user._id
       );
+
+      // 3. Calculate changes
+      const changes = calculateChanges(oldSecuritySettings, securitySettingsUpdate, "securitySettings");
 
       await AuditLog.logEvent({
         userId: req.user._id,
@@ -306,6 +390,9 @@ router.put(
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"],
         severity: "warning",
+        metadata: {
+          changes: changes
+        }
       });
 
       res.json({
@@ -323,5 +410,6 @@ router.put(
     }
   }
 );
+
 
 module.exports = router;
