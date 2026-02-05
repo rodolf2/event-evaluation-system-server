@@ -164,7 +164,7 @@ exports.shareReport = async (req, res) => {
     }
 
     // Send email notifications to all recipients
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const frontendUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173";
     console.log(`[shareReport] Preparing to send emails to ${schoolAdmins.length} recipients...`);
     
     // Check if Resend client is available
