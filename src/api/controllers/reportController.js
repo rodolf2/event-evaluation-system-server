@@ -770,8 +770,8 @@ const getDynamicQualitativeData = async (req, res) => {
         }
 
         questionResponses.forEach((r) => {
-          const rating = parseInt(r.answer) || 0;
-          if (rating >= min && rating <= max) {
+          const rating = parseInt(r.answer);
+          if (!isNaN(rating) && rating >= min && rating <= max) {
             ratingCounts[rating]++;
           }
         });
@@ -799,9 +799,10 @@ const getDynamicQualitativeData = async (req, res) => {
           questionTitle,
           questionType,
           responseCount,
-          ratingDistribution,
-          averageRating: Math.round(avgRating * 100) / 100,
+          averageRating: avgRating,
+          scaleMin: min,
           scaleMax: max,
+          ratingDistribution,
         });
       } else if (
         questionType === "paragraph" ||
@@ -2073,12 +2074,12 @@ function processRatingDistributionFromForm(scaleResponses) {
   ];
 
   scaleResponses.forEach((response) => {
-    const rating = response.value || 0;
+    const rating = Math.round(response.value) || 0;
     if (rating >= 1 && rating <= 2) distribution[0].value++;
     else if (rating >= 3 && rating <= 4) distribution[1].value++;
     else if (rating >= 5 && rating <= 6) distribution[2].value++;
     else if (rating >= 7 && rating <= 8) distribution[3].value++;
-    else if (rating >= 9 && rating <= 10) distribution[4].value++;
+    else if (rating >= 9) distribution[4].value++; // Any value >= 9 is excellent in 1-10 context
   });
 
   return distribution;
@@ -2353,6 +2354,7 @@ function processCompleteQuestionBreakdown(form, responses, textBreakdown) {
           questionTitle: q.title,
           questionType: "scale",
           responseCount: 0,
+          scaleMin: q.low || 1,
           scaleMax: q.high || 5,
           ratingDistribution: [], // To be populated
           averageRating: 0,
@@ -2410,18 +2412,21 @@ function processCompleteQuestionBreakdown(form, responses, textBreakdown) {
               qData.responseCount++;
               // Initialize distribution if empty
               if (qData.ratingDistribution.length === 0) {
+                const min = qData.scaleMin || 1;
                 const max = qData.scaleMax || 5;
-                for (let i = 1; i <= max; i++) {
+                for (let i = min; i <= max; i++) {
                   qData.ratingDistribution.push({
                     name: `${i} Star`,
                     value: 0,
                     count: 0,
+                    ratingValue: i
                   });
                 }
               }
 
               // Update count
-              const ratingIndex = Math.floor(val) - 1;
+              const min = qData.scaleMin || 1;
+              const ratingIndex = Math.floor(val) - min;
               if (
                 ratingIndex >= 0 &&
                 ratingIndex < qData.ratingDistribution.length
@@ -2461,8 +2466,8 @@ function processCompleteQuestionBreakdown(form, responses, textBreakdown) {
       qData.ratingDistribution.forEach((dist) => {
         // Provide safe calc for percentage
         dist.value = total > 0 ? Math.round((dist.count / total) * 100) : 0;
-        // Hacky way to get rating value from name "5 Star" -> 5
-        const ratingVal = parseInt(dist.name);
+        // Use ratingValue if present, otherwise fallback to parsing name
+        const ratingVal = dist.ratingValue !== undefined ? dist.ratingValue : parseInt(dist.name);
         if (!isNaN(ratingVal)) {
           sum += ratingVal * dist.count;
         }

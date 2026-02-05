@@ -1,0 +1,31 @@
+{
+  "version": "3.2.1",
+  "keys": [
+    "Canvas",
+    "Context2d",
+    "CanvasRenderingContext2D",
+    "CanvasGradient",
+    "CanvasPattern",
+    "Image",
+    "ImageData",
+    "PNGStream",
+    "PDFStream",
+    "JPEGStream",
+    "DOMMatrix",
+    "DOMPoint",
+    "registerFont",
+    "deregisterAllFonts",
+    "createCanvas",
+    "createImageData",
+    "loadImage",
+    "backends",
+    "version",
+    "cairoVersion",
+    "jpegVersion",
+    "gifVersion",
+    "freetypeVersion",
+    "rsvgVersion",
+    "pangoVersion"
+  ],
+  "typeofCreateCanvas": "function"
+}

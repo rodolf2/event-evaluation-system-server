@@ -274,6 +274,7 @@ const createBlankForm = async (req, res) => {
       linkedCertificateType: req.body.linkedCertificateType || "completion",
       certificateTemplateName: req.body.certificateTemplateName || null,
       isCertificateLinked: req.body.isCertificateLinked || false,
+      certificateCanvasData: req.body.certificateCanvasData || null,
     };
 
     const form = new Form(formData);
@@ -715,6 +716,7 @@ const updateDraftForm = async (req, res) => {
       "linkedCertificateType",
       "certificateTemplateName",
       "isCertificateLinked",
+      "certificateCanvasData",
     ];
 
     updatableFields.forEach((field) => {
@@ -1048,6 +1050,7 @@ const publishForm = async (req, res) => {
       linkedCertificateType,
       certificateTemplateName,
       isCertificateLinked,
+      certificateCanvasData,
     } = req.body;
 
     console.log(`[FORM-PUB] Publishing form ${id} with certificate linking:`, {
@@ -1136,6 +1139,10 @@ const publishForm = async (req, res) => {
       console.log(
         `[FORM-PUB] ✓ Set isCertificateLinked: ${isCertificateLinked}`,
       );
+    }
+    if (certificateCanvasData !== undefined) {
+      form.certificateCanvasData = certificateCanvasData;
+      console.log(`[FORM-PUB] ✓ Set certificateCanvasData (size: ${JSON.stringify(certificateCanvasData).length})`);
     }
 
     console.log(`[FORM-PUB] Form certificate settings after update:`, {
@@ -1533,8 +1540,20 @@ const submitFormResponse = async (req, res) => {
 
       if (attendee) {
         attendee.hasResponded = true;
-        // Generate certificate if the attendee hasn't received one yet
-        shouldGenerateCertificate = !attendee.certificateGenerated;
+        
+        // FIX: If certificate already generated, return existing info instead of null
+        if (attendee.certificateGenerated && attendee.certificateId) {
+          shouldGenerateCertificate = false;
+          certificateResult = {
+            success: true,
+            certificateId: attendee.certificateId,
+            downloadUrl: `/api/certificates/download/${attendee.certificateId}`
+          };
+          console.log(`[CERT-GEN] Returning existing certificate ${attendee.certificateId} for ${respondentEmail}`);
+        } else {
+          // Generate certificate if the attendee hasn't received one yet
+          shouldGenerateCertificate = !attendee.certificateGenerated;
+        }
       } else {
         // Generate certificate for any participant who completes the form (not just attendees)
         shouldGenerateCertificate = true;

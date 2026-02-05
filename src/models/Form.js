@@ -345,6 +345,11 @@ const formSchema = new mongoose.Schema(
         default: true,
       },
     },
+    // Visual certificate customizations (Fabric.js JSON)
+    certificateCanvasData: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
   },
   {
     timestamps: true,

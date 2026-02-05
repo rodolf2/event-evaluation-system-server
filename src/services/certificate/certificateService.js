@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const nodemailer = require("nodemailer");
 const Certificate = require("../../models/Certificate");
+const CertificateTemplate = require("../../models/CertificateTemplate");
 
 const { createCanvas, loadImage } = require("canvas");
 const {
@@ -15,19 +16,33 @@ class CertificateService {
   validateCertificatePath(basePath, filePath) {
     if (!filePath) throw new Error("Invalid certificate path");
 
-    // Normalize the paths
+    // Normalize the base path
     const normalizedBase = path.resolve(basePath);
-    const normalizedPath = path.resolve(
-      normalizedBase,
-      path.normalize(filePath),
-    );
 
-    // Ensure the path is within the certificates directory
-    if (!normalizedPath.startsWith(normalizedBase)) {
-      throw new Error("Invalid certificate path detected");
+    // If filePath is already absolute, use it directly; otherwise resolve relative to base
+    let normalizedPath;
+    if (path.isAbsolute(filePath)) {
+      normalizedPath = path.resolve(filePath);
+    } else {
+      normalizedPath = path.resolve(normalizedBase, path.normalize(filePath));
     }
 
-    return normalizedPath;
+    // Check if the path is within the certificates directory
+    if (normalizedPath.startsWith(normalizedBase)) {
+      return normalizedPath;
+    }
+
+    // FALLBACK: If the path is from a different environment (e.g. Render vs local),
+    // extract the filename and look for it in the local certificates directory
+    const filename = path.basename(filePath);
+    const localPath = path.resolve(normalizedBase, filename);
+
+    if (fs.existsSync(localPath)) {
+      return localPath;
+    }
+
+    // If neither works, throw an error
+    throw new Error("Invalid certificate path detected");
   }
 
   constructor() {
@@ -578,27 +593,77 @@ class CertificateService {
     try {
       const { user, event, certificateId, studentName } = certificateData;
 
-      console.log(`Loading template from path: ${templateId}`);
+      let templateData;
 
-      // Load template from server templates directory
-      const templatePath = path.join(
-        __dirname,
-        "../../templates",
-        `${templateId}.json`,
-      );
+      if (templateId) {
+        console.log(`[CERT-SVC] Loading template: ${templateId}`);
 
-      console.log(`Full template path: ${templatePath}`);
-      console.log(`Template file exists: ${fs.existsSync(templatePath)}`);
+        // Load template from server templates directory
+        const templatePath = path.join(
+          __dirname,
+          "../../templates",
+          `${templateId}.json`,
+        );
 
-      if (!fs.existsSync(templatePath)) {
-        throw new Error(
-          `Template ${templateId} not found at path: ${templatePath}`,
+        if (fs.existsSync(templatePath)) {
+          console.log(`[CERT-SVC] Found template file on disk: ${templatePath}`);
+          templateData = JSON.parse(fs.readFileSync(templatePath, "utf8"));
+        } else {
+          console.log(
+            `[CERT-SVC] Template file not found on disk, checking database: ${templateId}`,
+          );
+          // Check if templateId is a valid MongoDB ObjectId
+          const mongoose = require("mongoose");
+          if (mongoose.Types.ObjectId.isValid(templateId)) {
+            const dbTemplate = await CertificateTemplate.findById(templateId);
+            if (dbTemplate) {
+              console.log(
+                `[CERT-SVC] Found custom template in database: ${dbTemplate.name}`,
+              );
+              templateData = dbTemplate.canvasData;
+
+              // Ensure templateData is an object if it was stored as Mixed/String
+              if (typeof templateData === "string") {
+                try {
+                  templateData = JSON.parse(templateData);
+                } catch (e) {
+                  console.error(
+                    "[CERT-SVC] Failed to parse canvasData string:",
+                    e,
+                  );
+                }
+              }
+            }
+          }
+        }
+      } else {
+        console.log(
+          `[CERT-SVC] No templateId provided, checking for per-form canvas data`,
         );
       }
+ 
+      // PRIORITY: Use per-form canvas data if provided, otherwise use template data
+      if (certificateData.certificateCanvasData) {
+        console.log(`[CERT-SVC] Using per-form customized canvas data instead of global template`);
+        templateData = certificateData.certificateCanvasData;
+        
+        // Ensure templateData is an object
+        if (typeof templateData === "string") {
+          try {
+            templateData = JSON.parse(templateData);
+          } catch (e) {
+            console.error("[CERT-SVC] Failed to parse certificateCanvasData string:", e);
+          }
+        }
+      }
 
-      const templateData = JSON.parse(fs.readFileSync(templatePath, "utf8"));
+      if (!templateData) {
+        throw new Error(
+          `Template ${templateId} not found on disk or in database`
+        );
+      }
       console.log(
-        `Template loaded successfully, objects count: ${
+        `[CERT-SVC] Template loaded successfully, objects count: ${
           templateData.objects?.length || 0
         }`,
       );
@@ -613,6 +678,16 @@ class CertificateService {
       // Set white background
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Render background image if present
+      if (templateData.backgroundImage) {
+        console.log("[CERT-SVC] Rendering background image");
+        await this.renderFabricObject(
+          ctx,
+          templateData.backgroundImage,
+          certificateData,
+        );
+      }
 
       // Render template objects
       for (const obj of templateData.objects || []) {
@@ -663,12 +738,17 @@ class CertificateService {
 
     ctx.save();
 
+    // Normalize object type to lowercase for consistent matching
+    const objType = (obj.type || "").toLowerCase();
+
     // Handle different object types
-    switch (obj.type) {
+    switch (objType) {
       case "rect":
         this.renderRectangle(ctx, obj);
         break;
       case "textbox":
+      case "i-text":
+      case "text":
         await this.renderTextbox(ctx, obj, certificateData);
         break;
       case "line":
@@ -694,16 +774,31 @@ class CertificateService {
   }
 
   renderRectangle(ctx, obj) {
+    const width = (obj.width || 0) * (obj.scaleX || 1);
+    const height = (obj.height || 0) * (obj.scaleY || 1);
+
+    ctx.save();
+    ctx.translate(obj.left, obj.top);
+    if (obj.angle) {
+      ctx.rotate((obj.angle * Math.PI) / 180);
+    }
+
+    let x = 0;
+    let y = 0;
+    if (obj.originX === "center") x = -width / 2;
+    if (obj.originY === "center") y = -height / 2;
+
     ctx.fillStyle = obj.fill || "transparent";
     ctx.strokeStyle = obj.stroke || "transparent";
     ctx.lineWidth = obj.strokeWidth || 1;
 
     if (obj.fill && obj.fill !== "transparent") {
-      ctx.fillRect(obj.left, obj.top, obj.width, obj.height);
+      ctx.fillRect(x, y, width, height);
     }
     if (obj.stroke && obj.stroke !== "transparent") {
-      ctx.strokeRect(obj.left, obj.top, obj.width, obj.height);
+      ctx.strokeRect(x, y, width, height);
     }
+    ctx.restore();
   }
 
   async renderTextbox(ctx, obj, certificateData) {
@@ -730,51 +825,142 @@ class CertificateService {
     });
     text = text.replace(/\[?Issued Date\]?/gi, issuedDate);
 
+    // Apply branding customizations if available
+    if (certificateData.formCustomizations) {
+      const fc = certificateData.formCustomizations;
+
+      if (fc.organizationName) {
+        text = text.replace(/\[?Organization Name\]?/gi, fc.organizationName);
+      }
+      if (fc.customTitle) {
+        text = text.replace(
+          /\[?Title\]?|\[?Certificate Title\]?/gi,
+          fc.customTitle,
+        );
+      }
+      if (fc.customSubtitle) {
+        text = text.replace(/\[?Subtitle\]?/gi, fc.customSubtitle);
+      }
+      if (fc.customMessage) {
+        text = text.replace(
+          /\[?Message\]?|\[?Custom Message\]?/gi,
+          fc.customMessage,
+        );
+      }
+      if (fc.signature1Name) {
+        text = text.replace(/\[?Signature 1 Name\]?/gi, fc.signature1Name);
+      }
+      if (fc.signature1Title) {
+        text = text.replace(/\[?Signature 1 Title\]?/gi, fc.signature1Title);
+      }
+      if (fc.signature2Name) {
+        text = text.replace(/\[?Signature 2 Name\]?/gi, fc.signature2Name);
+      }
+      if (fc.signature2Title) {
+        text = text.replace(/\[?Signature 2 Title\]?/gi, fc.signature2Title);
+      }
+    }
+
+    ctx.save();
+
+    // Handle transformations
+    ctx.translate(obj.left, obj.top);
+    if (obj.angle) {
+      ctx.rotate((obj.angle * Math.PI) / 180);
+    }
+    ctx.scale(obj.scaleX || 1, obj.scaleY || 1);
+
+    // Handle originY for centering
+    if (obj.originY === "center") {
+      const totalHeight = text.includes("\n")
+        ? text.split("\n").length *
+          (obj.lineHeight
+            ? obj.fontSize * obj.lineHeight
+            : obj.fontSize * 1.2)
+        : obj.fontSize;
+      ctx.translate(0, -totalHeight / 2);
+    }
+
     ctx.fillStyle = obj.fill || "#000000";
     ctx.textAlign = obj.textAlign || "left";
     ctx.textBaseline = "top";
 
-    // Handle text wrapping for multi-line text
+    // FIX: Determine box boundaries relative to anchor (0,0)
+    // If originX is center, box starts at -width/2. If left, it starts at 0.
+    let boxLeft = 0;
+    
+    // We still need drawY for vertical positioning logic
+    let drawY = 0;
+    
+    if (obj.originX === "center") {
+      boxLeft = -obj.width / 2;
+    } else if (obj.originX === "right") {
+      boxLeft = -obj.width;
+    }
+
+    // Determine basic drawX relative to the box start, not just the anchor
+    // If textAlign is 'left', we align to boxLeft.
+    // If 'center', we align to boxLeft + width/2.
+    let baseDrawX = boxLeft;
+    if (obj.textAlign === "center") {
+      baseDrawX = boxLeft + obj.width / 2;
+    } else if (obj.textAlign === "right") {
+      baseDrawX = boxLeft + obj.width;
+    }
+
+    // Handle multi-line text
     if (text.includes("\n")) {
       const lines = text.split("\n");
-      let y = obj.top;
+      let y = drawY;
       const lineHeight = obj.lineHeight
         ? obj.fontSize * obj.lineHeight
         : obj.fontSize * 1.2;
 
       for (const line of lines) {
-        // Check if this line contains the event name (to render it bold)
         if (line.includes(eventName)) {
           const parts = line.split(eventName);
-
-          // Calculate total width first to handle center alignment
           ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
             obj.fontFamily || "Arial"
           }`;
           const beforeWidth = parts[0] ? ctx.measureText(parts[0]).width : 0;
-          const afterWidth = parts[1] ? ctx.measureText(parts[1]).width : 0;
 
           ctx.font = `bold ${obj.fontSize || 24}px ${
             obj.fontFamily || "Arial"
           }`;
-          const eventWidth = ctx.measureText(eventName).width;
+          const boldEventWidth = ctx.measureText(eventName).width;
 
-          const totalWidth = beforeWidth + eventWidth + afterWidth;
-
-          // Calculate starting x based on alignment
-          let x = obj.left;
+          let x = baseDrawX;
+          // Calculate offset for composite text (Before + Bold + After)
+          // We must manually align the composite block because fillText only aligns the start of the string
           if (obj.textAlign === "center") {
-            x = obj.left - totalWidth / 2;
+             ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+              obj.fontFamily || "Arial"
+            }`;
+            const totalWidth =
+              beforeWidth +
+              boldEventWidth +
+              (parts[1] ? ctx.measureText(parts[1]).width : 0);
+             // Since baseDrawX is the center of the box, we shift left by half total width to start drawing
+             x = baseDrawX - totalWidth / 2;
           } else if (obj.textAlign === "right") {
-            x = obj.left - totalWidth;
+            ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+              obj.fontFamily || "Arial"
+            }`;
+            const totalWidth =
+              beforeWidth +
+              boldEventWidth +
+              (parts[1] ? ctx.measureText(parts[1]).width : 0);
+            // Since baseDrawX is the right edge of box, we shift left by total width
+             x = baseDrawX - totalWidth;
           }
+          // If align is left, baseDrawX is the left edge, so we just start there.
 
           // Set normal font for before text
           ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
             obj.fontFamily || "Arial"
           }`;
 
-          // Render text before event name
+          // Render before text
           if (parts[0]) {
             ctx.save();
             ctx.textAlign = "left";
@@ -783,22 +969,18 @@ class CertificateService {
             x += beforeWidth;
           }
 
-          // Set bold font for event name
-          ctx.font = `bold ${obj.fontSize || 24}px ${
-            obj.fontFamily || "Arial"
-          }`;
+          // Render event name bold
+          ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
           ctx.save();
           ctx.textAlign = "left";
           ctx.fillText(eventName, x, y);
           ctx.restore();
-          x += eventWidth;
+          x += boldEventWidth;
 
-          // Set normal font for after text
+          // Render after text
           ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
             obj.fontFamily || "Arial"
           }`;
-
-          // Render text after event name
           if (parts[1]) {
             ctx.save();
             ctx.textAlign = "left";
@@ -806,11 +988,10 @@ class CertificateService {
             ctx.restore();
           }
         } else {
-          // Regular rendering for lines without event name
           ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
             obj.fontFamily || "Arial"
           }`;
-          ctx.fillText(line, obj.left, y);
+          ctx.fillText(line, baseDrawX, y);
         }
         y += lineHeight;
       }
@@ -818,93 +999,118 @@ class CertificateService {
       // Single line rendering
       if (text.includes(eventName)) {
         const parts = text.split(eventName);
-
-        // Calculate total width first to handle center alignment
         ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
           obj.fontFamily || "Arial"
         }`;
         const beforeWidth = parts[0] ? ctx.measureText(parts[0]).width : 0;
-        const afterWidth = parts[1] ? ctx.measureText(parts[1]).width : 0;
-
         ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
-        const eventWidth = ctx.measureText(eventName).width;
-
-        const totalWidth = beforeWidth + eventWidth + afterWidth;
-
-        // Calculate starting x based on alignment
-        let x = obj.left;
-        if (obj.textAlign === "center") {
-          x = obj.left - totalWidth / 2;
-        } else if (obj.textAlign === "right") {
-          x = obj.left - totalWidth;
-        }
-
-        // Set normal font for before text
+        const boldEventWidth = ctx.measureText(eventName).width;
         ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
           obj.fontFamily || "Arial"
         }`;
+        const afterWidth = parts[1] ? ctx.measureText(parts[1]).width : 0;
 
-        // Render text before event name
+        const totalWidth = beforeWidth + boldEventWidth + afterWidth;
+
+        let x = baseDrawX;
+        if (obj.textAlign === "center") {
+          x = baseDrawX - totalWidth / 2;
+        } else if (obj.textAlign === "right") {
+          x = baseDrawX - totalWidth;
+        }
+
+        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+          obj.fontFamily || "Arial"
+        }`;
         if (parts[0]) {
           ctx.save();
           ctx.textAlign = "left";
-          ctx.fillText(parts[0], x, obj.top);
+          ctx.fillText(parts[0], x, drawY);
           ctx.restore();
           x += beforeWidth;
         }
 
-        // Set bold font for event name
         ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
         ctx.save();
         ctx.textAlign = "left";
-        ctx.fillText(eventName, x, obj.top);
+        ctx.fillText(eventName, x, drawY);
         ctx.restore();
-        x += eventWidth;
+        x += boldEventWidth;
 
-        // Set normal font for after text
         ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
           obj.fontFamily || "Arial"
         }`;
-
-        // Render text after event name
         if (parts[1]) {
           ctx.save();
           ctx.textAlign = "left";
-          ctx.fillText(parts[1], x, obj.top);
+          ctx.fillText(parts[1], x, drawY);
           ctx.restore();
         }
       } else {
-        // Regular rendering for text without event name
         ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
           obj.fontFamily || "Arial"
         }`;
-        ctx.fillText(text, obj.left, obj.top);
+        // Standard text support uses baseDrawX which is correctly aligned relative to box
+        ctx.fillText(text, baseDrawX, drawY);
       }
     }
+
+    ctx.restore();
   }
 
   renderLine(ctx, obj) {
+    ctx.save();
+    ctx.translate(obj.left, obj.top);
+    if (obj.angle) {
+      ctx.rotate((obj.angle * Math.PI) / 180);
+    }
+    ctx.scale(obj.scaleX || 1, obj.scaleY || 1);
+
+    // FIX: Handle origin offsets.
+    // Fabric lines are drawn relative to the center of the bounding box (x1, y1 center-based).
+    // If the origin is NOT center (e.g. 'left', 'top'), we must shift the context to the center
+    // so that the center-relative x1/x2 coords draw in the correct place relative to the anchor.
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (obj.originX === "left") offsetX = obj.width / 2;
+    if (obj.originX === "right") offsetX = -obj.width / 2;
+    if (obj.originY === "top") offsetY = obj.height / 2;
+    if (obj.originY === "bottom") offsetY = -obj.height / 2;
+
+    ctx.translate(offsetX, offsetY);
+
     ctx.strokeStyle = obj.stroke || "#000000";
     ctx.lineWidth = obj.strokeWidth || 1;
     ctx.beginPath();
     ctx.moveTo(obj.x1, obj.y1);
     ctx.lineTo(obj.x2, obj.y2);
     ctx.stroke();
+    ctx.restore();
   }
 
   renderCircle(ctx, obj) {
+    const radius = obj.radius || 0;
+    const width = radius * 2 * (obj.scaleX || 1);
+    const height = radius * 2 * (obj.scaleY || 1);
+
+    ctx.save();
+    ctx.translate(obj.left, obj.top);
+    if (obj.angle) {
+      ctx.rotate((obj.angle * Math.PI) / 180);
+    }
+
+    let x = 0;
+    let y = 0;
+    if (obj.originX === "center") x = -width / 2;
+    if (obj.originY === "center") y = -height / 2;
+
     ctx.fillStyle = obj.fill || "transparent";
     ctx.strokeStyle = obj.stroke || "transparent";
     ctx.lineWidth = obj.strokeWidth || 1;
 
     ctx.beginPath();
-    ctx.arc(
-      obj.left + obj.radius,
-      obj.top + obj.radius,
-      obj.radius,
-      0,
-      2 * Math.PI,
-    );
+    ctx.arc(x + radius, y + radius, radius, 0, 2 * Math.PI);
 
     if (obj.fill && obj.fill !== "transparent") {
       ctx.fill();
@@ -912,17 +1118,32 @@ class CertificateService {
     if (obj.stroke && obj.stroke !== "transparent") {
       ctx.stroke();
     }
+    ctx.restore();
   }
 
   renderTriangle(ctx, obj) {
+    const width = (obj.width || 0) * (obj.scaleX || 1);
+    const height = (obj.height || 0) * (obj.scaleY || 1);
+
+    ctx.save();
+    ctx.translate(obj.left, obj.top);
+    if (obj.angle) {
+      ctx.rotate((obj.angle * Math.PI) / 180);
+    }
+
+    let x = 0;
+    let y = 0;
+    if (obj.originX === "center") x = -width / 2;
+    if (obj.originY === "center") y = -height / 2;
+
     ctx.fillStyle = obj.fill || "transparent";
     ctx.strokeStyle = obj.stroke || "transparent";
     ctx.lineWidth = obj.strokeWidth || 1;
 
     ctx.beginPath();
-    ctx.moveTo(obj.left + obj.width / 2, obj.top);
-    ctx.lineTo(obj.left, obj.top + obj.height);
-    ctx.lineTo(obj.left + obj.width, obj.top + obj.height);
+    ctx.moveTo(x + width / 2, y);
+    ctx.lineTo(x, y + height);
+    ctx.lineTo(x + width, y + height);
     ctx.closePath();
 
     if (obj.fill && obj.fill !== "transparent") {
@@ -931,20 +1152,35 @@ class CertificateService {
     if (obj.stroke && obj.stroke !== "transparent") {
       ctx.stroke();
     }
+    ctx.restore();
   }
 
   renderPolygon(ctx, obj) {
     if (!obj.points || obj.points.length === 0) return;
 
+    const width = (obj.width || 0) * (obj.scaleX || 1);
+    const height = (obj.height || 0) * (obj.scaleY || 1);
+
+    ctx.save();
+    ctx.translate(obj.left, obj.top);
+    if (obj.angle) {
+      ctx.rotate((obj.angle * Math.PI) / 180);
+    }
+
+    let x = 0;
+    let y = 0;
+    if (obj.originX === "center") x = -width / 2;
+    if (obj.originY === "center") y = -height / 2;
+
     ctx.fillStyle = obj.fill || "transparent";
     ctx.strokeStyle = obj.stroke || "transparent";
     ctx.lineWidth = obj.strokeWidth || 1;
 
     ctx.beginPath();
-    ctx.moveTo(obj.left + obj.points[0].x, obj.top + obj.points[0].y);
+    ctx.moveTo(x + obj.points[0].x, y + obj.points[0].y);
 
     for (let i = 1; i < obj.points.length; i++) {
-      ctx.lineTo(obj.left + obj.points[i].x, obj.top + obj.points[i].y);
+      ctx.lineTo(x + obj.points[i].x, y + obj.points[i].y);
     }
 
     ctx.closePath();
@@ -955,14 +1191,45 @@ class CertificateService {
     if (obj.stroke && obj.stroke !== "transparent") {
       ctx.stroke();
     }
+    ctx.restore();
   }
 
   async renderImage(ctx, obj) {
-    // For now, skip images as they require additional handling
-    // This can be implemented later if needed
-    console.log(
-      "Image rendering not yet implemented for server-side templates",
-    );
+    const src = obj.src || obj._element?.src;
+    if (!src) {
+      console.warn("[CERT-SVC] Image object has no src", obj);
+      return;
+    }
+
+    try {
+      console.log(`[CERT-SVC] Rendering image: ${src.substring(0, 50)}...`);
+      const img = await loadImage(src);
+
+      const width = (obj.width || img.width) * (obj.scaleX || 1);
+      const height = (obj.height || img.height) * (obj.scaleY || 1);
+
+      ctx.save();
+
+      // Translate to object origin
+      ctx.translate(obj.left, obj.top);
+
+      // Handle rotation
+      if (obj.angle) {
+        ctx.rotate((obj.angle * Math.PI) / 180);
+      }
+
+      // Calculate drawing coordinates based on origin
+      let x = 0;
+      let y = 0;
+      if (obj.originX === "center") x = -width / 2;
+      if (obj.originY === "center") y = -height / 2;
+
+      ctx.drawImage(img, x, y, width, height);
+
+      ctx.restore();
+    } catch (err) {
+      console.error("[CERT-SVC] Failed to load image:", err.message);
+    }
   }
 
   async generateCertificate(userId, eventId, options = {}) {
@@ -989,26 +1256,27 @@ class CertificateService {
       console.log(`[CERT-SVC] User lookup:`, { found: !!user, userId });
       console.log(`[CERT-SVC] Event lookup:`, { found: !!event, eventId });
 
-      if (!user || !event) {
-        console.error(`[CERT-SVC] Missing user or event:`, {
-          user: !!user,
-          event: !!event,
-        });
-        throw new Error("User or Event not found");
-      }
-
       // Get form customizations if formId is provided
       let formCustomizations = null;
+      let certificateCanvasData = null;
+
       if (options.formId) {
         const form = await Form.findById(options.formId);
-        if (form && form.certificateCustomizations) {
-          formCustomizations = form.certificateCustomizations;
-          console.log(
-            `[CERT-SVC] Loaded form customizations:`,
-            formCustomizations,
-          );
+        if (form) {
+          if (form.certificateCustomizations) {
+            formCustomizations = form.certificateCustomizations;
+            console.log(
+              `[CERT-SVC] Loaded form customizations:`,
+              formCustomizations,
+            );
+          }
+          if (form.certificateCanvasData) {
+            certificateCanvasData = form.certificateCanvasData;
+            console.log(`[CERT-SVC] Loaded per-form certificate canvas data`);
+          }
         }
       }
+
       const certificateId = this.generateCertificateId();
       console.log(`[CERT-SVC] Generated certificateId:`, certificateId);
 
@@ -1021,7 +1289,9 @@ class CertificateService {
         studentName: options.respondentName || options.studentName,
         respondentEmail: options.respondentEmail, // Include respondent email for sending
         formCustomizations, // Include form customizations
+        certificateCanvasData, // Include per-form canvas data
       };
+
 
       console.log(`[CERT-SVC] 🔍 EMAIL DEBUG:`, {
         optionsRespondentEmail: options.respondentEmail,
@@ -1031,10 +1301,12 @@ class CertificateService {
 
       let pdfResult;
 
-      // Check if templateId is provided and use template-based generation
-      if (options.templateId) {
+      // Check if templateId or certificateCanvasData is provided and use template-based generation
+      if (options.templateId || certificateData.certificateCanvasData) {
         console.log(
-          `[CERT-SVC] ✓ Generating certificate from template: ${options.templateId}`,
+          `[CERT-SVC] ✓ Generating certificate using template logic (templateId: ${
+            options.templateId || "none"
+          }, customCanvas: ${!!certificateData.certificateCanvasData})`,
         );
         console.log(`[CERT-SVC] Template certificate data:`, certificateData);
         pdfResult = await this.generateCertificateFromTemplate(

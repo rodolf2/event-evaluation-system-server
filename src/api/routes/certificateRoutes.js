@@ -68,8 +68,6 @@ router.get("/:templateId/validate", requireAuth, async (req, res) => {
     const path = require("path");
 
     // Build the template path
-    // From: server/src/api/routes/certificateRoutes.js
-    // To: client/src/templates/{templateId}.json
     const templatePath = path.resolve(
       __dirname,
       "../../../../client/src/templates",
@@ -78,71 +76,91 @@ router.get("/:templateId/validate", requireAuth, async (req, res) => {
 
     console.log(`[CERTIFICATE VALIDATE] Template path: ${templatePath}`);
 
-    // Check if file exists
-    if (!fs.existsSync(templatePath)) {
-      console.warn(
-        `[CERTIFICATE VALIDATE] Template file not found: ${templatePath}`
-      );
+    let templateData;
+    // Check if file exists on disk
+    if (fs.existsSync(templatePath)) {
+      console.log(`[CERTIFICATE VALIDATE] Template file found on disk, parsing...`);
+      try {
+        templateData = JSON.parse(fs.readFileSync(templatePath, "utf8"));
+      } catch (parseError) {
+        console.error(`[CERTIFICATE VALIDATE] JSON parse error:`, parseError.message);
+        return res.status(400).json({
+          success: false,
+          message: "Certificate template contains invalid JSON",
+          data: { isValid: false, message: "Template JSON is malformed" },
+        });
+      }
+    } else {
+      console.log(`[CERTIFICATE VALIDATE] Template file not found on disk, checking database: ${templateId}`);
+      try {
+        const CertificateTemplate = require("../../models/CertificateTemplate");
+        const mongoose = require("mongoose");
+        
+        if (mongoose.Types.ObjectId.isValid(templateId)) {
+          const dbTemplate = await CertificateTemplate.findById(templateId);
+          if (dbTemplate) {
+            console.log(`[CERTIFICATE VALIDATE] Found custom template in database: ${dbTemplate.name}`);
+            templateData = dbTemplate.canvasData;
+            
+            // Ensure templateData is an object
+            if (typeof templateData === "string") {
+              try {
+                templateData = JSON.parse(templateData);
+              } catch (e) {
+                console.error("[CERTIFICATE VALIDATE] Failed to parse canvasData string:", e);
+              }
+            }
+          }
+        }
+      } catch (dbError) {
+        console.error(`[CERTIFICATE VALIDATE] Database error:`, dbError);
+      }
+    }
+
+    if (!templateData) {
+      console.warn(`[CERTIFICATE VALIDATE] Template not found: ${templateId}`);
       return res.status(404).json({
         success: false,
         message: "Certificate template not found",
-        data: { isValid: false, message: "Template file does not exist" },
+        data: { isValid: false, message: "Template does not exist on disk or in database" },
       });
     }
 
-    console.log(`[CERTIFICATE VALIDATE] Template file found, parsing...`);
-
-    // Try to parse the template JSON
-    try {
-      const templateData = JSON.parse(fs.readFileSync(templatePath, "utf8"));
-      console.log(`[CERTIFICATE VALIDATE] Successfully parsed template JSON`);
-
-      // Basic validation - check if it has required Fabric.js properties
-      if (!templateData.objects || !Array.isArray(templateData.objects)) {
-        console.warn(`[CERTIFICATE VALIDATE] Template missing objects array`);
-        return res.status(400).json({
-          success: false,
-          message: "Invalid certificate template format",
-          data: {
-            isValid: false,
-            message: "Template missing required objects array",
-          },
-        });
-      }
-
-      // Check if template has at least one object
-      if (templateData.objects.length === 0) {
-        console.warn(`[CERTIFICATE VALIDATE] Template is empty`);
-        return res.status(400).json({
-          success: false,
-          message: "Certificate template is empty",
-          data: { isValid: false, message: "Template contains no objects" },
-        });
-      }
-
-      console.log(
-        `[CERTIFICATE VALIDATE] ✓ Template ${templateId} is VALID with ${templateData.objects.length} objects`
-      );
-      return res.status(200).json({
-        success: true,
-        message: "Certificate template is valid",
-        data: {
-          isValid: true,
-          message: `Template contains ${templateData.objects.length} objects`,
-          objectCount: templateData.objects.length,
-        },
-      });
-    } catch (parseError) {
-      console.error(
-        `[CERTIFICATE VALIDATE] JSON parse error:`,
-        parseError.message
-      );
+    // Basic validation - check if it has required Fabric.js properties
+    if (!templateData.objects || !Array.isArray(templateData.objects)) {
+      console.warn(`[CERTIFICATE VALIDATE] Template missing objects array`);
       return res.status(400).json({
         success: false,
-        message: "Certificate template contains invalid JSON",
-        data: { isValid: false, message: "Template JSON is malformed" },
+        message: "Invalid certificate template format",
+        data: {
+          isValid: false,
+          message: "Template missing required objects array",
+        },
       });
     }
+
+    // Check if template has at least one object
+    if (templateData.objects.length === 0) {
+      console.warn(`[CERTIFICATE VALIDATE] Template is empty`);
+      return res.status(400).json({
+        success: false,
+        message: "Certificate template is empty",
+        data: { isValid: false, message: "Template contains no objects" },
+      });
+    }
+
+    console.log(
+      `[CERTIFICATE VALIDATE] ✓ Template ${templateId} is VALID with ${templateData.objects.length} objects`
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Certificate template is valid",
+      data: {
+        isValid: true,
+        message: `Template contains ${templateData.objects.length} objects`,
+        objectCount: templateData.objects.length,
+      },
+    });
   } catch (error) {
     console.error(`[CERTIFICATE VALIDATE] Unhandled error:`, error);
     return res.status(500).json({
