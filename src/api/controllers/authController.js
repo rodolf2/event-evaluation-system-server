@@ -95,7 +95,14 @@ const getProfile = async (req, res) => {
 // Update user profile
 const updateProfile = async (req, res) => {
   try {
-    const { name, avatar } = req.body;
+    const {
+      name,
+      avatar,
+      department,
+      position,
+      muteNotifications,
+      muteReminders,
+    } = req.body;
 
     const user = await User.findById(req.user.id);
 
@@ -106,8 +113,13 @@ const updateProfile = async (req, res) => {
       });
     }
 
-    if (name) user.name = name;
-    if (avatar) user.avatar = avatar;
+    if (name !== undefined) user.name = name;
+    if (avatar !== undefined) user.avatar = avatar;
+    if (department !== undefined) user.department = department;
+    if (position !== undefined) user.position = position;
+    if (muteNotifications !== undefined)
+      user.muteNotifications = muteNotifications;
+    if (muteReminders !== undefined) user.muteReminders = muteReminders;
 
     await user.save();
 
