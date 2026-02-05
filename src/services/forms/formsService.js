@@ -305,6 +305,24 @@ class FormsService {
   // Extract data from Google Forms URL without creating form
   async extractDataFromUrl({ url, createdBy }) {
     try {
+      // Defense-in-depth: Strictly validate URL before processing
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(url);
+      } catch (e) {
+        throw new Error("Invalid URL format");
+      }
+
+      const allowedDomains = ["docs.google.com", "forms.gle"];
+      const isAllowed = allowedDomains.some((domain) =>
+        parsedUrl.hostname === domain ||
+        parsedUrl.hostname.endsWith("." + domain)
+      );
+
+      if (!isAllowed) {
+        throw new Error("Only Google Forms URLs are allowed for extraction");
+      }
+
       let finalUrl = url;
       // Handle shortened Google Forms URLs
       if (url.includes("forms.gle")) {

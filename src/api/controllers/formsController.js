@@ -881,6 +881,27 @@ const extractFormByUrl = async (req, res) => {
       });
     }
 
+    // SSRF Protection: Validate URL domain
+    try {
+      const parsedUrl = new URL(url);
+      const allowedDomains = ["docs.google.com", "forms.gle"];
+      const isAllowed = allowedDomains.some(domain => 
+        parsedUrl.hostname === domain || parsedUrl.hostname.endsWith("." + domain)
+      );
+
+      if (!isAllowed) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid URL. Only Google Forms URLs are allowed.",
+        });
+      }
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid URL format.",
+      });
+    }
+
     // Extract data from Google Forms URL without creating form
     const extractedData = await enhancedFormsExtractor.extractDataFromUrl({
       url,
@@ -931,6 +952,27 @@ const uploadFormByUrl = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "URL is required",
+      });
+    }
+
+    // SSRF Protection: Validate URL domain
+    try {
+      const parsedUrl = new URL(url);
+      const allowedDomains = ["docs.google.com", "forms.gle"];
+      const isAllowed = allowedDomains.some(domain => 
+        parsedUrl.hostname === domain || parsedUrl.hostname.endsWith("." + domain)
+      );
+
+      if (!isAllowed) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid URL. Only Google Forms URLs are allowed.",
+        });
+      }
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid URL format.",
       });
     }
 
