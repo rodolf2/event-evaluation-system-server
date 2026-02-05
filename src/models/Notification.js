@@ -26,7 +26,18 @@ const notificationSchema = new mongoose.Schema({
   // Target roles for this notification
   targetRoles: [{
     type: String,
-    enum: ['participant', 'psas', 'club-officer', 'school-admin', 'mis'],
+    enum: [
+      'student',
+      'participant',
+      'psas',
+      'club-officer',
+      'senior-management',
+      'school-admin',
+      'club-adviser',
+      'mis',
+      'evaluator',
+      'guest-speaker'
+    ],
     required: true
   }],
   // Specific users (optional, if not provided, send to all users with target roles)

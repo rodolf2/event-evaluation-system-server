@@ -1,4 +1,4 @@
-# Requirements for Render deployment
 textblob>=0.18.0
-# Note: langid removed for memory efficiency
-# Note: We explicitly don't include scipy/numpy/pandas to stay under memory limits
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
