@@ -267,6 +267,11 @@ const sendEmail = async (options) => {
   }
 };
 
+console.log("[EMAIL-DEBUG] Exporting:", { 
+  hasSendEmail: typeof sendEmail, 
+  hasResendClient: typeof resendClient 
+});
+
 module.exports = {
   sendEmail,
   transporter,

@@ -43,42 +43,7 @@ const getUserNotifications = async (req, res) => {
     });
 
     // Build base visibility filter
-    const visibilityFilter = buildVisibilityFilter(userId, userRole);
-
-    // Add mute preference filters
-    const muteFilters = [];
-
-    // If user has muted notifications, exclude non-reminder notifications
-    if (muteNotifications) {
-      // Only show reminder-type notifications (exclude regular ones)
-      muteFilters.push({
-        $or: [{ type: "reminder" }, { "relatedEntity.type": "reminder" }],
-      });
-    }
-
-    // If user has muted reminders, exclude reminder-type notifications
-    if (muteReminders) {
-      // Exclude reminder-type notifications
-      muteFilters.push({
-        $and: [
-          { type: { $ne: "reminder" } },
-          {
-            $or: [
-              { "relatedEntity.type": { $exists: false } },
-              { "relatedEntity.type": { $ne: "reminder" } },
-            ],
-          },
-        ],
-      });
-    }
-
-    // Combine filters
-    let finalFilter = visibilityFilter;
-    if (muteFilters.length > 0) {
-      finalFilter = {
-        $and: [visibilityFilter, ...muteFilters],
-      };
-    }
+    const finalFilter = buildVisibilityFilter(userId, userRole);
 
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);

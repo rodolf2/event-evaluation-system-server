@@ -36,6 +36,37 @@ router.get(
   analyticsController.getMyFormsAnalytics,
 );
 
+// POST /api/analytics/form/:formId/refresh - Manually refresh analytics cache
+router.post(
+  "/form/:formId/refresh",
+  requireRole([
+    "psas",
+    "club-officer",
+    "school-admin",
+    "senior-management",
+    "club-adviser",
+    "mis",
+  ]),
+  analyticsController.refreshFormAnalytics,
+);
+
+// GET /api/analytics/form/:formId/comments - Get paginated comments
+router.get(
+  "/form/:formId/comments",
+  requireRole([
+    "psas",
+    "club-officer",
+    "school-admin",
+    "senior-management",
+    "club-adviser",
+    "mis",
+    "evaluator",
+    "guest-speaker",
+  ]),
+  analyticsController.getFormCommentsPaginated,
+);
+
+
 // NEW: Dynamic Report Data Endpoints
 // GET /api/analytics/reports/:reportId/quantitative - Get dynamic quantitative data
 router.get(

@@ -1,17 +1,25 @@
 const SharedReport = require("../../models/SharedReport");
 const SystemSettings = require("../../models/SystemSettings");
 const User = require("../../models/User");
+const Notification = require("../../models/Notification");
 const puppeteer = require("puppeteer");
-const sendEmail = require("../../utils/email");
+const { sendEmail, resendClient } = require("../../utils/email");
+console.log("[REPORTS-CONTROLLER-DEBUG] Imported email utils:", { 
+  sendEmailType: typeof sendEmail, 
+  resendClientExists: !!resendClient 
+});
 const {
   generateSharedReportEmailHtml,
 } = require("../../utils/sharedReportEmailTemplate");
 
 // Get school admins and senior management for report sharing (accessible by PSAS/Club Officers)
-// Get school admins and senior management for report sharing (accessible by PSAS/Club Officers)
 exports.getSchoolAdmins = async (req, res) => {
   try {
+    // Prevent caching to ensure role switching updates the list
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    
     const userRole = req.user.role;
+    console.log(`[getSchoolAdmins] Fetching potential share recipients for user: ${req.user.email} (${userRole})`);
     let query = {};
 
     // Define filtering logic based on requester's role
@@ -55,9 +63,12 @@ exports.getSchoolAdmins = async (req, res) => {
       };
     }
 
+    console.log(`[getSchoolAdmins] Query constructed:`, JSON.stringify(query));
+    
     const users = await User.find(query).select(
       "name email department position role permissions",
     );
+    console.log(`[getSchoolAdmins] Found ${users.length} users matching query.`);
 
     res.status(200).json({
       success: true,
@@ -80,6 +91,7 @@ exports.getSchoolAdmins = async (req, res) => {
     });
   }
 };
+
 // Share report with school administrators
 exports.shareReport = async (req, res) => {
   try {
@@ -153,6 +165,15 @@ exports.shareReport = async (req, res) => {
 
     // Send email notifications to all recipients
     const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    console.log(`[shareReport] Preparing to send emails to ${schoolAdmins.length} recipients...`);
+    
+    // Check if Resend client is available
+    if (resendClient) {
+      console.log("[shareReport] Using Resend client directly based on configuration.");
+    } else {
+      console.log("[shareReport] Resend client not found, falling back to sendEmail helper (might be SMTP/Gmail).");
+    }
+
     const emailPromises = schoolAdmins.map(async (admin) => {
       try {
         let reportUrlPath = "senior-management";
@@ -160,9 +181,13 @@ exports.shareReport = async (req, res) => {
           reportUrlPath = "psas";
         } else if (admin.role === "club-adviser") {
           reportUrlPath = "club-adviser";
+        } else if (admin.role === "mis") {
+          reportUrlPath = "mis";
         }
 
         const reportUrl = `${frontendUrl}/${reportUrlPath}/reports/${reportId}`;
+        console.log(`[shareReport] Generating email for ${admin.email} with URL: ${reportUrl}`);
+
         const htmlContent = generateSharedReportEmailHtml({
           recipientName: admin.name || admin.email,
           sharedByName: sharedByUser.name || sharedByUser.email,
@@ -170,16 +195,55 @@ exports.shareReport = async (req, res) => {
           reportUrl,
         });
 
-        await sendEmail({
-          to: admin.email,
-          subject: `📊 Report Shared: ${reportTitle || "Evaluation Report"}`,
-          html: htmlContent,
-        });
+        const subject = `📊 Report Shared: ${reportTitle || "Evaluation Report"}`;
 
-        console.log(`Email notification sent to ${admin.email}`);
+
+
+        if (resendClient) {
+          // Use Resend Directly
+             const { data, error } = await resendClient.emails.send({
+              from: "Event Evaluation System <onboarding@resend.dev>", // Default or env var
+              to: admin.email,
+              subject: subject,
+              html: htmlContent,
+            });
+            if (error) throw new Error(error.message);
+            console.log(`[shareReport] ✓ Resend email sent to ${admin.email}. ID: ${data?.id}`);
+        } else {
+           // Use Helper Fallback
+            await sendEmail({
+              to: admin.email,
+              subject: subject,
+              html: htmlContent,
+            });
+            console.log(`[shareReport] ✓ Helper email sent to ${admin.email}`);
+        }
+
+        // Create In-System Notification
+        try {
+          await Notification.create({
+            title: "Report Shared With You",
+            message: `${sharedByUser.name || sharedByUser.email} shared a report: "${reportTitle || "Evaluation Report"}"`,
+            type: "info",
+            priority: "medium",
+            targetRoles: [admin.role],
+            targetUsers: [admin._id],
+            relatedEntity: {
+              type: "form", // Or 'report', but schema says 'form'/'event'/'certificate'/'reminder'/'system'
+              id: reportId
+            },
+            createdBy: sharedBy,
+            isSystemGenerated: true
+          });
+          console.log(`[shareReport] ✓ Notification created for ${admin.email}`);
+        } catch (notifError) {
+          console.error(`[shareReport] ✗ Failed to create notification for ${admin.email}:`, notifError);
+          // Don't fail the entire process if notification fails
+        }
+
         return { email: admin.email, success: true };
       } catch (emailError) {
-        console.error(`Failed to send email to ${admin.email}:`, emailError);
+        console.error(`[shareReport] ✗ Failed to send email to ${admin.email}:`, emailError);
         return {
           email: admin.email,
           success: false,
@@ -190,6 +254,7 @@ exports.shareReport = async (req, res) => {
 
     const emailResults = await Promise.all(emailPromises);
     const successfulEmails = emailResults.filter((r) => r.success).length;
+    console.log(`[shareReport] Email Summary: ${successfulEmails}/${schoolAdmins.length} sent successfully.`);
 
     res.status(200).json({
       message: `Report shared with ${schoolAdmins.length} school administrator(s). ${successfulEmails} email notification(s) sent.`,

@@ -401,6 +401,10 @@ const server = app.listen(PORT, () => {
     // Initialize reminder cron
     const { initReminderCron } = require("./jobs/reminderCron");
     initReminderCron();
+
+    // Initialize analytics computation cron
+    const { startAnalyticsCron } = require("./jobs/analyticsComputationCron");
+    startAnalyticsCron();
   } catch (cronError) {
     console.error("❌ Failed to initialize cron jobs:", cronError);
   }
