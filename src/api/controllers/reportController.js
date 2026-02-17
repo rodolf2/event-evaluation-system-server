@@ -48,6 +48,112 @@ const checkSharedReportAccess = async (reportId, user) => {
   return true;
 };
 
+
+
+/**
+ * Helper to hydrate attendee list with up-to-date User data
+ * Handles merging of missing fields and case-insensitive column matching
+ */
+const hydrateAttendeeList = async (form, responses) => {
+  try {
+    // 1. Identify all emails involved (attendees + respondents)
+    const existingEmails = new Set(
+      (form.attendeeList || [])
+        .map((a) => a.email?.toLowerCase())
+        .filter(Boolean)
+    );
+    
+    // Get unique respondent emails
+    const respondentEmails = new Set(
+      (responses || [])
+        .map((r) => r.respondentEmail?.toLowerCase())
+        .filter(Boolean)
+    );
+
+    // Combine all emails to fetch
+    const allEmails = new Set([...existingEmails, ...respondentEmails]);
+
+    if (allEmails.size === 0) return form;
+
+    // 2. Fetch User details
+    // Explicitly select program and other fields
+    const users = await User.find({
+      email: { $in: Array.from(allEmails) },
+    }).select("email name department yearLevel role program");
+
+    const userMap = new Map();
+    users.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+
+    // 3. Create hydrated form copy
+    const plainForm = form.toObject ? form.toObject() : { ...form };
+    let newAttendeeList = plainForm.attendeeList ? [...plainForm.attendeeList] : [];
+
+    // Helper to intelligently update fields (preserving case if key exists)
+    const updateField = (obj, field, value) => {
+      if (!value) return;
+      // Case-insensitive lookup for existing key
+      const existingKey = Object.keys(obj).find(k => k.toLowerCase() === field.toLowerCase());
+      if (existingKey) {
+        // Only update if current value is missing/empty/unknown
+        if (!obj[existingKey] || obj[existingKey] === 'Unknown') {
+            obj[existingKey] = value;
+        }
+      } else {
+        obj[field] = value;
+      }
+    };
+
+    // 4. Update existing attendees
+    newAttendeeList.forEach((attendee) => {
+      if (!attendee.email) return;
+      const user = userMap.get(attendee.email.toLowerCase());
+      if (user) {
+        updateField(attendee, 'department', user.department);
+        updateField(attendee, 'program', user.program);
+        updateField(attendee, 'yearLevel', user.yearLevel);
+        updateField(attendee, 'name', user.name);
+        // We generally don't overwrite ID or other CSV fields
+      }
+    });
+
+    // 5. Add missing respondents
+    const processedEmails = new Set(newAttendeeList.map(a => a.email?.toLowerCase()));
+    
+    respondentEmails.forEach(email => {
+        if (!processedEmails.has(email)) {
+            const user = userMap.get(email);
+            if (user) {
+                newAttendeeList.push({
+                    email: user.email,
+                    name: user.name,
+                    department: user.department,
+                    program: user.program,
+                    yearLevel: user.yearLevel,
+                    role: user.role
+                });
+            } else {
+                // Respondent has no User account? Edge case, but add placeholder
+                // This prevents them from being invisible if we rely on attendeeList length
+                newAttendeeList.push({
+                    email: email,
+                    name: "Unknown User",
+                    department: "Unknown",
+                    program: "Unknown"
+                });
+            }
+        }
+    });
+
+    plainForm.attendeeList = newAttendeeList;
+    console.log(`[REPORT] Hydrated attendee list. Size: ${newAttendeeList.length} (from ${form.attendeeList?.length || 0})`);
+    return plainForm;
+
+  } catch (error) {
+    console.error(`[REPORT] Error hydrating attendee list:`, error);
+    return form; // Fallback to original
+  }
+};
+
 /**
  * Helper to find the previous year's form for the same event
  */
@@ -267,52 +373,9 @@ const getDynamicQuantitativeData = async (req, res) => {
       );
     }
 
-    // --- NEW: Augment Attendee List for Missing Users ---
-    // Some respondents (e.g. Basic Ed students) might not be in the original attendee list
-    // We fetch their User details to get department/yearLevel info
-    let augmentedForm = form;
-    try {
-      const existingEmails = new Set(
-        (form.attendeeList || [])
-          .map((a) => a.email?.toLowerCase())
-          .filter(Boolean),
-      );
-      const missingEmails = responses
-        .map((r) => r.respondentEmail?.toLowerCase())
-        .filter((email) => email && !existingEmails.has(email));
-
-      if (missingEmails.length > 0) {
-        // Fetch users for these emails
-        const foundUsers = await User.find({
-          email: { $in: missingEmails },
-        }).select("email name department yearLevel role");
-
-        if (foundUsers.length > 0) {
-          const extraAttendees = foundUsers.map((u) => ({
-            email: u.email,
-            department: u.department,
-            yearLevel: u.yearLevel,
-            name: u.name,
-            role: u.role,
-          }));
-
-          // Create a plain object copy of form with augmented attendee list
-          // mapping to ensure we don't mutate the original mongoose doc if it's being tracked
-          const plainForm = form.toObject ? form.toObject() : { ...form };
-          plainForm.attendeeList = [
-            ...(plainForm.attendeeList || []),
-            ...extraAttendees,
-          ];
-          augmentedForm = plainForm;
-          console.log(
-            `[REPORT] Augmented attendee list with ${extraAttendees.length} users for breakdown.`,
-          );
-        }
-      }
-    } catch (augmentError) {
-      console.error("[REPORT] Failed to augment attendee list:", augmentError);
-      // Fallback to original form
-    }
+    // --- NEW: Hydrate Attendee List with User Data ---
+    // This handles both missing users AND missing metadata (e.g. program/department)
+    const augmentedForm = await hydrateAttendeeList(form, responses);
 
     const yearLevelBreakdown = processYearLevelBreakdown(
       augmentedForm,
@@ -327,6 +390,43 @@ const getDynamicQuantitativeData = async (req, res) => {
     );
     const dynamicColumns = dynamicCSVData.columns;
     const dynamicData = dynamicCSVData.data;
+
+    // Build per-column response breakdowns for dynamic report sections
+    // Build per-column response breakdowns for dynamic report sections
+    const columnBreakdowns = {};
+    const breakdownColumns = (dynamicColumns || []).filter(col =>
+      !['name', 'email', 'yearLevel', '_id', 'userId', 'hasResponded', 'uploadedAt', 'certificateGenerated', 'certificateId'].includes(col)
+    );
+
+    // Hydrate previous form if available for accurate comparison
+    let augmentedPreviousAttendeeList = [];
+    if (previousForm) {
+      try {
+        const hydratedPrevious = await hydrateAttendeeList(previousForm, previousResponses);
+        augmentedPreviousAttendeeList = hydratedPrevious.attendeeList;
+      } catch (hydrationError) {
+        console.warn("[REPORT] Failed to hydrate previous form for comparison:", hydrationError);
+        augmentedPreviousAttendeeList = previousForm.attendeeList || [];
+      }
+    }
+
+    breakdownColumns.forEach(col => {
+      if (previousForm) {
+        // Generate comparison with previous year/event
+        columnBreakdowns[col] = DynamicCSVReportService.generateComparisonData(
+          augmentedForm.attendeeList || form.attendeeList,
+          augmentedPreviousAttendeeList,
+          col
+        );
+      } else {
+        // Standard single-event breakdown
+        columnBreakdowns[col] = DynamicCSVReportService.generateColumnBreakdown(
+          augmentedForm.attendeeList || form.attendeeList,
+          col,
+          responses,
+        );
+      }
+    });
 
     // Calculate metrics
     const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
@@ -354,6 +454,7 @@ const getDynamicQuantitativeData = async (req, res) => {
         statusBreakdown,
         responseTrends,
         yearLevelBreakdown,
+        columnBreakdowns,
         dynamicColumns,
         dynamicData,
       },
@@ -1486,44 +1587,8 @@ const generateReport = async (req, res) => {
       );
     }
 
-    // --- NEW: Augment Attendee List for Missing Users ---
-    let augmentedForm = form;
-    try {
-      const existingEmails = new Set(
-        (form.attendeeList || [])
-          .map((a) => a.email?.toLowerCase())
-          .filter(Boolean),
-      );
-      const missingEmails = (form.responses || [])
-        .map((r) => r.respondentEmail?.toLowerCase())
-        .filter((email) => email && !existingEmails.has(email));
-
-      if (missingEmails.length > 0) {
-        const foundUsers = await User.find({
-          email: { $in: missingEmails },
-        }).select("email name department yearLevel role");
-        if (foundUsers.length > 0) {
-          const extraAttendees = foundUsers.map((u) => ({
-            email: u.email,
-            department: u.department,
-            yearLevel: u.yearLevel,
-            name: u.name,
-            role: u.role,
-          }));
-          const plainForm = form.toObject ? form.toObject() : { ...form };
-          plainForm.attendeeList = [
-            ...(plainForm.attendeeList || []),
-            ...extraAttendees,
-          ];
-          augmentedForm = plainForm;
-        }
-      }
-    } catch (augmentError) {
-      console.error(
-        "[REPORT] Failed to augment attendee list in generateReport:",
-        augmentError,
-      );
-    }
+    // --- NEW: Hydrate Attendee List ---
+    const augmentedForm = await hydrateAttendeeList(form, form.responses || []);
 
     const yearLevelBreakdown = processYearLevelBreakdown(
       augmentedForm,
@@ -1531,6 +1596,22 @@ const generateReport = async (req, res) => {
       previousForm,
       previousResponses,
     );
+
+    // Build per-column response breakdowns for dynamic report sections
+    const dynamicCSVData = DynamicCSVReportService.processDynamicColumns(
+      augmentedForm.attendeeList || form.attendeeList,
+    );
+    const columnBreakdowns = {};
+    const breakdownColumns = (dynamicCSVData.columns || []).filter(col =>
+      !['name', 'email', 'yearLevel', '_id', 'userId', 'hasResponded', 'uploadedAt'].includes(col)
+    );
+    breakdownColumns.forEach(col => {
+      columnBreakdowns[col] = DynamicCSVReportService.generateColumnBreakdown(
+        augmentedForm.attendeeList || form.attendeeList,
+        col,
+        form.responses || [],
+      );
+    });
 
     // Generate thumbnail
     const thumbnail = await ThumbnailService.generateReportThumbnail(
@@ -1569,6 +1650,7 @@ const generateReport = async (req, res) => {
           statusBreakdown,
           responseTrends,
           yearLevelBreakdown, // Include in static snapshot
+          columnBreakdowns: columnBreakdowns || {},
         },
       },
       // Create frozen snapshot of all data at generation time
@@ -1594,6 +1676,7 @@ const generateReport = async (req, res) => {
             statusBreakdown,
             responseTrends,
             yearLevelBreakdown, // Include in static snapshot
+            columnBreakdowns: columnBreakdowns || {},
           },
           categorizedComments: responseAnalysis.categorizedComments,
           questionBreakdown: processCompleteQuestionBreakdown(

@@ -33,7 +33,56 @@ const responseSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  submittedAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
+
+const attendeeSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null, // Can be null if user is not registered
+  },
+  name: {
+    type: String,
+    trim: true,
+  },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true,
+  },
+  yearLevel: {
+    type: String,
+    default: null,
+  },
+  department: {
+    type: String,
+    default: null,
+  },
+  program: {
+    type: String,
+    default: null,
+  },
+  hasResponded: {
+    type: Boolean,
+    default: false,
+  },
+  uploadedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  certificateGenerated: {
+    type: Boolean,
+    default: false,
+  },
+  certificateId: {
+    type: String,
+    default: null,
+  },
+}, { strict: false }); // Allow dynamic fields (e.g. from CSV)
 
 const questionSchema = new mongoose.Schema({
   title: {
@@ -167,52 +216,7 @@ const formSchema = new mongoose.Schema(
         },
       },
     ],
-    attendeeList: [
-      {
-        userId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
-          default: null, // Can be null if user is not registered
-        },
-        name: {
-          type: String,
-          trim: true,
-        },
-        email: {
-          type: String,
-          trim: true,
-          lowercase: true,
-        },
-        yearLevel: {
-          type: String,
-          default: null,
-        },
-        department: {
-          type: String,
-          default: null,
-        },
-        program: {
-          type: String,
-          default: null,
-        },
-        hasResponded: {
-          type: Boolean,
-          default: false,
-        },
-        uploadedAt: {
-          type: Date,
-          default: Date.now,
-        },
-        certificateGenerated: {
-          type: Boolean,
-          default: false,
-        },
-        certificateId: {
-          type: String,
-          default: null,
-        },
-      },
-    ],
+    attendeeList: [attendeeSchema],
     uploadedLinks: [
       {
         title: String,

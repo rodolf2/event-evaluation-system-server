@@ -1032,6 +1032,50 @@ def main():
                     'details': result
                 }))
 
+        elif action == 'analyze_batch':
+            # Batch analysis: process multiple comments in a single Python invocation
+            comments = data.get('comments', [])
+            lexicon = data.get('lexicon', None)
+            print(f"🐍 Batch analysis: {len(comments)} comments, Lexicon entries: {len(lexicon) if lexicon else 0}", file=sys.stderr, flush=True)
+            
+            analyzer = MultilingualSentimentAnalyzer(custom_lexicon=lexicon)
+            results = []
+            
+            for i, comment in enumerate(comments):
+                if not comment or not comment.strip():
+                    results.append({
+                        'sentiment': 'neutral',
+                        'confidence': 0.0,
+                        'method': 'empty_text'
+                    })
+                    continue
+                
+                try:
+                    result = analyzer.analyze_sentiment(comment)
+                    results.append({
+                        'sentiment': result.get('sentiment', 'neutral'),
+                        'confidence': result.get('confidence', 0.5),
+                        'method': result.get('method', 'unknown'),
+                    })
+                except Exception as comment_err:
+                    results.append({
+                        'sentiment': 'neutral',
+                        'confidence': 0.0,
+                        'method': 'error_fallback',
+                        'error': str(comment_err)
+                    })
+                
+                # Progress logging every 100 comments
+                if (i + 1) % 100 == 0:
+                    print(f"🐍 Batch progress: {i + 1}/{len(comments)}", file=sys.stderr, flush=True)
+            
+            print(f"🐍 Batch analysis complete: {len(results)} results", file=sys.stderr, flush=True)
+            print(json.dumps({
+                'success': True,
+                'results': results,
+                'total': len(results)
+            }))
+
         else:
             print(json.dumps({
                 'success': False,

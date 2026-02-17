@@ -1258,6 +1258,7 @@ const publishForm = async (req, res) => {
             }
 
             return {
+              ...student, // Preserve dynamic fields from CSV (e.g. department, program)
               userId: user._id,
               name: student.name ? student.name.trim() : user.name,
               email: normalizedEmail,
@@ -1557,8 +1558,8 @@ const submitFormResponse = async (req, res) => {
     const responseData = {
       formId: id,
       responses: processedResponses,
-      respondentEmail: null, // Always null for complete anonymity
-      respondentName: null,
+      respondentEmail: respondentEmail || null, // Save email if provided to allow report breakdowns
+      respondentName: respondentName || null,
       submittedAt: new Date(),
     };
 
@@ -1935,8 +1936,25 @@ const uploadAttendeeList = [
             name: attendee.name ? attendee.name.trim() : user.name,
             email: normalizedEmail,
             yearLevel: attendee.yearLevel || null,
+            department: attendee.department || null,
+            program: attendee.program || null,
             hasResponded: false,
             uploadedAt: new Date(),
+            ...Object.fromEntries(
+              Object.entries(attendee).filter(
+                ([key]) =>
+                  ![
+                    "name",
+                    "email",
+                    "yearLevel",
+                    "department",
+                    "program",
+                    "hasResponded",
+                    "uploadedAt",
+                    "userId",
+                  ].includes(key)
+              )
+            ),
           };
         }),
       );

@@ -772,13 +772,14 @@ const generateQualitativeReport = async (eventId) => {
 
       const pyshell = new PythonShell(scriptName, options);
 
-      // Set a SHORTER timeout for local (10s), longer for Render (30s)
+      // Dynamic timeout: scale based on number of comments
+      // Base: 15s + 50ms per comment, capped at 120s
       const isLocal =
         !process.env.RENDER && !process.cwd().includes("/opt/render");
-      const timeoutMs = isLocal ? 10000 : 30000;
+      const timeoutMs = Math.min(120000, Math.max(15000, comments.length * 50));
 
       console.log(
-        `[PYTHON] Starting sentiment analysis (timeout: ${timeoutMs}ms, local: ${isLocal})`,
+        `[PYTHON] Starting sentiment analysis (timeout: ${timeoutMs}ms, ${comments.length} comments, local: ${isLocal})`,
       );
 
       let hasStarted = false;
@@ -1207,44 +1208,54 @@ async function analyzeResponses(
       };
     }
 
-    // Call Python script for advanced sentiment analysis
-    const pythonResult = await new Promise((resolve, reject) => {
-      const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
-      const options = getPythonOptions(scriptPath);
-      const scriptName = path.basename(scriptPath);
+    // Decide analysis mode:
+    // - If ANALYSIS_FORCE_PYTHON=true and dataset is moderate, use Python
+    // - Otherwise, use fast in-memory JS analyzer (no Python startup cost)
+    const usePython =
+      process.env.ANALYSIS_FORCE_PYTHON === "true" && textContents.length <= 800;
 
-      const pyshell = new PythonShell(scriptName, options);
+    if (usePython) {
+      // Existing Python-based path (kept for smaller datasets if explicitly forced)
+      const pythonResult = await new Promise((resolve, reject) => {
+        const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
+        const options = getPythonOptions(scriptPath);
+        const scriptName = path.basename(scriptPath);
 
-      pyshell.send(
-        JSON.stringify({
-          action: "generate_report",
-          feedbacks: textContents,
-        }),
-      );
+        const pyshell = new PythonShell(scriptName, options);
 
-      let result = "";
-      pyshell.on("message", (message) => {
-        result += message;
-      });
+        pyshell.send(
+          JSON.stringify({
+            action: "generate_report",
+            feedbacks: textContents,
+          }),
+        );
 
-      pyshell.on("stderr", (stderr) => {
-        console.log("Python stderr (analyzeResponses):", stderr);
-      });
+        let result = "";
+        pyshell.on("message", (message) => {
+          result += message;
+        });
 
-      pyshell.end((err) => {
-        if (err) {
-          reject(err);
-        } else {
-          try {
-            resolve(JSON.parse(result));
-          } catch (parseErr) {
-            reject(parseErr);
+        pyshell.on("stderr", (stderr) => {
+          console.log("Python stderr (analyzeResponses):", stderr);
+        });
+
+        pyshell.end((err) => {
+          if (err) {
+            reject(err);
+          } else {
+            try {
+              resolve(JSON.parse(result));
+            } catch (parseErr) {
+              reject(parseErr);
+            }
           }
-        }
+        });
       });
-    });
 
-    if (pythonResult.success) {
+      if (!pythonResult.success) {
+        throw new Error(pythonResult.error || "Python analysis failed");
+      }
+
       // Map analyzed comments back to questions
       const analyzedFeedbacks = pythonResult.analyzed_feedbacks || [];
       const questionMap = new Map();
@@ -1312,9 +1323,128 @@ async function analyzeResponses(
         questionBreakdown: Array.from(questionMap.values()),
         method: "python_advanced",
       };
-    } else {
-      throw new Error(pythonResult.error || "Python analysis failed");
     }
+
+    // Fast path: JS-only sentiment analysis for large datasets
+    const jsAnalyzer = new JSSentimentAnalyzer();
+
+    const analyzedFeedbacks = [];
+    const categorizedComments = {
+      positive: [],
+      neutral: [],
+      negative: [],
+    };
+
+    let positiveCount = 0;
+    let neutralCount = 0;
+    let negativeCount = 0;
+
+    // Analyze all comments with JS analyzer
+    textContents.forEach((text, index) => {
+      const analysis = jsAnalyzer.analyze(text);
+      const sentiment = analysis.sentiment || "neutral";
+
+      analyzedFeedbacks.push({
+        text,
+        analysis,
+      });
+
+      if (categorizedComments[sentiment]) {
+        categorizedComments[sentiment].push({
+          text,
+        });
+      }
+
+      if (sentiment === "positive") positiveCount++;
+      else if (sentiment === "negative") negativeCount++;
+      else neutralCount++;
+    });
+
+    const total = textContents.length;
+    const sentimentBreakdown = {
+      positive: {
+        count: positiveCount,
+        percentage:
+          total > 0 ? Math.round((positiveCount / total) * 100) : 0,
+      },
+      neutral: {
+        count: neutralCount,
+        percentage:
+          total > 0 ? Math.round((neutralCount / total) * 100) : 0,
+      },
+      negative: {
+        count: negativeCount,
+        percentage:
+          total > 0 ? Math.round((negativeCount / total) * 100) : 0,
+      },
+    };
+
+    // Build per-question breakdown from JS results
+    const questionMap = new Map();
+
+    analyzedFeedbacks.forEach((analysisEntry, index) => {
+      const meta = textMetadata[index];
+      if (!meta) return;
+
+      const qId = meta.questionId || meta.questionTitle;
+      if (!questionMap.has(qId)) {
+        questionMap.set(qId, {
+          questionId: meta.questionId,
+          questionTitle: meta.questionTitle,
+          questionType: meta.questionType,
+          responseCount: 0,
+          responses: [],
+        });
+      }
+
+      const qData = questionMap.get(qId);
+      qData.responseCount++;
+      qData.responses.push({
+        text: meta.text,
+        sentiment: analysisEntry.analysis.sentiment || "neutral",
+        confidence: analysisEntry.analysis.confidence || 0,
+      });
+    });
+
+    for (const qData of questionMap.values()) {
+      const breakdown = {
+        positive: { count: 0, percentage: 0 },
+        neutral: { count: 0, percentage: 0 },
+        negative: { count: 0, percentage: 0 },
+      };
+
+      qData.responses.forEach((r) => {
+        const sentiment = r.sentiment || "neutral";
+        if (breakdown[sentiment]) {
+          breakdown[sentiment].count++;
+        }
+      });
+
+      const totalQ = qData.responseCount;
+      if (totalQ > 0) {
+        breakdown.positive.percentage = Math.round(
+          (breakdown.positive.count / totalQ) * 100,
+        );
+        breakdown.neutral.percentage = Math.round(
+          (breakdown.neutral.count / totalQ) * 100,
+        );
+        breakdown.negative.percentage = Math.round(
+          (breakdown.negative.count / totalQ) * 100,
+        );
+      }
+
+      qData.sentimentBreakdown = breakdown;
+      // Provide a small sample of responses for UI summaries
+      qData.sampleResponses = qData.responses.slice(0, 6);
+    }
+
+    return {
+      sentimentBreakdown,
+      analyzed_responses: analyzedFeedbacks,
+      categorizedComments,
+      questionBreakdown: Array.from(questionMap.values()),
+      method: "js_fallback",
+    };
   } catch (error) {
     console.error("Error in analyzeResponses:", error.message);
     throw error;
@@ -1547,8 +1677,9 @@ function getPythonOptions(scriptPath) {
 }
 
 /**
- * Analyze a single comment using Python (primary) with JavaScript fallback
+ * Analyze a single comment using fast JS analyzer (primary) with Python fallback
  * This is the SINGLE SOURCE OF TRUTH for sentiment analysis
+ * Uses JS-first approach for speed; Python is available via batch API
  * @param {string} text - The comment text to analyze
  * @returns {Promise<{sentiment: string, confidence: number, method: string}>}
  */
@@ -1571,44 +1702,33 @@ async function analyzeCommentSentiment(text) {
 
   let result;
 
-  // Use Python for sentiment analysis (pure lexicon, no heavy ML libs)
+  // Use fast JS analyzer as primary (no process spawn overhead)
   try {
-    // Fetch custom lexicon from DB (MIS lexicon management)
-    // Only send minimal data: { word, sentiment } to reduce payload size
     const dbLexicon = await Lexicon.find().select("word sentiment").lean();
-    const minimalLexicon = dbLexicon.map((entry) => ({
-      word: entry.word,
-      sentiment: entry.sentiment,
-    }));
-
-    const pythonPromise = analyzeSingleWithPython(cleanText, minimalLexicon);
-
-    // 30 second timeout for Python
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Python analysis timed out")), 30000),
-    );
-
-    result = await Promise.race([pythonPromise, timeoutPromise]);
-    console.log(
-      `✅ Python analysis succeeded for: "${cleanText.substring(0, 30)}..."`,
-    );
+    const analyzer = new JSSentimentAnalyzer(dbLexicon);
+    result = analyzer.analyze(cleanText);
   } catch (error) {
-    console.error(`❌ Python analysis failed: ${error.message}`);
-    console.warn(`[FALLBACK] Using robust JS analyzer for single comment...`);
-    
+    console.error(`❌ JS analysis failed: ${error.message}`);
+    // Fallback to Python only if JS fails
     try {
       const dbLexicon = await Lexicon.find().select("word sentiment").lean();
-      const analyzer = new JSSentimentAnalyzer(dbLexicon);
-      result = analyzer.analyze(cleanText);
+      const minimalLexicon = dbLexicon.map((entry) => ({
+        word: entry.word,
+        sentiment: entry.sentiment,
+      }));
+      const pythonPromise = analyzeSingleWithPython(cleanText, minimalLexicon);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Python analysis timed out")), 30000),
+      );
+      result = await Promise.race([pythonPromise, timeoutPromise]);
     } catch (fallbackError) {
-      console.error(`❌ Robust JS analyzer also failed: ${fallbackError.message}`);
-      throw error; // Throw original error if fallback fails
+      console.error(`❌ Python fallback also failed: ${fallbackError.message}`);
+      throw error;
     }
   }
 
   // Cache the result
   if (sentimentCache.size >= CACHE_MAX_SIZE) {
-    // Remove oldest entry (FIFO)
     const firstKey = sentimentCache.keys().next().value;
     sentimentCache.delete(firstKey);
   }
@@ -1685,6 +1805,166 @@ async function analyzeSingleWithPython(text, lexicon = []) {
   });
 }
 
+/**
+ * Batch analyze multiple comments with Python in a single process
+ * Dramatically faster than spawning one Python process per comment
+ * @param {string[]} comments - Array of comment strings
+ * @param {Array} lexicon - Custom lexicon from DB
+ * @returns {Promise<Array<{sentiment: string, confidence: number, method: string}>>}
+ */
+async function analyzeBatchWithPython(comments, lexicon = []) {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.resolve(__dirname, "../../../text_analysis.py");
+    const options = getPythonOptions(scriptPath);
+    const scriptName = path.basename(scriptPath);
+
+    const pyshell = new PythonShell(scriptName, options);
+
+    // Dynamic timeout: 15s base + 50ms per comment, max 120s
+    const timeoutMs = Math.min(120000, Math.max(15000, comments.length * 50));
+
+    const pythonTimeout = setTimeout(() => {
+      console.warn(`[BATCH PYTHON] Timeout after ${timeoutMs}ms for ${comments.length} comments`);
+      pyshell.kill("SIGKILL");
+      reject(new Error(`Python batch timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    pyshell.send(
+      JSON.stringify({
+        action: "analyze_batch",
+        comments: comments,
+        lexicon: lexicon,
+      }),
+    );
+
+    let result = "";
+    let stderrOutput = "";
+
+    pyshell.on("message", (message) => {
+      result += message;
+    });
+
+    pyshell.on("stderr", (stderr) => {
+      stderrOutput += stderr;
+    });
+
+    pyshell.end((err) => {
+      clearTimeout(pythonTimeout);
+      if (err) {
+        console.error("[BATCH PYTHON] Error:", err.message);
+        reject(err);
+      } else {
+        try {
+          if (!result || result.trim() === "") {
+            reject(new Error("Python batch returned empty result"));
+            return;
+          }
+          const parsed = JSON.parse(result);
+          if (parsed.success) {
+            resolve(parsed.results || []);
+          } else {
+            reject(new Error(parsed.error || "Python batch analysis failed"));
+          }
+        } catch (parseErr) {
+          console.error("[BATCH PYTHON] Parse error:", result.substring(0, 200));
+          reject(parseErr);
+        }
+      }
+    });
+  });
+}
+
+/**
+ * High-level batch comment analysis with caching
+ * Checks cache first, processes misses in one batch, populates cache
+ * @param {string[]} comments - Array of comment strings
+ * @param {Object} options - Options
+ * @param {boolean} options.usePython - Whether to use Python (default: false, uses fast JS)
+ * @returns {Promise<Array<{sentiment: string, confidence: number, method: string}>>}
+ */
+async function analyzeBatchComments(comments, options = {}) {
+  const { usePython = false } = options;
+  const startTime = Date.now();
+
+  console.log(`[BATCH ANALYSIS] Starting batch of ${comments.length} comments (python: ${usePython})`);
+
+  const results = new Array(comments.length);
+  const cacheMisses = []; // { index, text }
+
+  // Step 1: Check cache for each comment
+  for (let i = 0; i < comments.length; i++) {
+    const text = comments[i];
+    if (!text || !text.trim()) {
+      results[i] = { sentiment: "neutral", confidence: 0, method: "empty_text" };
+      continue;
+    }
+
+    const cacheKey = text.trim().toLowerCase();
+    if (sentimentCache.has(cacheKey)) {
+      const cached = sentimentCache.get(cacheKey);
+      if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        results[i] = cached.result;
+        continue;
+      }
+      sentimentCache.delete(cacheKey);
+    }
+
+    cacheMisses.push({ index: i, text: text.trim() });
+  }
+
+  console.log(`[BATCH ANALYSIS] Cache hits: ${comments.length - cacheMisses.length}, misses: ${cacheMisses.length}`);
+
+  if (cacheMisses.length === 0) {
+    console.log(`[BATCH ANALYSIS] All cached! (${Date.now() - startTime}ms)`);
+    return results;
+  }
+
+  // Step 2: Process cache misses
+  const missTexts = cacheMisses.map((m) => m.text);
+  let batchResults;
+
+  if (usePython) {
+    try {
+      const dbLexicon = await Lexicon.find().select("word sentiment").lean();
+      const minimalLexicon = dbLexicon.map((entry) => ({
+        word: entry.word,
+        sentiment: entry.sentiment,
+      }));
+      batchResults = await analyzeBatchWithPython(missTexts, minimalLexicon);
+      console.log(`[BATCH ANALYSIS] Python batch completed for ${missTexts.length} comments`);
+    } catch (error) {
+      console.warn(`[BATCH ANALYSIS] Python batch failed: ${error.message}, falling back to JS`);
+      // Fall through to JS
+      batchResults = null;
+    }
+  }
+
+  // JS fallback or primary JS path
+  if (!batchResults) {
+    const dbLexicon = await Lexicon.find().select("word sentiment").lean();
+    const jsAnalyzer = new JSSentimentAnalyzer(dbLexicon);
+    batchResults = missTexts.map((text) => jsAnalyzer.analyze(text));
+  }
+
+  // Step 3: Populate results and cache
+  for (let i = 0; i < cacheMisses.length; i++) {
+    const { index, text } = cacheMisses[i];
+    const result = batchResults[i] || { sentiment: "neutral", confidence: 0, method: "fallback" };
+    results[index] = result;
+
+    // Populate cache
+    const cacheKey = text.toLowerCase();
+    if (sentimentCache.size >= CACHE_MAX_SIZE) {
+      const firstKey = sentimentCache.keys().next().value;
+      sentimentCache.delete(firstKey);
+    }
+    sentimentCache.set(cacheKey, { result, timestamp: Date.now() });
+  }
+
+  console.log(`[BATCH ANALYSIS] Completed ${comments.length} comments in ${Date.now() - startTime}ms`);
+  return results;
+}
+
 module.exports = {
   getAverageRating,
   generateQualitativeReport,
@@ -1692,5 +1972,6 @@ module.exports = {
   analyzeResponses,
   generateResponseOverview,
   analyzeCommentSentiment,
+  analyzeBatchComments,
   JSSentimentAnalyzer,
 };

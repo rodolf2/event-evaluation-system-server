@@ -286,6 +286,22 @@ exports.generatePDFReport = async (req, res) => {
     console.log("[PDF Generation] Starting PDF generation...");
     console.log("[PDF Generation] HTML length:", html.length);
 
+    // Debug: check for title elements in received HTML
+    const h1Count = (html.match(/<h1/gi) || []).length;
+    const h4Count = (html.match(/<h4/gi) || []).length;
+    console.log(`[PDF Generation] HTML contains ${h1Count} h1 tags, ${h4Count} h4 tags`);
+
+    // Debug: save HTML to temp file for inspection
+    const fs = require("fs");
+    const path = require("path");
+    const debugHtmlPath = path.join(__dirname, "../../debug_pdf.html");
+    try {
+      fs.writeFileSync(debugHtmlPath, html, "utf8");
+      console.log(`[PDF Generation] Debug HTML saved to: ${debugHtmlPath}`);
+    } catch (e) {
+      console.log("[PDF Generation] Could not save debug HTML:", e.message);
+    }
+
     // Launch puppeteer browser
     try {
       if (process.env.RENDER || process.env.NODE_ENV === "production") {
@@ -352,9 +368,9 @@ exports.generatePDFReport = async (req, res) => {
         format: "A4",
         printBackground: true,
         margin: {
-          top: "80px", // Header height only
+          top: "50px", // Standard margin
           right: "15px",
-          bottom: "50px", // Footer height only
+          bottom: "50px", // Standard margin
           left: "15px",
         },
         preferCSSPageSize: false,

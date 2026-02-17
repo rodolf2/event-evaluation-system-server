@@ -1405,15 +1405,38 @@ class FormsService {
                   key.toLowerCase() === "yr"
               );
 
+              // Look for department column
+              const deptKeys = Object.keys(data).filter(
+                (key) =>
+                  key.toLowerCase().includes("department") ||
+                  key.toLowerCase().includes("dept") ||
+                  key.toLowerCase().includes("college") ||
+                  key.toLowerCase().includes("branch")
+              );
+
+              // Look for program/course column
+              const programKeys = Object.keys(data).filter(
+                (key) =>
+                  key.toLowerCase().includes("program") ||
+                  key.toLowerCase().includes("course") ||
+                  key.toLowerCase().includes("major") ||
+                  key.toLowerCase().includes("specialization") ||
+                  key.toLowerCase().includes("strand")
+              );
+
               const name = nameKeys.length > 0 ? data[nameKeys[0]]?.trim() : "";
               const email =
                 emailKeys.length > 0 ? data[emailKeys[0]]?.trim() : "";
               const yearLevel =
                 yearKeys.length > 0 ? data[yearKeys[0]]?.trim() : null;
+              const department =
+                deptKeys.length > 0 ? data[deptKeys[0]]?.trim() : null;
+              const program =
+                programKeys.length > 0 ? data[programKeys[0]]?.trim() : null;
 
               if (name && email) {
                 // Return FULL data object combined with normalized fields
-                results.push({ ...data, name, email: email.toLowerCase(), yearLevel });
+                results.push({ ...data, name, email: email.toLowerCase(), yearLevel, department, program });
               } else if (email) {
                 // If only email is present, use email as name
                 results.push({
@@ -1421,6 +1444,8 @@ class FormsService {
                   name: email.split("@")[0],
                   email: email.toLowerCase(),
                   yearLevel,
+                  department,
+                  program,
                 });
               }
             })
@@ -1489,16 +1514,39 @@ class FormsService {
               key.toLowerCase() === "yr"
           );
 
+          // Look for department column
+          const deptKeys = Object.keys(row).filter(
+            (key) =>
+              key.toLowerCase().includes("department") ||
+              key.toLowerCase().includes("dept") ||
+              key.toLowerCase().includes("college") ||
+              key.toLowerCase().includes("branch")
+          );
+
+          // Look for program/course column
+          const programKeys = Object.keys(row).filter(
+            (key) =>
+              key.toLowerCase().includes("program") ||
+              key.toLowerCase().includes("course") ||
+              key.toLowerCase().includes("major") ||
+              key.toLowerCase().includes("specialization") ||
+              key.toLowerCase().includes("strand")
+          );
+
           const name =
             nameKeys.length > 0 ? String(row[nameKeys[0]] || "").trim() : "";
           const email =
             emailKeys.length > 0 ? String(row[emailKeys[0]] || "").trim() : "";
           const yearLevel =
             yearKeys.length > 0 ? String(row[yearKeys[0]] || "").trim() : null;
+          const department =
+            deptKeys.length > 0 ? String(row[deptKeys[0]] || "").trim() : null;
+          const program =
+            programKeys.length > 0 ? String(row[programKeys[0]] || "").trim() : null;
 
           if (name && email) {
              // Return FULL data object combined with normalized fields
-            results.push({ ...row, name, email: email.toLowerCase(), yearLevel });
+            results.push({ ...row, name, email: email.toLowerCase(), yearLevel, department, program });
           } else if (email) {
             // If only email is present, use email username as name
             results.push({
@@ -1506,6 +1554,8 @@ class FormsService {
               name: email.split("@")[0],
               email: email.toLowerCase(),
               yearLevel,
+              department,
+              program,
             });
           }
         });

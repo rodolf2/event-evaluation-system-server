@@ -26,8 +26,23 @@ class DynamicCSVReportService {
     // Extract unique column names from attendee list
     const allKeys = new Set();
     attendeeList.forEach(attendee => {
-      Object.keys(attendee).forEach(key => {
-        if (key !== '_id' && key !== 'userId' && key !== 'hasResponded' && key !== 'uploadedAt') {
+      // Ensure we're working with a plain object if possible
+      const attendeeObj = attendee.toObject ? attendee.toObject() : attendee;
+      
+      Object.keys(attendeeObj).forEach(key => {
+        // Strict filtering for internal Mongoose/System fields
+        if (
+          key !== '_id' && 
+          key !== 'userId' && 
+          key !== 'hasResponded' && 
+          key !== 'uploadedAt' &&
+          key !== 'id' && 
+          key !== '__v' &&
+          key !== 'certificateGenerated' &&
+          key !== 'certificateId' &&
+          !key.startsWith('$') && 
+          !key.startsWith('_')
+        ) {
           allKeys.add(key);
         }
       });
@@ -249,8 +264,23 @@ class DynamicCSVReportService {
     // Extract all columns
     const allKeys = new Set();
     attendeeList.forEach(attendee => {
-      Object.keys(attendee).forEach(key => {
-        if (key !== '_id' && key !== 'userId' && key !== 'hasResponded' && key !== 'uploadedAt') {
+      // Ensure we're working with a plain object to avoid prototype chain issues
+      const attendeeObj = attendee.toObject ? attendee.toObject() : attendee;
+
+      Object.keys(attendeeObj).forEach(key => {
+        // Strict filtering for internal Mongoose/System fields
+        if (
+          key !== '_id' && 
+          key !== 'userId' && 
+          key !== 'hasResponded' && 
+          key !== 'uploadedAt' &&
+          key !== 'id' && 
+          key !== '__v' &&
+          key !== 'certificateGenerated' &&
+          key !== 'certificateId' &&
+          !key.startsWith('$') && 
+          !key.startsWith('_')
+        ) {
           allKeys.add(key);
         }
       });

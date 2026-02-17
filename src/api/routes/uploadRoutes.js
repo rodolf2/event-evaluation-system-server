@@ -82,6 +82,7 @@ function parseCSVText(csvText) {
   const nameIndex = headers.indexOf("name");
   const seenEmails = new Set();
   const students = [];
+  const warnings = [];
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -109,25 +110,31 @@ function parseCSVText(csvText) {
     values.push(current.trim()); // Add the last value
 
     if (values.length < headers.length) {
-      throw new Error(
-        `Row ${i + 1}: expected ${headers.length} columns but found ${values.length}.`
-      );
+      warnings.push(`Row ${i + 1}: Skipped - Expected ${headers.length} columns but found ${values.length}`);
+      continue;
     }
 
     const name = values[nameIndex] || "";
     const email = (values[emailIndex] || "").toLowerCase().trim();
 
     if (!name || !email) {
-      throw new Error(`Row ${i + 1}: missing required name or email.`);
+      // Check if row is completely empty (sometimes happens with trailing commas)
+      const hasData = values.some(v => v.length > 0);
+      if (hasData) {
+        warnings.push(`Row ${i + 1}: Skipped - Missing required name or email`);
+      }
+      continue;
     }
 
     if (!emailRegex.test(email)) {
-      throw new Error(`Row ${i + 1}: invalid email format (${email}).`);
+      warnings.push(`Row ${i + 1}: Skipped - Invalid email format (${email})`);
+      continue;
     }
 
     const normalizedEmail = email.toLowerCase();
     if (seenEmails.has(normalizedEmail)) {
-      throw new Error(`Row ${i + 1}: duplicate email (${email}).`);
+      warnings.push(`Row ${i + 1}: Skipped - Duplicate email (${email})`);
+      continue;
     }
 
     seenEmails.add(normalizedEmail);
@@ -157,11 +164,11 @@ function parseCSVText(csvText) {
     students.push(student);
   }
 
-  if (students.length === 0) {
+  if (students.length === 0 && warnings.length === 0) {
     throw new Error("No valid recipients found in CSV.");
   }
 
-  return students;
+  return { students, warnings };
 }
 
 // Parse Excel file and extract students
@@ -175,6 +182,7 @@ async function parseExcelFile(filePath) {
   }
 
   const students = [];
+  const warnings = [];
   let headers = [];
   let nameIndex = -1;
   let emailIndex = -1;
@@ -226,17 +234,24 @@ async function parseExcelFile(filePath) {
           }
         });
         students.push(student);
+      } else if (values.some(v => v)) {
+        // Only warn if row has some data but is invalid
+        if (!name || !email) {
+          warnings.push(`Row ${rowNumber}: Skipped - Missing required name or email`);
+        } else {
+          warnings.push(`Row ${rowNumber}: Skipped - Invalid email format`);
+        }
       }
     }
   });
 
-  if (students.length === 0) {
+  if (students.length === 0 && warnings.length === 0) {
     throw new Error(
       "No valid students found in Excel file. Ensure 'name' and 'email' columns have valid data."
     );
   }
 
-  return students;
+  return { students, warnings };
 }
 
 // Upload CSV or Excel file
@@ -261,19 +276,21 @@ router.post("/csv", requireAuth, (req, res) => {
 
       const filePath = req.file.path;
       const ext = path.extname(req.file.originalname).toLowerCase();
-      let students;
+      let parseResult;
 
       // Parse based on file type
       if (ext === ".xlsx" || ext === ".xls") {
         console.log(`📊 Parsing Excel file: ${req.file.originalname}`);
-        students = await parseExcelFile(filePath);
-        console.log(`📊 Parsed ${students.length} students from Excel`);
+        parseResult = await parseExcelFile(filePath);
+        console.log(`📊 Parsed ${parseResult.students.length} students from Excel`);
       } else {
         console.log(`📋 Parsing CSV file: ${req.file.originalname}`);
         const csvText = fs.readFileSync(filePath, "utf8");
-        students = parseCSVText(csvText);
-        console.log(`📋 Parsed ${students.length} students from CSV`);
+        parseResult = parseCSVText(csvText);
+        console.log(`📋 Parsed ${parseResult.students.length} students from CSV`);
       }
+
+      const { students, warnings } = parseResult;
 
       // Return the file URL along with student data
       const fileUrl = `${req.protocol}://${req.get("host")}/uploads/csv/${req.file.filename}`;
@@ -285,6 +302,7 @@ router.post("/csv", requireAuth, (req, res) => {
         filename: req.file.originalname,
         size: req.file.size,
         students: students,
+        warnings: warnings
       });
     } catch (error) {
       console.error("File parsing error:", error);
@@ -356,9 +374,9 @@ router.post("/csv-from-url", requireAuth, async (req, res) => {
     console.log(`📥 [CSV Proxy] Fetched ${csvText.length} characters`);
 
     // Parse the CSV
-    const students = parseCSVText(csvText);
+    const { students, warnings } = parseCSVText(csvText);
 
-    console.log(`📥 [CSV Proxy] Parsed ${students.length} students`);
+    console.log(`📥 [CSV Proxy] Parsed ${students.length} students. Warnings: ${warnings.length}`);
 
     // Extract filename from URL
     let filename = "external-csv.csv";
@@ -378,6 +396,7 @@ router.post("/csv-from-url", requireAuth, async (req, res) => {
       url: url,
       filename: filename,
       students: students,
+      warnings: warnings
     });
   } catch (error) {
     console.error("📥 [CSV Proxy] Error:", error.message);
