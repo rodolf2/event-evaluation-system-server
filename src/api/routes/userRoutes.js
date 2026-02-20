@@ -4,6 +4,13 @@ const User = require("../../models/User");
 const { requireRole } = require("../../middlewares/auth");
 const AuditLog = require("../../models/AuditLog");
 const { updateUser, getAllUsers, createUser, provisionUser, bulkUpdateUsers, bulkUpdateStatus } = require("../controllers/userController");
+const { getStudentManagementStats, getUserManagementStats } = require("../controllers/userStatsController");
+
+// Get student management stats - allow MIS and PSAS
+router.get("/stats/student-management", requireRole(["mis", "psas"]), getStudentManagementStats);
+
+// Get user management stats - allow MIS only
+router.get("/stats/user-management", requireRole(["mis"]), getUserManagementStats);
 
 // Get all users - allow MIS and PSAS
 router.get("/", requireRole(["mis", "psas"]), getAllUsers);

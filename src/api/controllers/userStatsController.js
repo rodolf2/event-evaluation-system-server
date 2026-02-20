@@ -205,7 +205,84 @@ const getTopActiveUsers = async (req, res) => {
   }
 };
 
+
+
+/**
+ * Get statistics for Student Management Dashboard (PSAS)
+ */
+const getStudentManagementStats = async (req, res) => {
+  try {
+    const now = new Date();
+    const last7Days = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+    const [totalStudents, activeStudents, activePBOOs, newStudentsWeek] = await Promise.all([
+      User.countDocuments({ role: "student" }),
+      User.countDocuments({ role: "student", isActive: true }),
+      User.countDocuments({ role: "club-officer", isActive: true }),
+      User.countDocuments({
+        role: { $in: ["student", "club-officer"] },
+        createdAt: { $gte: last7Days }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalStudents,
+        activeStudents,
+        activePBOOs,
+        newStudentsWeek
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching student management stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch student statistics",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get statistics for User Management Dashboard (MIS)
+ */
+const getUserManagementStats = async (req, res) => {
+  try {
+    const now = new Date();
+    const last7Days = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+    const [totalUsers, activePBOOs, facultyStaff, suspended, newUsersWeek] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: "club-officer", isActive: true }),
+      User.countDocuments({ role: { $in: ["psas", "mis"] } }),
+      User.countDocuments({ isActive: false }),
+      User.countDocuments({ createdAt: { $gte: last7Days } })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        activePBOOs,
+        facultyStaff,
+        suspended,
+        newUsersWeek
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching user management stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch user management statistics",
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getUserStatistics,
   getTopActiveUsers,
+  getStudentManagementStats,
+  getUserManagementStats,
 };

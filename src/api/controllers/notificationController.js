@@ -50,7 +50,7 @@ const getUserNotifications = async (req, res) => {
 
     // Get notifications
     const notifications = await Notification.find(finalFilter)
-      .populate("createdBy", "name role")
+      .populate("createdBy", "name role profilePicture avatar")
       .sort({ priority: -1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -234,7 +234,7 @@ const createNotification = async (req, res) => {
     const notification = new Notification(notificationData);
     await notification.save();
 
-    await notification.populate("createdBy", "name");
+    await notification.populate("createdBy", "name role profilePicture avatar");
 
     res.status(201).json({
       success: true,
