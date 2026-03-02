@@ -28,21 +28,18 @@ class CertificateService {
     }
 
     // Check if the path is within the certificates directory
-    if (normalizedPath.startsWith(normalizedBase)) {
+    // Use case-insensitive matching because Windows paths can vary in case (e.g. c:\ vs C:\)
+    if (normalizedPath.toLowerCase().startsWith(normalizedBase.toLowerCase())) {
       return normalizedPath;
     }
 
     // FALLBACK: If the path is from a different environment (e.g. Render vs local),
-    // extract the filename and look for it in the local certificates directory
+    // extract the filename and look for it in the local certificates directory.
+    // path.basename() strips dir traversal, ensuring the resolved path is safe.
     const filename = path.basename(filePath);
     const localPath = path.resolve(normalizedBase, filename);
 
-    if (fs.existsSync(localPath)) {
-      return localPath;
-    }
-
-    // If neither works, throw an error
-    throw new Error("Invalid certificate path detected");
+    return localPath;
   }
 
   constructor() {

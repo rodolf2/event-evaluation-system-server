@@ -1126,6 +1126,30 @@ class GoogleFormsExtractorPuppeteer {
         timeout: 30000,
       });
 
+      // Wait a bit for any dynamic content to load
+      await this.delay(2000);
+
+      // Take a screenshot for debugging (save to file system)
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const screenshotDir = path.join(__dirname, '..', '..', '..', 'debug_screenshots');
+        if (!fs.existsSync(screenshotDir)) {
+          fs.mkdirSync(screenshotDir, { recursive: true });
+        }
+        const screenshotPath = path.join(screenshotDir, `analytics-${Date.now()}.png`);
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        console.log(`📸 [Puppeteer Extractor] Saved screenshot to: ${screenshotPath}`);
+        
+        // Also save the HTML content for debugging
+        const htmlContent = await page.content();
+        const htmlPath = path.join(screenshotDir, `analytics-${Date.now()}.html`);
+        fs.writeFileSync(htmlPath, htmlContent);
+        console.log(`📄 [Puppeteer Extractor] Saved HTML to: ${htmlPath}`);
+      } catch (screenshotError) {
+        console.warn(`⚠️ [Puppeteer Extractor] Could not save screenshot: ${screenshotError.message}`);
+      }
+
       // Check if we were redirected to a login page or permission denied
       const currentUrl = page.url();
       if (currentUrl.includes("accounts.google.com") || currentUrl.includes("ServiceLogin")) {
@@ -1150,6 +1174,10 @@ class GoogleFormsExtractorPuppeteer {
 
       // Extract response count
       const responseCount = await page.evaluate(() => {
+        // Log the page content for debugging
+        console.log('Page URL:', window.location.href);
+        console.log('Page title:', document.title);
+        
         // Look for the big number at the top
         // The structure varies, but often it's in a specific class or near "responses" text
         const countElements = Array.from(document.querySelectorAll('div'));
@@ -1161,23 +1189,57 @@ class GoogleFormsExtractorPuppeteer {
           const parent = responseLabel.parentElement;
           if (parent) {
             const number = parent.querySelector('.freebirdFormviewerViewAnalyticsAnalyticsPageSummaryCount');
-            if (number) return parseInt(number.textContent.replace(/,/g, '')) || 0;
+            if (number) {
+              console.log('Found response count via responseLabel parent:', number.textContent);
+              return parseInt(number.textContent.replace(/,/g, '')) || 0;
+            }
           }
         }
 
         // Try specific class for count
         const countEl = document.querySelector('.freebirdFormviewerViewAnalyticsAnalyticsPageSummaryCount');
         if (countEl) {
+          console.log('Found response count via class selector:', countEl.textContent);
           return parseInt(countEl.textContent.trim().replace(/,/g, '')) || 0;
         }
 
         // Try looking for "X responses" text
         const bodyText = document.body.innerText;
-        const match = bodyText.match(/(\d+)\s+responses/i);
+        const match = bodyText.match(/(\d+)\s+responses?/i);
         if (match) {
+          console.log('Found response count via text match:', match[1]);
           return parseInt(match[1]) || 0;
         }
 
+        // Try looking for numbers in common analytics containers
+        const analyticsContainers = document.querySelectorAll('[class*="analytics"], [class*="summary"], [class*="response"]');
+        for (const container of analyticsContainers) {
+          const text = container.textContent || '';
+          const numMatch = text.match(/(\d+)/);
+          if (numMatch && parseInt(numMatch[1]) > 0) {
+            // Check if this looks like a response count (usually a larger number at the top)
+            const num = parseInt(numMatch[1]);
+            if (num > 0) {
+              console.log('Found potential response count in container:', num);
+              return num;
+            }
+          }
+        }
+
+        // Check for any large numbers that might be response counts
+        const allNumbers = bodyText.match(/\b(\d{1,5})\b/g);
+        if (allNumbers && allNumbers.length > 0) {
+          // Take the first reasonably sized number as a fallback
+          for (const numStr of allNumbers) {
+            const num = parseInt(numStr);
+            if (num > 0 && num < 100000) {
+              console.log('Using fallback number as response count:', num);
+              return num;
+            }
+          }
+        }
+
+        console.log('Could not find response count on page');
         return 0;
       });
 

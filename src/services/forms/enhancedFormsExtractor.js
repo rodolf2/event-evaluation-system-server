@@ -128,9 +128,20 @@ class EnhancedFormsExtractor {
       console.log(`🚀 [Enhanced Extractor] Attempting to scrape existing responses...`);
       const responseData = await puppeteerExtractor.extractResponses(url);
 
+      console.log(`📊 [Enhanced Extractor] Response data result:`, {
+        responseCount: responseData?.responseCount || 0,
+        isPrivate: responseData?.isPrivate,
+        hasAnalytics: !!responseData?.analytics,
+        error: responseData?.error
+      });
+
       if (responseData && responseData.responseCount > 0) {
         console.log(`✅ [Enhanced Extractor] Found ${responseData.responseCount} existing responses`);
         result.scrapedResponseData = responseData;
+      } else if (responseData && responseData.isPrivate) {
+        console.log(`⚠️ [Enhanced Extractor] Response data is private - Google Form requires login to view analytics`);
+      } else {
+        console.log(`⚠️ [Enhanced Extractor] No responses found or response count is 0`);
       }
     } catch (responseError) {
       console.warn(`⚠️ [Enhanced Extractor] Failed to scrape responses: ${responseError.message}`);

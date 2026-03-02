@@ -263,6 +263,42 @@ const getDynamicQuantitativeData = async (req, res) => {
         // Return frozen snapshot data
         const snapshot = report.dataSnapshot;
 
+        // Check if analytics exists in snapshot
+        if (!snapshot.analytics) {
+          console.warn(`[REPORT] Snapshot missing analytics for report ${reportId}`);
+          // Return basic data from report instead
+          return res.status(200).json({
+            success: true,
+            data: {
+              metrics: report.analytics?.quantitativeData || {
+                totalResponses: report.feedbackCount || 0,
+                totalAttendees: report.feedbackCount || 0,
+                responseRate: 100,
+                averageRating: report.averageRating || 0
+              },
+              charts: report.analytics?.charts || null,
+              rawData: [],
+              formInfo: {
+                title: form.title,
+                description: form.description,
+                status: form.status,
+                eventStartDate: form.eventStartDate,
+                eventEndDate: form.eventEndDate,
+                publishedAt: form.publishedAt,
+              },
+              filters: {
+                startDate,
+                endDate,
+                ratingFilter,
+                responseLimit,
+              },
+              isSnapshot: true,
+              snapshotDate: snapshot.snapshotDate || report.generatedAt,
+              lastUpdated: snapshot.snapshotDate || report.lastUpdated,
+            },
+          });
+        }
+
         // Apply filters to snapshot data if needed
         let responses = snapshot.responses || [];
         let scaleResponses = snapshot.scaleResponses || [];
@@ -570,6 +606,38 @@ const getDynamicQualitativeData = async (req, res) => {
       const report = await Report.findOne({ formId: reportId, userId });
       if (report && report.dataSnapshot) {
         const snapshot = report.dataSnapshot;
+
+        // Check if analytics exists in snapshot
+        if (!snapshot.analytics) {
+          console.warn(`[REPORT] Snapshot missing analytics for qualitative data: ${reportId}`);
+          // Return data from report.analytics instead
+          return res.status(200).json({
+            success: true,
+            data: {
+              sentimentBreakdown: report.analytics?.sentimentBreakdown || {
+                positive: { count: 0, percentage: 0 },
+                neutral: { count: 0, percentage: 0 },
+                negative: { count: 0, percentage: 0 }
+              },
+              categorizedComments: report.analytics?.categorizedComments || {
+                positive: [],
+                neutral: [],
+                negative: [],
+              },
+              questionBreakdown: report.analytics?.questionBreakdown || [],
+              totalComments: 0,
+              formInfo: {
+                title: form.title,
+                description: form.description,
+                status: form.status,
+              },
+              filters: { sentiment, keyword, startDate, endDate, limit },
+              isSnapshot: true,
+              snapshotDate: snapshot.snapshotDate || report.generatedAt,
+              lastUpdated: snapshot.snapshotDate || report.lastUpdated,
+            },
+          });
+        }
 
         // Use snapshot sentiment and text responses
         return res.status(200).json({

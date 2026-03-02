@@ -174,11 +174,12 @@ const getAllUsers = async (req, res) => {
     }
 
     if (role) {
-      const roles = role.split(",");
+      const roleString = Array.isArray(role) ? role.join(",") : role;
+      const roles = roleString.split(",");
       if (roles.length > 1) {
         filter.role = { $in: roles };
       } else {
-        filter.role = role;
+        filter.role = roles[0];
       }
     }
 

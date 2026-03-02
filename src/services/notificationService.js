@@ -109,9 +109,15 @@ class NotificationService {
     // Notify only the creator
     const creator = await User.findById(createdBy);
     if (creator) {
+      // Truncate title if too long for notification
+      const maxTitleLength = 180; // Leave room for "Form Published: " prefix
+      const truncatedTitle = form.title.length > maxTitleLength 
+        ? form.title.substring(0, maxTitleLength) + '...' 
+        : form.title;
+      
       await this.createRoleBasedNotification(
-        `Form Published: ${form.title}`,
-        `You have successfully published the evaluation form "${form.title}".`,
+        `Form Published: ${truncatedTitle}`,
+        `You have successfully published the evaluation form "${truncatedTitle}".`,
         [], // No role targeting, specific user only
         {
           type: "success",
