@@ -79,8 +79,8 @@ router.put(
         nlpSettings,
       } = req.body;
       
-      // RESTRICTION: Only MIS Head or PSAS Head can update general/security settings
-      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head";
+      // RESTRICTION: Only MIS Head or PSAS Head or Assistant Department Head can update general/security settings
+      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head" || req.user.position === "Assistant Department Head";
 
       if ((generalSettings || securitySettings || nlpSettings) && !isAuthorizedHead) {
         return res.status(403).json({
@@ -273,8 +273,8 @@ router.put(
     try {
       const generalSettingsUpdate = req.body;
       
-      // RESTRICTION: Only MIS Head or PSAS Head can update general settings
-      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head";
+      // RESTRICTION: Only MIS Head or PSAS Head or Assistant Department Head can update general settings
+      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head" || req.user.position === "Assistant Department Head";
 
       if (!isAuthorizedHead) {
         return res.status(403).json({
@@ -358,8 +358,8 @@ router.put(
     try {
       const securitySettingsUpdate = req.body;
       
-      // RESTRICTION: Only MIS Head or PSAS Head can update security settings
-      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head";
+      // RESTRICTION: Only MIS Head or PSAS Head or Assistant Department Head can update security settings
+      const isAuthorizedHead = req.user.position === "MIS Head" || req.user.position === "PSAS Head" || req.user.position === "Assistant Department Head";
 
       if (!isAuthorizedHead) {
         return res.status(403).json({

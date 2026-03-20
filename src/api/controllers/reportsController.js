@@ -31,12 +31,11 @@ exports.getSchoolAdmins = async (req, res) => {
           { role: "mis", position: { $regex: /mis head/i }, isActive: true },
         ],
       };
-    } else if (userRole === "club-officer") {
-      // Club Officers can share with Club Advisers and PSAS Head
+      // Club Officers can share with Club Advisers and PSAS Head or Assistant Department Head
       query = {
         $or: [
           { role: "club-adviser", isActive: true },
-          { role: "psas", position: { $regex: /psas head/i }, isActive: true },
+          { role: "psas", position: { $regex: /psas head|assistant department head/i }, isActive: true },
         ],
       };
     } else {

@@ -103,36 +103,41 @@ const getAllForms = async (req, res) => {
       });
     }
 
-    // Build search query
-    const searchQuery = search
-      ? {
-        createdBy: req.user._id,
-        title: { $regex: search, $options: "i" },
-      }
-      : { createdBy: req.user._id };
-
-    const forms = await Form.find(searchQuery)
+    const isAdmin = ["psas", "mis", "senior-management"].includes(req.user.role);
+    const summaryOnly = req.query.summaryOnly === "true";
+    const statusParam = req.query.status;
+    
+    const searchQuery = {
+      ...(isAdmin ? {} : { createdBy: req.user._id }),
+      ...(search ? { title: { $regex: search, $options: "i" } } : {}),
+      ...(statusParam ? { status: statusParam } : {})
+    };
+    
+    // Always exclude responses and attendeeList from list queries (they are only needed for single form views)
+    let query = Form.find(searchQuery)
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 })
       .limit(limitNum)
-      .skip((pageNum - 1) * limitNum);
+      .skip((pageNum - 1) * limitNum)
+      .select("-responses -attendeeList")
+      .lean();
 
-    const total = await Form.countDocuments(searchQuery);
+    if (summaryOnly) {
+      // Additionally exclude other heavy arrays for summary list view
+      query = query.select("-responses -attendeeList -sections -clientQuestions -uploadedFiles -uploadedLinks");
+    }
+
+    const [forms, total] = await Promise.all([
+      query,
+      Form.countDocuments(searchQuery),
+    ]);
     const totalPages = Math.ceil(total / limitNum);
 
     // Map forms to include isPublished field for frontend compatibility
     const mappedForms = forms.map((form) => ({
-      _id: form._id,
-      title: form.title,
-      description: form.description,
-      status: form.status,
+      ...form,
       isPublished: form.status === "published",
-      createdAt: form.createdAt,
-      updatedAt: form.updatedAt,
-      eventStartDate: form.eventStartDate,
-      eventEndDate: form.eventEndDate,
-      createdBy: form.createdBy,
-      responseCount: form.responseCount || (form.responses ? form.responses.length : 0),
+      responseCount: form.responseCount || 0,
     }));
 
     res.status(200).json({
@@ -2347,6 +2352,12 @@ const getAttendeeList = async (req, res) => {
  * GET /api/forms/my-evaluations
  * Returns all published forms the current user is assigned to and can currently answer.
  * This is used for listing available evaluations for the participant.
+ *
+ * Performance optimizations:
+ * - Single query with direct string match (uses attendeeList.email index)
+ * - Only selects fields needed by the frontend
+ * - Uses .lean() for faster serialization
+ * - No debug logging in production path
  */
 const getMyEvaluations = async (req, res) => {
   try {
@@ -2359,96 +2370,30 @@ const getMyEvaluations = async (req, res) => {
       });
     }
 
-    console.log(`[MY-EVALUATIONS] Fetching forms for user: ${userEmail}`);
-
-    // First, let's check what published forms exist
-    const allPublishedForms = await Form.find({
-      status: "published",
-      $or: [
-        { type: { $exists: false } },
-        { type: null },
-        { type: "evaluation" },
-      ],
-    }).select("title attendeeList createdAt");
-
-    console.log(
-      `[MY-EVALUATIONS] Found ${allPublishedForms.length} published forms:`,
-    );
-    allPublishedForms.forEach((form, i) => {
-      const attendeeCount = form.attendeeList ? form.attendeeList.length : 0;
-      const hasUser = form.attendeeList?.some(
-        (a) => a.email && a.email.toLowerCase().trim() === userEmail,
-      );
-      console.log(
-        `  ${i + 1}. "${form.title
-        }" - Attendees: ${attendeeCount}, User assigned: ${hasUser}`,
-      );
-      if (attendeeCount > 0 && attendeeCount <= 3) {
-        form.attendeeList.forEach((attendee, j) => {
-          console.log(`    - ${attendee.name} <${attendee.email}>`);
-        });
-      }
-    });
-
-    // Only include:
-    // - Published evaluation forms
-    // - Where the current user is explicitly in attendeeList
-    // NOTE:
-    // This prevents generic or admin-only forms (e.g. PSAS notification/config forms)
-    // from leaking into the participant-facing evaluations list.
+    // Single optimized query:
+    // - Direct string match on attendeeList.email (index-friendly, no regex)
+    // - The attendeeSchema has lowercase: true, so all emails are stored lowercase
+    // - Only select fields the frontend needs
+    // - Use .lean() for faster serialization
     const forms = await Form.find({
       status: "published",
-      // Use regex for case-insensitive email matching to ensure users see their forms
-      // regardless of how the email was stored in the attendee list
-      "attendeeList.email": { $regex: new RegExp(`^${userEmail}$`, "i") },
+      "attendeeList.email": userEmail,
       $or: [
         { type: { $exists: false } },
         { type: null },
         { type: "evaluation" },
       ],
     })
-      .populate("createdBy", "name email")
       .select(
-        "title description shareableLink eventStartDate eventEndDate attendeeList createdAt type",
+        "title description shareableLink eventStartDate eventEndDate createdAt type attendeeList.$",
       )
-      .sort({ createdAt: -1 });
-
-    console.log(
-      `[MY-EVALUATIONS] Found ${forms.length} assigned forms for ${userEmail}:`,
-    );
-    forms.forEach((form, i) => {
-      console.log(`  ${i + 1}. "${form.title}" (ID: ${form._id})`);
-      console.log(`     Start: ${form.eventStartDate || "No start date"}`);
-      console.log(`     End: ${form.eventEndDate || "No end date"}`);
-    });
-
-    console.log(
-      `[MY-EVALUATIONS] User ${userEmail} is assigned to ${forms.length} forms`,
-    );
-
-    const now = new Date();
-    // We want to return ALL forms the user is assigned to, regardless of date
-    // The frontend handles the display logic for "Upcoming", "Open", "Closed"
-    // and "Completed" states. 
-    const availableForms = forms;
-    
-    // Log for debugging
-    availableForms.forEach(form => {
-        const startDate = form.eventStartDate ? new Date(form.eventStartDate) : null;
-        const endDate = form.eventEndDate ? new Date(form.eventEndDate) : null;
-        console.log(`[MY-EVALUATIONS] Returning form "${form.title}" (Start: ${startDate}, End: ${endDate})`);
-    });
-
-    console.log(
-      `[MY-EVALUATIONS] Final result: ${availableForms.length} forms available for ${userEmail}`,
-    );
+      .sort({ createdAt: -1 })
+      .lean();
 
     // Normalize response objects so the frontend always has a stable _id field.
-    const normalizedForms = availableForms.map((form) => {
-      const attendee =
-        form.attendeeList?.find(
-          (a) => a.email && a.email.toLowerCase().trim() === userEmail,
-        ) || null;
+    // Extract only the current user's attendee entry (from $elemMatch projection)
+    const normalizedForms = forms.map((form) => {
+      const attendee = form.attendeeList?.[0] || null;
       return {
         _id: form._id,
         title: form.title,
@@ -2456,7 +2401,6 @@ const getMyEvaluations = async (req, res) => {
         shareableLink: form.shareableLink,
         eventStartDate: form.eventStartDate,
         eventEndDate: form.eventEndDate,
-        attendeeList: form.attendeeList,
         createdAt: form.createdAt,
         type: form.type || "evaluation",
         completed: !!attendee?.hasResponded,
@@ -2484,18 +2428,9 @@ const getMyEvaluations = async (req, res) => {
  * GET /api/forms/completion-stats
  * Returns participant evaluation completion stats for badge progression.
  *
- * Response:
- * {
- *   success: true,
- *   data: {
- *     completedCount: number
- *   }
- * }
- *
- * Logic:
- * - Count distinct published forms where:
- *   - current user's email is in attendeeList
- *   - AND attendeeList.hasResponded is true for that email
+ * Performance optimization:
+ * - Uses countDocuments with $elemMatch instead of fetching full attendeeList arrays
+ * - No data transfer overhead — only the count is returned from MongoDB
  */
 const getCompletionStats = async (req, res) => {
   try {
@@ -2508,23 +2443,16 @@ const getCompletionStats = async (req, res) => {
       });
     }
 
-    const forms = await Form.find({
+    // Use countDocuments with $elemMatch to count in the database
+    // instead of fetching full attendeeList arrays and filtering in JS
+    const completedCount = await Form.countDocuments({
       status: "published",
-      "attendeeList.email": userEmail,
-    }).select("attendeeList");
-
-    let completedCount = 0;
-
-    forms.forEach((form) => {
-      const attendee = (form.attendeeList || []).find(
-        (a) =>
-          a.email &&
-          a.email.toLowerCase().trim() === userEmail &&
-          a.hasResponded,
-      );
-      if (attendee) {
-        completedCount += 1;
-      }
+      attendeeList: {
+        $elemMatch: {
+          email: userEmail,
+          hasResponded: true,
+        },
+      },
     });
 
     res.status(200).json({

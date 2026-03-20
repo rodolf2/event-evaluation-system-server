@@ -1341,12 +1341,17 @@ const getAllReportsWithLiveData = async (req, res) => {
       status = "all",
       dateRange,
       search,
-      limit = 50,
+      limit = 10,
       page = 1,
+      summaryOnly = "false", // Performance flag
     } = req.query;
 
+    const isSummaryOnly = summaryOnly === "true";
+    const startTime = Date.now();
+
+    console.log(`[REPORT_FETCH] User: ${req.user._id}, Page: ${page}, Limit: ${limit}, SummaryOnly: ${isSummaryOnly}`);
+
     // School admins don't create reports, they view shared ones
-    // Since sharing is not implemented yet, return empty array
     if (req.user.role === "school-admin") {
       return res.status(200).json({
         success: true,
@@ -1358,13 +1363,7 @@ const getAllReportsWithLiveData = async (req, res) => {
             total: 0,
             pages: 0,
           },
-          filters: {
-            status,
-            dateRange,
-            search,
-            limit,
-            page,
-          },
+          filters: { status, dateRange, search, limit, page },
           lastUpdated: new Date().toISOString(),
         },
       });
@@ -1388,16 +1387,56 @@ const getAllReportsWithLiveData = async (req, res) => {
     }
 
     if (search) {
-      reportFilter.title = {
-        $regex: search,
-        $options: "i",
-      };
+      reportFilter.title = { $regex: search, $options: "i" };
     }
 
-    // Get reports with pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const totalCount = await Report.countDocuments(reportFilter);
+
+    // [OPTIMIZATION] Summary Only: Fast path for list views
+    if (isSummaryOnly) {
+      const reports = await Report.find(reportFilter)
+        .select("_id formId title eventDate status feedbackCount averageRating thumbnail lastUpdated metadata.description isGenerated analytics.overallRating")
+        .sort({ lastUpdated: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean();
+
+      console.log(`[REPORT_FETCH] Found ${reports.length} reports in summary mode. Total: ${totalCount}`);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          reports: reports.map((r) => ({
+            id: r._id,
+            formId: r.formId,
+            title: r.title,
+            eventDate: r.eventDate,
+            status: r.status,
+            feedbackCount: r.feedbackCount,
+            averageRating: r.averageRating,
+            thumbnail: r.thumbnail,
+            lastUpdated: r.lastUpdated,
+            description: r.metadata?.description,
+            isSnapshot: r.isGenerated,
+            overallRating: r.analytics?.overallRating,
+          })),
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: totalCount,
+            pages: Math.ceil(totalCount / parseInt(limit)),
+          },
+          duration: `${Date.now() - startTime}ms`,
+          lastUpdated: new Date().toISOString(),
+          isSummaryOnly: true,
+        },
+      });
+    }
+
+    // Full mode with population (standard logic, but optimized)
     const reports = await Report.find(reportFilter)
-      .populate("formId") // Populate form to access responses
+      .populate("formId")
       .sort({ lastUpdated: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -1408,7 +1447,7 @@ const getAllReportsWithLiveData = async (req, res) => {
         const form = report.formId;
 
         // If form is deleted or missing, return the stored report
-        if (!form)
+        if (!form) {
           return {
             id: report._id,
             title: report.title,
@@ -1423,6 +1462,7 @@ const getAllReportsWithLiveData = async (req, res) => {
             isSnapshot: !!report.dataSnapshot,
             snapshotDate: report.dataSnapshot?.snapshotDate || null,
           };
+        }
 
         // If report has a snapshot, return frozen data (no live updates)
         if (report.dataSnapshot) {
@@ -1443,9 +1483,33 @@ const getAllReportsWithLiveData = async (req, res) => {
           };
         }
 
-        // No snapshot - calculate live data (for backward compatibility)
-        const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
+        // [OPTIMIZATION] Check if re-analysis is actually needed
         const totalResponses = form.responses ? form.responses.length : 0;
+        const feedbackCountUnchanged = report.feedbackCount === totalResponses;
+        const hasExistingAnalytics = report.analytics && 
+                                   report.analytics.sentimentBreakdown && 
+                                   report.analytics.charts;
+
+        if (feedbackCountUnchanged && hasExistingAnalytics) {
+          // Skip expensive sentiment analysis and chart generation if feedback count hasn't changed
+          return {
+            id: report._id,
+            formId: form._id,
+            title: report.title,
+            eventDate: report.eventDate,
+            status: report.status,
+            feedbackCount: report.feedbackCount,
+            averageRating: report.averageRating,
+            thumbnail: report.thumbnail,
+            lastUpdated: report.lastUpdated,
+            metadata: report.metadata,
+            analytics: report.analytics,
+            isSnapshot: false,
+          };
+        }
+
+        // No snapshot and data changed - calculate live data (for backward compatibility)
+        const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
         const responseRate =
           totalAttendees > 0 ? (totalResponses / totalAttendees) * 100 : 0;
 
@@ -1457,16 +1521,6 @@ const getAllReportsWithLiveData = async (req, res) => {
               scaleResponses.length
             : 0;
 
-        // Get recent responses (last 7 days)
-        const recentResponses = form.responses
-          ? form.responses.filter((response) => {
-              const responseDate = new Date(response.submittedAt);
-              return (
-                responseDate >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-              );
-            }).length
-          : 0;
-
         // Build question type map for filtering
         const questionTypeMap = {};
         (form.questions || []).forEach((q) => {
@@ -1474,11 +1528,12 @@ const getAllReportsWithLiveData = async (req, res) => {
           questionTypeMap[q.title] = q.type;
         });
 
-        // Perform sentiment analysis (use Python for consistency)
+        // Perform sentiment analysis
         const responseAnalysis = await AnalysisService.analyzeResponses(
           form.responses || [],
           questionTypeMap,
         );
+        
         const sentimentBreakdown = responseAnalysis.sentimentBreakdown || {
           positive: { count: 0, percentage: 0 },
           neutral: { count: 0, percentage: 0 },
@@ -1523,28 +1578,25 @@ const getAllReportsWithLiveData = async (req, res) => {
         await report.save();
 
         return {
-          id: report._id, // Use report ID, not form ID
+          id: report._id,
           formId: form._id,
           title: report.title,
           eventDate: report.eventDate,
           status: report.status,
           feedbackCount: totalResponses,
           averageRating: Math.round(averageRating * 100) / 100,
-          recentComments: recentResponses,
-          creator: form.createdBy, // Or report.userId
+          creator: form.createdBy,
           thumbnail: report.thumbnail,
           lastUpdated: report.lastUpdated,
           metadata: report.metadata,
+          analytics: report.analytics,
           isSnapshot: false,
-          snapshotDate: null,
         };
       }),
     );
 
-    // Get total count for pagination
-    const totalCount = await Report.countDocuments(reportFilter);
-
-    res.status(200).json({
+    // Get total count for pagination is already calculated above as totalCount
+    return res.status(200).json({
       success: true,
       data: {
         reports: reportsWithLiveData,
@@ -1561,6 +1613,7 @@ const getAllReportsWithLiveData = async (req, res) => {
           limit,
           page,
         },
+        duration: `${Date.now() - startTime}ms`,
         lastUpdated: new Date().toISOString(),
       },
     });

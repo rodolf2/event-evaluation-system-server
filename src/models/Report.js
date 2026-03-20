@@ -101,7 +101,7 @@ const reportSchema = new mongoose.Schema(
 
 // Indexes for performance
 reportSchema.index({ formId: 1, userId: 1 });
-reportSchema.index({ userId: 1, lastUpdated: -1 });
+reportSchema.index({ userId: 1, isGenerated: 1, lastUpdated: -1 });
 reportSchema.index({ status: 1 });
 reportSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index for auto-deletion
 

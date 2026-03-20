@@ -265,13 +265,13 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // [SECURITY] Check for ITSS Student Management (Disable/Enable)
-    const isITSS = req.user.position === "ITSS";
+    // [SECURITY] Check for ITSS Coordinator Student Management (Disable/Enable)
+    const isITSS = req.user.position === "ITSS Coordinator";
     if (isITSS) {
       if (user.role !== "student" && user.role !== "club-officer") {
         return res.status(403).json({
           success: false,
-          message: "ITSS can only manage Student and PBOO accounts",
+          message: "ITSS Coordinator can only manage Student and PBOO accounts",
         });
       }
       
@@ -283,7 +283,7 @@ const updateUser = async (req, res) => {
       if (hasUnauthorizedUpdates) {
         return res.status(403).json({
           success: false,
-          message: "ITSS can only update the active status of students",
+          message: "ITSS Coordinator can only update the active status of students",
         });
       }
       // If validation passes, fall through to update logic
@@ -293,11 +293,11 @@ const updateUser = async (req, res) => {
       const isRemovingPBOO = user.role === "club-officer" && updates.role && updates.role !== "club-officer";
 
       if (isChangingToPBOO || isRemovingPBOO) {
-        // Only PSAS Head can manage PBOO roles
-        if (req.user.position !== "PSAS Head") {
+        // Only PSAS Head or Assistant Department Head can manage PBOO roles
+        if (req.user.position !== "PSAS Head" && req.user.position !== "Assistant Department Head") {
            return res.status(403).json({
             success: false,
-            message: "Only the PSAS Head can manage PBOO (Club Officer) roles",
+            message: "Only the PSAS Head / Assistant Department Head can manage PBOO (Club Officer) roles",
           });
         }
       } else {
@@ -317,11 +317,11 @@ const updateUser = async (req, res) => {
     const isRemovingHead = user.position?.includes("Head") && updates.position && !updates.position.includes("Head");
 
     if (isChangingToHead || isRemovingHead) {
-      // STRICTLY limit Head/ITSS position management to MIS Head only
+      // STRICTLY limit Head/ITSS Coordinator position management to MIS Head only
       if (req.user.position !== "MIS Head") {
         return res.status(403).json({
           success: false,
-          message: "Only the MIS Head can manage Head/ITSS positions",
+          message: "Only the MIS Head can manage Head/ITSS Coordinator positions",
         });
       }
     }
@@ -627,7 +627,7 @@ const bulkUpdateStatus = async (req, res) => {
 
     // [SECURITY] Check permissions
     const isMis = req.user.role === "mis";
-    const isItss = req.user.role === "psas" && req.user.position === "ITSS";
+    const isItss = req.user.role === "psas" && req.user.position === "ITSS Coordinator";
 
     if (!isMis && !isItss) {
       return res.status(403).json({
@@ -645,7 +645,7 @@ const bulkUpdateStatus = async (req, res) => {
       if (invalidUsers.length > 0) {
         return res.status(403).json({
           success: false,
-          message: "ITSS can only bulk update Student and PBOO (Club Officer) accounts",
+          message: "ITSS Coordinator can only bulk update Student and PBOO (Club Officer) accounts",
         });
       }
     }
@@ -710,7 +710,7 @@ const provisionUser = async (req, res) => {
     // [SECURITY] Check permissions for provisioning
     const isMis = req.user.role === "mis";
     const isMisHead = isMis && req.user.position === "MIS Head";
-    const isItss = req.user.role === "psas" && req.user.position === "ITSS";
+    const isItss = req.user.role === "psas" && req.user.position === "ITSS Coordinator";
 
     if (!isMis && !isItss) {
       return res.status(403).json({
@@ -724,7 +724,7 @@ const provisionUser = async (req, res) => {
       if (role !== "student") {
         return res.status(403).json({
           success: false,
-          message: "ITSS can only provision Student accounts",
+          message: "ITSS Coordinator can only provision Student accounts",
         });
       }
     } else if (isMis) {
@@ -733,7 +733,7 @@ const provisionUser = async (req, res) => {
         return res.status(403).json({
           success: false,
           message:
-            "MIS users cannot provision Student accounts. Please ask the ITSS.",
+            "MIS users cannot provision Student accounts. Please ask the ITSS Coordinator.",
         });
       }
       if (role === "mis" && !isMisHead) {

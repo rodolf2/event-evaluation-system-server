@@ -367,5 +367,6 @@ formSchema.index({ createdBy: 1, createdAt: -1 });
 formSchema.index({ _id: 1, "responses.submittedAt": 1 });
 formSchema.index({ createdBy: 1, status: 1, "responses.0": 1 });
 formSchema.index({ "attendeeList.email": 1 });
+formSchema.index({ status: 1, "attendeeList.email": 1 });
 
 module.exports = mongoose.model("Form", formSchema);

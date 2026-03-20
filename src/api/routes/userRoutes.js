@@ -15,13 +15,13 @@ router.get("/stats/user-management", requireRole(["mis"]), getUserManagementStat
 // Get all users - allow MIS and PSAS
 router.get("/", requireRole(["mis", "psas"]), getAllUsers);
 
-// Bulk update user status - restricted to mis (all) and psas (ITSS only)
+// Bulk update user status - restricted to mis (all) and psas (ITSS Coordinator only)
 router.put("/bulk-status", requireRole(["mis", "psas"]), bulkUpdateStatus);
 
 // Create new user - restricted to mis role
 router.post("/", requireRole(["mis"]), createUser);
 
-// Provision user with permissions - restricted to mis (all) and psas (ITSS only)
+// Provision user with permissions - restricted to mis (all) and psas (ITSS Coordinator only)
 router.post("/provision", requireRole(["mis", "psas"]), provisionUser);
 
 // Bulk update user permissions - restricted to mis role

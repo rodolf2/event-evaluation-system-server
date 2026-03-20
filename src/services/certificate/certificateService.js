@@ -798,6 +798,51 @@ class CertificateService {
     ctx.restore();
   }
 
+  /**
+   * Word-wrap a line of text to fit within maxWidth.
+   * Returns an array of wrapped lines.
+   */
+  wrapTextToLines(ctx, text, maxWidth) {
+    if (!text || maxWidth <= 0) return [text || ""];
+    const words = text.split(/\s+/);
+    const lines = [];
+    let currentLine = "";
+
+    for (let word of words) {
+      if (ctx.measureText(word).width > maxWidth) {
+        if (currentLine) {
+          lines.push(currentLine);
+          currentLine = "";
+        }
+        let tempWord = "";
+        for (let i = 0; i < word.length; i++) {
+          const char = word[i];
+          const testWord = tempWord + char;
+          if (ctx.measureText(testWord).width > maxWidth && tempWord) {
+            lines.push(tempWord);
+            tempWord = char;
+          } else {
+            tempWord = testWord;
+          }
+        }
+        word = tempWord;
+      }
+
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = ctx.measureText(testLine).width;
+      if (testWidth > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    return lines.length > 0 ? lines : [""];
+  }
+
   async renderTextbox(ctx, obj, certificateData) {
     const { user, event, studentName } = certificateData;
 
@@ -905,150 +950,114 @@ class CertificateService {
       baseDrawX = boxLeft + obj.width;
     }
 
+    // Helper to render a single plain line (no event name) with alignment
+    const renderPlainLine = (lineText, yPos) => {
+      ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+        obj.fontFamily || "Arial"
+      }`;
+      ctx.fillText(lineText, baseDrawX, yPos);
+    };
+
+    // Helper to render a line that contains the event name (bold) with surrounding text
+    const renderEventLine = (lineText, yPos) => {
+      const parts = lineText.split(eventName);
+      ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+        obj.fontFamily || "Arial"
+      }`;
+      const beforeWidth = parts[0] ? ctx.measureText(parts[0]).width : 0;
+
+      ctx.font = `bold ${obj.fontSize || 24}px ${
+        obj.fontFamily || "Arial"
+      }`;
+      const boldEventWidth = ctx.measureText(eventName).width;
+
+      ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+        obj.fontFamily || "Arial"
+      }`;
+      const afterWidth = parts[1] ? ctx.measureText(parts[1]).width : 0;
+      const totalWidth = beforeWidth + boldEventWidth + afterWidth;
+
+      let x = baseDrawX;
+      if (obj.textAlign === "center") {
+        x = baseDrawX - totalWidth / 2;
+      } else if (obj.textAlign === "right") {
+        x = baseDrawX - totalWidth;
+      }
+
+      // Render before text
+      ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+        obj.fontFamily || "Arial"
+      }`;
+      if (parts[0]) {
+        ctx.save();
+        ctx.textAlign = "left";
+        ctx.fillText(parts[0], x, yPos);
+        ctx.restore();
+        x += beforeWidth;
+      }
+
+      // Render event name bold
+      ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
+      ctx.save();
+      ctx.textAlign = "left";
+      ctx.fillText(eventName, x, yPos);
+      ctx.restore();
+      x += boldEventWidth;
+
+      // Render after text
+      ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+        obj.fontFamily || "Arial"
+      }`;
+      if (parts[1]) {
+        ctx.save();
+        ctx.textAlign = "left";
+        ctx.fillText(parts[1], x, yPos);
+        ctx.restore();
+      }
+    };
+
+    const maxWidth = obj.width || 9999;
+    const lineHeight = obj.lineHeight
+      ? obj.fontSize * obj.lineHeight
+      : obj.fontSize * 1.2;
+
     // Handle multi-line text
     if (text.includes("\n")) {
       const lines = text.split("\n");
       let y = drawY;
-      const lineHeight = obj.lineHeight
-        ? obj.fontSize * obj.lineHeight
-        : obj.fontSize * 1.2;
 
       for (const line of lines) {
-        if (line.includes(eventName)) {
-          const parts = line.split(eventName);
-          ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-            obj.fontFamily || "Arial"
-          }`;
-          const beforeWidth = parts[0] ? ctx.measureText(parts[0]).width : 0;
+        // Set font for measuring
+        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+          obj.fontFamily || "Arial"
+        }`;
 
-          ctx.font = `bold ${obj.fontSize || 24}px ${
-            obj.fontFamily || "Arial"
-          }`;
-          const boldEventWidth = ctx.measureText(eventName).width;
+        // Wrap line if it exceeds the textbox width
+        const wrappedLines = this.wrapTextToLines(ctx, line, maxWidth);
 
-          let x = baseDrawX;
-          // Calculate offset for composite text (Before + Bold + After)
-          // We must manually align the composite block because fillText only aligns the start of the string
-          if (obj.textAlign === "center") {
-             ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-              obj.fontFamily || "Arial"
-            }`;
-            const totalWidth =
-              beforeWidth +
-              boldEventWidth +
-              (parts[1] ? ctx.measureText(parts[1]).width : 0);
-             // Since baseDrawX is the center of the box, we shift left by half total width to start drawing
-             x = baseDrawX - totalWidth / 2;
-          } else if (obj.textAlign === "right") {
-            ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-              obj.fontFamily || "Arial"
-            }`;
-            const totalWidth =
-              beforeWidth +
-              boldEventWidth +
-              (parts[1] ? ctx.measureText(parts[1]).width : 0);
-            // Since baseDrawX is the right edge of box, we shift left by total width
-             x = baseDrawX - totalWidth;
+        for (const wrappedLine of wrappedLines) {
+          if (wrappedLine.includes(eventName)) {
+            renderEventLine(wrappedLine, y);
+          } else {
+            renderPlainLine(wrappedLine, y);
           }
-          // If align is left, baseDrawX is the left edge, so we just start there.
-
-          // Set normal font for before text
-          ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-            obj.fontFamily || "Arial"
-          }`;
-
-          // Render before text
-          if (parts[0]) {
-            ctx.save();
-            ctx.textAlign = "left";
-            ctx.fillText(parts[0], x, y);
-            ctx.restore();
-            x += beforeWidth;
-          }
-
-          // Render event name bold
-          ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
-          ctx.save();
-          ctx.textAlign = "left";
-          ctx.fillText(eventName, x, y);
-          ctx.restore();
-          x += boldEventWidth;
-
-          // Render after text
-          ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-            obj.fontFamily || "Arial"
-          }`;
-          if (parts[1]) {
-            ctx.save();
-            ctx.textAlign = "left";
-            ctx.fillText(parts[1], x, y);
-            ctx.restore();
-          }
-        } else {
-          ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-            obj.fontFamily || "Arial"
-          }`;
-          ctx.fillText(line, baseDrawX, y);
+          y += lineHeight;
         }
-        y += lineHeight;
       }
     } else {
-      // Single line rendering
-      if (text.includes(eventName)) {
-        const parts = text.split(eventName);
-        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-          obj.fontFamily || "Arial"
-        }`;
-        const beforeWidth = parts[0] ? ctx.measureText(parts[0]).width : 0;
-        ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
-        const boldEventWidth = ctx.measureText(eventName).width;
-        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-          obj.fontFamily || "Arial"
-        }`;
-        const afterWidth = parts[1] ? ctx.measureText(parts[1]).width : 0;
-
-        const totalWidth = beforeWidth + boldEventWidth + afterWidth;
-
-        let x = baseDrawX;
-        if (obj.textAlign === "center") {
-          x = baseDrawX - totalWidth / 2;
-        } else if (obj.textAlign === "right") {
-          x = baseDrawX - totalWidth;
+      // Single line rendering - wrap if needed
+      ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
+        obj.fontFamily || "Arial"
+      }`;
+      const wrappedLines = this.wrapTextToLines(ctx, text, maxWidth);
+      let y = drawY;
+      for (const wrappedLine of wrappedLines) {
+        if (wrappedLine.includes(eventName)) {
+          renderEventLine(wrappedLine, y);
+        } else {
+          renderPlainLine(wrappedLine, y);
         }
-
-        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-          obj.fontFamily || "Arial"
-        }`;
-        if (parts[0]) {
-          ctx.save();
-          ctx.textAlign = "left";
-          ctx.fillText(parts[0], x, drawY);
-          ctx.restore();
-          x += beforeWidth;
-        }
-
-        ctx.font = `bold ${obj.fontSize || 24}px ${obj.fontFamily || "Arial"}`;
-        ctx.save();
-        ctx.textAlign = "left";
-        ctx.fillText(eventName, x, drawY);
-        ctx.restore();
-        x += boldEventWidth;
-
-        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-          obj.fontFamily || "Arial"
-        }`;
-        if (parts[1]) {
-          ctx.save();
-          ctx.textAlign = "left";
-          ctx.fillText(parts[1], x, drawY);
-          ctx.restore();
-        }
-      } else {
-        ctx.font = `${obj.fontWeight || "normal"} ${obj.fontSize || 24}px ${
-          obj.fontFamily || "Arial"
-        }`;
-        // Standard text support uses baseDrawX which is correctly aligned relative to box
-        ctx.fillText(text, baseDrawX, drawY);
+        y += lineHeight;
       }
     }
 

@@ -286,6 +286,7 @@ const lexiconRoutes = require("./api/routes/lexiconRoutes");
 
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/certificates", certificateRoutes);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/reminders", reminderRoutes);
