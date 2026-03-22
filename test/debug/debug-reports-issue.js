@@ -12,10 +12,10 @@ const mongoose = require("mongoose");
 const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "./server/.env") });
 
-const Report = require("./src/models/Report");
-const Form = require("./src/models/Form");
-const User = require("./src/models/User");
-const SharedReport = require("./src/models/SharedReport");
+const Report = require("../../src/models/Report");
+const Form = require("../../src/models/Form");
+const User = require("../../src/models/User");
+const SharedReport = require("../../src/models/SharedReport");
 
 async function debugReportsIssue() {
   try {

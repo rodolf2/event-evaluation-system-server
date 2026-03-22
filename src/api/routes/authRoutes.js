@@ -502,8 +502,8 @@ router.delete("/profile/picture", async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    // Revert to Google picture (avatar) if available, otherwise null
-    user.profilePicture = user.avatar || null;
+    // Revert to "default" to show the "white person" and prevent Google OAuth from overwriting it
+    user.profilePicture = "default";
     await user.save();
 
     res.json({

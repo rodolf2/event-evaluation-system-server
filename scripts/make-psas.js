@@ -7,7 +7,7 @@ dns.setDefaultResultOrder("ipv4first");
 
 dotenv.config();
 
-const User = require("./src/models/User");
+const User = require("../src/models/User");
 
 async function makePsas() {
   try {
@@ -16,20 +16,20 @@ async function makePsas() {
     console.log("Connected successfully.");
 
     const email = "rodolfojrxgt@gmail.com";
-    
+
     const user = await User.findOne({ email });
-    
+
     if (!user) {
       console.log("User not found!");
       process.exit(1);
     }
 
     console.log(`Updating user: ${user.name} (${user.email})`);
-    
+
     // Update role and clear MIS-specific fields
     user.role = "psas";
     user.position = "PSAS Staff"; // Or null, but PSAS might benefit from a position
-    
+
     // Clear MIS specific permissions if any
     if (user.permissions) {
       user.permissions.delete("canViewReports");
@@ -38,16 +38,15 @@ async function makePsas() {
     }
 
     await user.save();
-    
+
     console.log("User updated successfully to PSAS role!");
     console.log("New User Info:", {
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        position: user.position,
-        permissions: Object.fromEntries(user.permissions || [])
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      position: user.position,
+      permissions: Object.fromEntries(user.permissions || []),
     });
-
   } catch (error) {
     console.error("Error updating user:", error);
   } finally {

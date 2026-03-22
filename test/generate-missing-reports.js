@@ -11,9 +11,9 @@ const mongoose = require("mongoose");
 const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "./server/.env") });
 
-const Report = require("./src/models/Report");
-const Form = require("./src/models/Form");
-const ThumbnailService = require("./src/services/thumbnail/thumbnailService");
+const Report = require("../src/models/Report");
+const Form = require("../src/models/Form");
+const ThumbnailService = require("../src/services/thumbnail/thumbnailService");
 
 async function generateMissingReports() {
   try {

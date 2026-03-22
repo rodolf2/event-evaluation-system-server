@@ -55,8 +55,11 @@ passport.use(
           }
           // Update profile picture and name if available
           if (profile.photos && profile.photos[0]) {
-            user.profilePicture = profile.photos[0].value;
-            user.avatar = profile.photos[0].value; // Save as backup
+            // Only update profilePicture if it's null (not set or explicitly removed)
+            if (!user.profilePicture) {
+              user.profilePicture = profile.photos[0].value;
+            }
+            user.avatar = profile.photos[0].value; // Always update backup
           }
           if (profile.displayName) {
             user.name = profile.displayName;
@@ -79,8 +82,11 @@ passport.use(
           // Link Google account to existing user
           user.googleId = profile.id;
           if (profile.photos && profile.photos[0]) {
-            user.profilePicture = profile.photos[0].value;
-            user.avatar = profile.photos[0].value; // Save as backup
+            // Only update profilePicture if it's null
+            if (!user.profilePicture) {
+              user.profilePicture = profile.photos[0].value;
+            }
+            user.avatar = profile.photos[0].value; // Always update backup
           }
           if (profile.displayName) {
             user.name = profile.displayName;
