@@ -258,7 +258,7 @@ const getDynamicQuantitativeData = async (req, res) => {
 
     // Check if we should use snapshot data (for generated reports)
     if (useSnapshot === "true") {
-      const report = await Report.findOne({ formId: reportId, userId });
+      const report = await Report.findOne({ formId: reportId, isGenerated: true }).sort({ createdAt: -1 });
       if (report && report.dataSnapshot) {
         // Return frozen snapshot data
         const snapshot = report.dataSnapshot;
@@ -603,7 +603,7 @@ const getDynamicQualitativeData = async (req, res) => {
 
     // Check if we should use snapshot data (for generated reports)
     if (req.query.useSnapshot === "true") {
-      const report = await Report.findOne({ formId: reportId, userId });
+      const report = await Report.findOne({ formId: reportId, isGenerated: true }).sort({ createdAt: -1 });
       if (report && report.dataSnapshot) {
         const snapshot = report.dataSnapshot;
 
@@ -1188,6 +1188,122 @@ const getDynamicCommentsData = async (req, res) => {
       questionTypeMap[q._id.toString()] = q.type;
       questionTypeMap[q.title] = q.type;
     });
+
+    // Check if we should use snapshot data (for generated reports)
+    if (req.query.useSnapshot === "true") {
+      const report = await Report.findOne({ formId: reportId, isGenerated: true }).sort({ createdAt: -1 });
+      if (report && report.dataSnapshot) {
+        // Extract comments from categorizedComments snapshot so we don't recalculate sentiments
+        const snapshot = report.dataSnapshot;
+        let allComments = [];
+        const categorized = snapshot.analytics?.categorizedComments || {
+          positive: [], neutral: [], negative: []
+        };
+        
+        ['positive', 'neutral', 'negative'].forEach(sentiment => {
+          (categorized[sentiment] || []).forEach(c => {
+            allComments.push({
+              id: c.id,
+              answer: c.comment || c.text,
+              respondentName: c.user || c.respondentName,
+              respondentEmail: c.email || c.respondentEmail,
+              questionTitle: c.questionTitle,
+              submittedAt: c.createdAt || c.submittedAt || new Date(),
+              sentiment: sentiment
+            });
+          });
+        });
+
+        // Use standard frontend query logic on these pre-analyzed comments
+        let filteredComments = allComments;
+
+        if (type !== "all") {
+          filteredComments = filteredComments.filter(c => c.sentiment === type);
+        }
+
+        if (searchTerm) {
+          const term = searchTerm.toLowerCase();
+          filteredComments = filteredComments.filter(
+            (c) =>
+              (c.answer || "").toLowerCase().includes(term) ||
+              (c.questionTitle || "").toLowerCase().includes(term) ||
+              (c.respondentName || "").toLowerCase().includes(term),
+          );
+        }
+
+        if (dateRange) {
+          const [start, end] = dateRange.split(",");
+          if (start && end) {
+            const startDateObj = new Date(start);
+            const endDateObj = new Date(end);
+            filteredComments = filteredComments.filter((c) => {
+              const commentDate = new Date(c.submittedAt);
+              return commentDate >= startDateObj && commentDate <= endDateObj;
+            });
+          }
+        }
+
+        if (role && form.attendeeList) {
+          filteredComments = filteredComments.filter((c) => {
+            const attendee = form.attendeeList.find(
+              (a) => a.email === c.respondentEmail,
+            );
+            return attendee && attendee.role === role;
+          });
+        }
+
+        filteredComments.sort((a, b) => {
+          const aVal = sortBy === "date" ? new Date(a.submittedAt) : a[sortBy] || "";
+          const bVal = sortBy === "date" ? new Date(b.submittedAt) : b[sortBy] || "";
+
+          if (sortOrder === "asc") return aVal > bVal ? 1 : -1;
+          else return aVal < bVal ? 1 : -1;
+        });
+
+        const totalCount = filteredComments.length;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const paginatedComments = filteredComments.slice(skip, skip + parseInt(limit));
+
+        const comments = paginatedComments.map((c) => {
+          let name = c.respondentName || "Anonymous";
+          let email = c.respondentEmail;
+
+          if (isAnonymousMode) {
+            name = "Anonymous";
+            email = null;
+          }
+
+          return {
+            id: c.id,
+            comment: c.answer,
+            user: name,
+            email: email,
+            questionTitle: c.questionTitle,
+            submittedAt: c.submittedAt,
+            sentiment: c.sentiment,
+          };
+        });
+
+        const responseData = {
+          comments,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: totalCount,
+            pages: Math.ceil(totalCount / parseInt(limit)),
+          },
+          formInfo: {
+            title: form.title,
+            description: form.description,
+            status: form.status,
+          },
+          filters: { type, searchTerm, dateRange, role, ratingRange, sortBy, sortOrder },
+          lastUpdated: snapshot.snapshotDate || new Date().toISOString(),
+        };
+
+        return res.status(200).json({ success: true, data: responseData });
+      }
+    }
 
     // Extract all individual text responses first
     let allComments = extractTextResponses(
@@ -1928,6 +2044,12 @@ function extractTextResponses(
         // Check if this is a text response
         if (typeof item.answer === "string" && item.answer.trim().length > 0) {
           const trimmed = item.answer.trim();
+
+          // Apply the exact same filtering as analysisService to ensure counts match
+          // Skip pure numbers or very short responses (likely ratings)
+          if (/^\d+$/.test(trimmed) && trimmed.length <= 2) return;
+          // Skip if too short to be meaningful text (less than 3 characters)
+          if (trimmed.length < 3) return;
 
           // Safety Check: Is this "text" actually a known option for a question with this title?
           // This handles cases where an MC question shares a title with a Text question (especially with orphaned IDs)
