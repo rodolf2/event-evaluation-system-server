@@ -118,7 +118,6 @@ router.get(
         email: req.user.email,
         role: req.user.role,
         isActive: req.user.isActive,
-        profilePicture: req.user.profilePicture,
         department: req.user.department,
         position: req.user.position,
         muteNotifications: req.user.muteNotifications,
@@ -131,8 +130,12 @@ router.get(
       { expiresIn: "7d" },
     );
 
+    const redirectUrl = `${process.env.CLIENT_URL}/auth/callback?token=${token}`;
+    console.log(`[AUTH-DEBUG] Redirect URL length: ${redirectUrl.length}`);
+    console.log(`[AUTH-DEBUG] Token length: ${token.length}`);
+
     // Redirect to client with token in URL
-    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
+    res.redirect(redirectUrl);
   },
 );
 
@@ -248,7 +251,6 @@ router.post("/guest", async (req, res) => {
         email: user.email,
         role: user.role,
         isActive: user.isActive,
-        profilePicture: user.profilePicture,
         department: user.department,
         position: user.position,
         muteNotifications: user.muteNotifications,
