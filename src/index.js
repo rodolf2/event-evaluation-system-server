@@ -1,5 +1,14 @@
 require("dotenv").config();
 const express = require("express");
+ 
+const app = express();
+ 
+// Request Logger (Temporary for debugging)
+app.use((req, res, next) => {
+  console.log(`[HTTP-DEBUG] ${req.method} ${req.url} - Headers Size: ${JSON.stringify(req.headers).length}`);
+  next();
+});
+ 
 const cors = require("cors");
 const session = require("express-session");
 const MongoStore = require("connect-mongo");
@@ -26,8 +35,6 @@ const {
 
 // Configure Passport
 require("./config/passport");
-
-const app = express();
 
 // Trust proxy for production environments (Railway, Render, etc.)
 // This is required for express-rate-limit to work correctly behind a proxy

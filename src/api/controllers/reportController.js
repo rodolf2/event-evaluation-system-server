@@ -244,11 +244,36 @@ const getDynamicQuantitativeData = async (req, res) => {
       });
     }
 
-    // Find the form
-    const form = await Form.findById(reportId).populate(
-      "createdBy",
-      "name email role",
-    );
+    // Find the form and report (if snapshot requested)
+    let form;
+    let report = null;
+
+    if (useSnapshot === "true") {
+      // First try to find by Report ID directly
+      report = await Report.findById(reportId);
+      if (report) {
+        form = await Form.findById(report.formId).populate(
+          "createdBy",
+          "name email role",
+        );
+      } else {
+        // Fallback: reportId might be a formId, find the latest generated report for it
+        form = await Form.findById(reportId).populate(
+          "createdBy",
+          "name email role",
+        );
+        if (form) {
+          report = await Report.findOne({ formId: form._id, isGenerated: true }).sort({ createdAt: -1 });
+        }
+      }
+    } else {
+      // For live data, reportId is expected to be a formId
+      form = await Form.findById(reportId).populate(
+        "createdBy",
+        "name email role",
+      );
+    }
+
     if (!form) {
       return res.status(404).json({
         success: false,
@@ -257,9 +282,8 @@ const getDynamicQuantitativeData = async (req, res) => {
     }
 
     // Check if we should use snapshot data (for generated reports)
-    if (useSnapshot === "true") {
-      const report = await Report.findOne({ formId: reportId, isGenerated: true }).sort({ createdAt: -1 });
-      if (report && report.dataSnapshot) {
+    if (useSnapshot === "true" && report) {
+      if (report.dataSnapshot) {
         // Return frozen snapshot data
         const snapshot = report.dataSnapshot;
 
@@ -589,11 +613,36 @@ const getDynamicQualitativeData = async (req, res) => {
       console.log(`[REPORT] Cache MISS for qualitative data: ${reportId}`);
     }
 
-    // Find the form
-    const form = await Form.findById(reportId).populate(
-      "createdBy",
-      "name email role",
-    );
+    // Find the form and report (if snapshot requested)
+    let form;
+    let report = null;
+
+    if (req.query.useSnapshot === "true") {
+      // First try to find by Report ID directly
+      report = await Report.findById(reportId);
+      if (report) {
+        form = await Form.findById(report.formId).populate(
+          "createdBy",
+          "name email role",
+        );
+      } else {
+        // Fallback: reportId might be a formId, find the latest generated report for it
+        form = await Form.findById(reportId).populate(
+          "createdBy",
+          "name email role",
+        );
+        if (form) {
+          report = await Report.findOne({ formId: form._id, isGenerated: true }).sort({ createdAt: -1 });
+        }
+      }
+    } else {
+      // For live data, reportId is expected to be a formId
+      form = await Form.findById(reportId).populate(
+        "createdBy",
+        "name email role",
+      );
+    }
+
     if (!form) {
       return res.status(404).json({
         success: false,
@@ -602,9 +651,8 @@ const getDynamicQualitativeData = async (req, res) => {
     }
 
     // Check if we should use snapshot data (for generated reports)
-    if (req.query.useSnapshot === "true") {
-      const report = await Report.findOne({ formId: reportId, isGenerated: true }).sort({ createdAt: -1 });
-      if (report && report.dataSnapshot) {
+    if (req.query.useSnapshot === "true" && report) {
+      if (report.dataSnapshot) {
         const snapshot = report.dataSnapshot;
 
         // Check if analytics exists in snapshot
@@ -1170,11 +1218,36 @@ const getDynamicCommentsData = async (req, res) => {
     }
     console.log(`[REPORT] Cache MISS for comments data: ${reportId}`);
 
-    // Find the form
-    const form = await Form.findById(reportId).populate(
-      "createdBy",
-      "name email role",
-    );
+    // Find the form and report (if snapshot requested)
+    let form;
+    let report = null;
+
+    if (req.query.useSnapshot === "true") {
+      // First try to find by Report ID directly
+      report = await Report.findById(reportId);
+      if (report) {
+        form = await Form.findById(report.formId).populate(
+          "createdBy",
+          "name email role",
+        );
+      } else {
+        // Fallback: reportId might be a formId, find the latest generated report for it
+        form = await Form.findById(reportId).populate(
+          "createdBy",
+          "name email role",
+        );
+        if (form) {
+          report = await Report.findOne({ formId: form._id, isGenerated: true }).sort({ createdAt: -1 });
+        }
+      }
+    } else {
+      // For live data, reportId is expected to be a formId
+      form = await Form.findById(reportId).populate(
+        "createdBy",
+        "name email role",
+      );
+    }
+
     if (!form) {
       return res.status(404).json({
         success: false,
@@ -1190,9 +1263,8 @@ const getDynamicCommentsData = async (req, res) => {
     });
 
     // Check if we should use snapshot data (for generated reports)
-    if (req.query.useSnapshot === "true") {
-      const report = await Report.findOne({ formId: reportId, isGenerated: true }).sort({ createdAt: -1 });
-      if (report && report.dataSnapshot) {
+    if (req.query.useSnapshot === "true" && report) {
+      if (report.dataSnapshot) {
         // Extract comments from categorizedComments snapshot so we don't recalculate sentiments
         const snapshot = report.dataSnapshot;
         let allComments = [];
@@ -1838,17 +1910,79 @@ const generateReport = async (req, res) => {
     const dynamicCSVData = DynamicCSVReportService.processDynamicColumns(
       augmentedForm.attendeeList || form.attendeeList,
     );
+    const dynamicColumns = dynamicCSVData.columns;
     const columnBreakdowns = {};
-    const breakdownColumns = (dynamicCSVData.columns || []).filter(col =>
-      !['name', 'email', 'yearLevel', '_id', 'userId', 'hasResponded', 'uploadedAt'].includes(col)
+    const breakdownColumns = (dynamicColumns || []).filter(col =>
+      !['name', 'email', 'yearLevel', '_id', 'userId', 'hasResponded', 'uploadedAt', 'certificateGenerated', 'certificateId'].includes(col)
     );
+
+    // Hydrate previous form if available for accurate comparison
+    let augmentedPreviousAttendeeList = [];
+    if (previousForm) {
+      try {
+        const hydratedPrevious = await hydrateAttendeeList(previousForm, previousResponses);
+        augmentedPreviousAttendeeList = hydratedPrevious.attendeeList;
+      } catch (hydrationError) {
+        console.warn("[REPORT-GEN] Failed to hydrate previous form for comparison:", hydrationError);
+        augmentedPreviousAttendeeList = previousForm.attendeeList || [];
+      }
+    }
+
     breakdownColumns.forEach(col => {
-      columnBreakdowns[col] = DynamicCSVReportService.generateColumnBreakdown(
-        augmentedForm.attendeeList || form.attendeeList,
-        col,
-        form.responses || [],
-      );
+      if (previousForm) {
+        // Generate comparison with previous year/event
+        columnBreakdowns[col] = DynamicCSVReportService.generateComparisonData(
+          augmentedForm.attendeeList || form.attendeeList,
+          augmentedPreviousAttendeeList,
+          col
+        );
+      } else {
+        // Standard single-event breakdown
+        columnBreakdowns[col] = DynamicCSVReportService.generateColumnBreakdown(
+          augmentedForm.attendeeList || form.attendeeList,
+          col,
+          form.responses || [],
+        );
+      }
     });
+
+    // --- NEW: Fetch Previous Year Qualitative Data ---
+    let previousYearData = null;
+    if (previousForm) {
+      try {
+        const prevQuestionTypeMap = {};
+        (previousForm.questions || []).forEach((q) => {
+          prevQuestionTypeMap[q._id.toString()] = q.type;
+          prevQuestionTypeMap[q.title] = q.type;
+        });
+
+        // Sample previous year responses for analysis (max 100)
+        const sampledPrevResponses =
+          previousResponses.length > 100
+            ? previousResponses
+                .filter(
+                  (_, i) => i % Math.ceil(previousResponses.length / 100) === 0,
+                )
+                .slice(0, 100)
+            : previousResponses;
+
+        const prevAnalysis = await AnalysisService.analyzeResponses(
+          sampledPrevResponses,
+          prevQuestionTypeMap,
+        );
+
+        previousYearData = {
+          formId: previousForm._id,
+          title: previousForm.title,
+          date: previousForm.createdAt,
+          sentiment: prevAnalysis.sentimentBreakdown,
+          insights: prevAnalysis.insights || [],
+          totalResponses: previousResponses.length,
+        };
+      } catch (err) {
+        console.warn("[REPORT-GEN] Failed to process previous year qualitative data:", err);
+      }
+    }
 
     // Generate thumbnail
     const thumbnail = await ThumbnailService.generateReportThumbnail(
@@ -1859,7 +1993,7 @@ const generateReport = async (req, res) => {
     const reportData = {
       formId: form._id,
       userId: userId,
-      title: form.title,
+      title: `${form.title} (Generated ${new Date().toLocaleDateString()})`,
       eventDate: form.eventStartDate || form.createdAt,
       status: form.status,
       isGenerated: true, // Mark as generated
@@ -1914,6 +2048,7 @@ const generateReport = async (req, res) => {
             responseTrends,
             yearLevelBreakdown, // Include in static snapshot
             columnBreakdowns: columnBreakdowns || {},
+            dynamicColumns,
           },
           categorizedComments: responseAnalysis.categorizedComments,
           questionBreakdown: processCompleteQuestionBreakdown(
@@ -1921,6 +2056,7 @@ const generateReport = async (req, res) => {
             form.responses || [],
             responseAnalysis.questionBreakdown || [],
           ),
+          previousYearData, // Include comparison data in snapshot
         },
         metadata: {
           description: form.description,
@@ -1933,15 +2069,10 @@ const generateReport = async (req, res) => {
       },
     };
 
-    // Save or update report
-    let report = await Report.findOne({ formId: form._id, userId });
-    if (report) {
-      Object.assign(report, reportData);
-      await report.save();
-    } else {
-      report = new Report(reportData);
-      await report.save();
-    }
+    // ALWAYS create a new report to keep it separate from the live/dynamic data
+    // and from previously generated reports
+    const report = new Report(reportData);
+    await report.save();
 
     // Emit socket event for real-time updates
     emitUpdate(
