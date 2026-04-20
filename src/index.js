@@ -36,6 +36,11 @@ const {
 // Configure Passport
 require("./config/passport");
 
+const normalizeEnvValue = (value = "") =>
+  value.replace(/[\r\n\t ]+/g, "").replace(/^['"]|['"]$/g, "");
+
+const MONGODB_URI = normalizeEnvValue(process.env.MONGODB_URI || "");
+
 // Trust proxy for production environments (Railway, Render, etc.)
 // This is required for express-rate-limit to work correctly behind a proxy
 // Trust proxy for production environments (Railway, Render, etc.)
@@ -187,7 +192,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
-      mongoUrl: process.env.MONGODB_URI,
+      mongoUrl: MONGODB_URI,
       ttl: 24 * 60 * 60, // 1 day
       autoRemove: "native",
     }),
@@ -217,7 +222,10 @@ connectDB();
 
 // Environment variable validation
 const requiredEnvVars = ["JWT_SECRET", "SESSION_SECRET", "MONGODB_URI"];
-const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
+const missingEnvVars = requiredEnvVars.filter((envVar) => {
+  const envValue = process.env[envVar];
+  return !envValue || !String(envValue).trim();
+});
 
 if (missingEnvVars.length > 0) {
   console.error(
