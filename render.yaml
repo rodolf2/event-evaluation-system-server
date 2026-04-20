@@ -1,10 +1,11 @@
 services:
   - type: web
     name: event-evaluation-backend
-    env: docker
+    env: node
     region: oregon
     plan: starter
-    dockerfilePath: ./Dockerfile
+    buildCommand: chmod +x render-build.sh && ./render-build.sh
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
