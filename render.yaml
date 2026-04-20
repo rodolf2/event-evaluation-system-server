@@ -1,11 +1,10 @@
 services:
   - type: web
     name: event-evaluation-backend
-    env: node
+    env: docker
     region: oregon
     plan: starter
-    buildCommand: chmod +x render-build.sh && ./render-build.sh
-    startCommand: python3 -c "from textblob import TextBlob; print('Python ready')" && npm start
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
