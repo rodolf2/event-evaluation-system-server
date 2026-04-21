@@ -3,13 +3,31 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const User = require("../models/User");
 const SystemSettings = require("../models/SystemSettings");
 
+const normalizeUrl = (url = "") =>
+  String(url).trim().replace(/^['"]|['"]$/g, "").replace(/\/+$/, "");
+
+const resolveGoogleCallbackUrl = () => {
+  if (process.env.GOOGLE_CALLBACK_URL) {
+    return normalizeUrl(process.env.GOOGLE_CALLBACK_URL);
+  }
+
+  if (process.env.GOOGLE_AUTH_REDIRECT_URI) {
+    return normalizeUrl(process.env.GOOGLE_AUTH_REDIRECT_URI);
+  }
+
+  if (process.env.RENDER_EXTERNAL_URL) {
+    return `${normalizeUrl(process.env.RENDER_EXTERNAL_URL)}/api/auth/google/callback`;
+  }
+
+  return "/api/auth/google/callback";
+};
+
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL:
-        process.env.GOOGLE_CALLBACK_URL || "/api/auth/google/callback",
+      callbackURL: resolveGoogleCallbackUrl(),
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
