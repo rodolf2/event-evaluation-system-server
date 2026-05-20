@@ -1,6 +1,7 @@
 const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
 const axios = require("axios");
+const sgMail = require("@sendgrid/mail");
 const { generateRatingEmailHtml } = require("./ratingEmailTemplate.js");
 
 /**
@@ -25,6 +26,13 @@ const validateEmailConfig = () => {
       );
       return false;
     }
+  } else if (emailService === "sendgrid") {
+    if (!process.env.SENDGRID_API_KEY) {
+      console.error(
+        "❌ [EMAIL-CONFIG] SendGrid API key missing. Set SENDGRID_API_KEY environment variable.",
+      );
+      return false;
+    }
   } else if (emailService === "gmail") {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       console.error(
@@ -45,7 +53,7 @@ const validateEmailConfig = () => {
     }
   } else {
     console.error(
-      `❌ [EMAIL-CONFIG] Invalid EMAIL_SERVICE: ${emailService}. Use 'brevo', 'resend', 'gmail', or 'smtp'.`,
+      `❌ [EMAIL-CONFIG] Invalid EMAIL_SERVICE: ${emailService}. Use 'sendgrid', 'brevo', 'resend', 'gmail', or 'smtp'.`,
     );
     return false;
   }
@@ -165,8 +173,57 @@ console.log(
   `[EMAIL-INIT] Brevo API key present: ${!!process.env.BREVO_API_KEY}`,
 );
 console.log(
+  `[EMAIL-INIT] SendGrid API key present: ${!!process.env.SENDGRID_API_KEY}`,
+);
+console.log(
   `[EMAIL-INIT] Gmail credentials present: ${!!process.env.EMAIL_USER && !!process.env.EMAIL_PASS}`,
 );
+
+// Initialize SendGrid if configured
+if ((process.env.EMAIL_SERVICE || "").toLowerCase().trim() === "sendgrid" && process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log("[EMAIL-INIT] SendGrid initialized.");
+}
+
+/**
+ * Send email via SendGrid HTTP API
+ */
+const sendViaSendGrid = async (mailOptions) => {
+  const fromEmail =
+    process.env.EMAIL_FROM ||
+    process.env.SENDGRID_FROM_EMAIL ||
+    process.env.EMAIL_USER;
+
+  const toAddresses = Array.isArray(mailOptions.to)
+    ? mailOptions.to
+    : [mailOptions.to];
+
+  const msg = {
+    to: toAddresses,
+    from: { name: "Event Evaluation System", email: fromEmail },
+    subject: mailOptions.subject,
+    html: mailOptions.html || mailOptions.text || "",
+  };
+
+  // Attach files as base64 if any
+  if (mailOptions.attachments && mailOptions.attachments.length > 0) {
+    const fs = require("fs");
+    msg.attachments = mailOptions.attachments.map((att) => ({
+      filename: att.filename,
+      content: (att.content
+        ? att.content
+        : fs.readFileSync(att.path)
+      ).toString("base64"),
+      type: "application/pdf",
+      disposition: "attachment",
+    }));
+  }
+
+  const [response] = await sgMail.send(msg);
+  const messageId = response.headers["x-message-id"] || "sent";
+  console.log(`[EMAIL-SENDGRID] ✓ Email sent via SendGrid, messageId: ${messageId}`);
+  return { messageId };
+};
 
 /**
  * Send email via Brevo HTTP API (avoids SMTP port blocking on cloud hosts)
@@ -309,7 +366,9 @@ const sendEmail = async (options) => {
 
   try {
     let info;
-    if (emailService === "resend") {
+    if (emailService === "sendgrid") {
+      info = await sendViaSendGrid(mailOptions);
+    } else if (emailService === "resend") {
       info = await sendViaResend(mailOptions);
     } else if (emailService === "brevo") {
       info = await sendViaBrevo(mailOptions);
