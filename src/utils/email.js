@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
+const axios = require("axios");
 const { generateRatingEmailHtml } = require("./ratingEmailTemplate.js");
 
 /**
@@ -14,6 +15,13 @@ const validateEmailConfig = () => {
     if (!process.env.RESEND_API_KEY) {
       console.error(
         "❌ [EMAIL-CONFIG] Resend API key missing. Set RESEND_API_KEY environment variable.",
+      );
+      return false;
+    }
+  } else if (emailService === "brevo") {
+    if (!process.env.BREVO_API_KEY) {
+      console.error(
+        "❌ [EMAIL-CONFIG] Brevo API key missing. Set BREVO_API_KEY environment variable.",
       );
       return false;
     }
@@ -37,7 +45,7 @@ const validateEmailConfig = () => {
     }
   } else {
     console.error(
-      `❌ [EMAIL-CONFIG] Invalid EMAIL_SERVICE: ${emailService}. Use 'resend', 'gmail', or 'smtp'.`,
+      `❌ [EMAIL-CONFIG] Invalid EMAIL_SERVICE: ${emailService}. Use 'brevo', 'resend', 'gmail', or 'smtp'.`,
     );
     return false;
   }
@@ -154,8 +162,66 @@ console.log(
   `[EMAIL-INIT] Resend API key present: ${!!process.env.RESEND_API_KEY}`,
 );
 console.log(
+  `[EMAIL-INIT] Brevo API key present: ${!!process.env.BREVO_API_KEY}`,
+);
+console.log(
   `[EMAIL-INIT] Gmail credentials present: ${!!process.env.EMAIL_USER && !!process.env.EMAIL_PASS}`,
 );
+
+/**
+ * Send email via Brevo HTTP API (avoids SMTP port blocking on cloud hosts)
+ */
+const sendViaBrevo = async (mailOptions) => {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    throw new Error("Brevo API key not configured");
+  }
+
+  const fromEmail =
+    process.env.EMAIL_FROM ||
+    process.env.BREVO_FROM_EMAIL ||
+    "noreply@laverdad.edu.ph";
+  const fromName = "Event Evaluation System";
+
+  // Build recipients array
+  const toAddresses = Array.isArray(mailOptions.to)
+    ? mailOptions.to
+    : [mailOptions.to];
+
+  const payload = {
+    sender: { name: fromName, email: fromEmail },
+    to: toAddresses.map((email) => ({ email })),
+    subject: mailOptions.subject,
+    htmlContent: mailOptions.html || mailOptions.text || "",
+  };
+
+  // Attach files as base64 if any
+  if (mailOptions.attachments && mailOptions.attachments.length > 0) {
+    const fs = require("fs");
+    payload.attachment = mailOptions.attachments.map((att) => ({
+      name: att.filename,
+      content: (att.content
+        ? att.content
+        : fs.readFileSync(att.path)
+      ).toString("base64"),
+    }));
+  }
+
+  const response = await axios.post(
+    "https://api.brevo.com/v3/smtp/email",
+    payload,
+    {
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    },
+  );
+
+  console.log(`[EMAIL-BREVO] ✓ Email sent via Brevo API, messageId: ${response.data.messageId}`);
+  return { messageId: response.data.messageId };
+};
 
 /**
  * Send email via Resend API
@@ -245,6 +311,8 @@ const sendEmail = async (options) => {
     let info;
     if (emailService === "resend") {
       info = await sendViaResend(mailOptions);
+    } else if (emailService === "brevo") {
+      info = await sendViaBrevo(mailOptions);
     } else {
       info = await sendViaTransporter(mailOptions);
     }
