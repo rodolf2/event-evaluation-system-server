@@ -1,39 +1,18 @@
-const { createCanvas, loadImage, registerFont } = require("canvas");
-const path = require("path");
-const fs = require("fs").promises;
+const { createCanvas } = require("canvas");
 
 class ThumbnailService {
   constructor() {
     this.width = 800;
     this.height = 450;
-    this.thumbnailDir = path.join(__dirname, "../../../public/thumbnails");
   }
 
-  async ensureThumbnailDirectory() {
+  /**
+   * Generate a report thumbnail and return it as a PNG Buffer.
+   * @param {string} formTitle
+   * @returns {Promise<Buffer|null>}
+   */
+  async generateReportThumbnail(formTitle) {
     try {
-      await fs.mkdir(this.thumbnailDir, { recursive: true });
-    } catch (error) {
-      console.error("Error creating thumbnail directory:", error);
-    }
-  }
-
-  async generateReportThumbnail(formId, formTitle, force = false) {
-    try {
-      const thumbnailPath = path.join(this.thumbnailDir, `form-${formId}.png`);
-
-      // Check if thumbnail exists
-      if (!force) {
-        try {
-          await fs.access(thumbnailPath);
-          // If file exists, return path immediately
-          return `/api/thumbnails/form-${formId}.png`;
-        } catch (err) {
-          // File doesn't exist, proceed to generate
-        }
-      }
-
-      await this.ensureThumbnailDirectory();
-
       const canvas = createCanvas(this.width, this.height);
       const ctx = canvas.getContext("2d");
 
@@ -76,7 +55,7 @@ class ThumbnailService {
       ctx.font = "12px Arial";
       ctx.fillText("Apalit, Pampanga", 140, 85);
 
-      // Main title - Dynamic (e.g., "Sample Event Evaluation Report")
+      // Main title
       ctx.fillStyle = "#000000";
       ctx.font = "bold 42px Arial";
       ctx.textAlign = "center";
@@ -139,7 +118,6 @@ class ThumbnailService {
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
 
-      // Create uppercase version of the title for this section
       const eventNameUpper = formTitle.toUpperCase();
       ctx.fillText(eventNameUpper, this.width / 2, eventSectionY);
 
@@ -151,72 +129,24 @@ class ThumbnailService {
       ctx.font = "16px Arial";
       ctx.fillText("College Level", this.width / 2, eventSectionY + 55);
 
-      // Save thumbnail
-      const buffer = canvas.toBuffer("image/png");
-      await fs.writeFile(thumbnailPath, buffer);
-
-      // Verify file size
-      const stats = await fs.stat(thumbnailPath);
-      if (stats.size === 0) {
-        await fs.unlink(thumbnailPath);
-        throw new Error("Generated thumbnail is 0 bytes");
-      }
-
-      console.log(`✅ Generated thumbnail for form ${formId}: ${formTitle}`);
-      return `/api/thumbnails/form-${formId}.png`;
+      console.log(`✅ Generated report thumbnail buffer for: ${formTitle}`);
+      return canvas.toBuffer("image/png");
     } catch (error) {
       console.error(
-        `❌ Error generating thumbnail for form ${formId}:`,
+        `❌ Error generating report thumbnail for "${formTitle}":`,
         error.message
       );
-      console.error(`Stack trace:`, error.stack);
-      // Return a dynamic placeholder
-      const encodedTitle = encodeURIComponent(formTitle || "Report");
-      return `https://placehold.co/800x450/1e3a8a/ffffff?text=${encodedTitle}`;
+      return null;
     }
   }
 
-  async getThumbnailPath(formId) {
-    const thumbnailPath = path.join(this.thumbnailDir, `form-${formId}.png`);
-
+  /**
+   * Generate an analytics thumbnail and return it as a PNG Buffer.
+   * @param {object} analyticsData
+   * @returns {Promise<Buffer|null>}
+   */
+  async generateAnalyticsThumbnail(analyticsData = {}) {
     try {
-      await fs.access(thumbnailPath);
-      return `/api/thumbnails/form-${formId}.png`;
-    } catch {
-      return `https://placehold.co/800x450/1e3a8a/ffffff?text=Report`;
-    }
-  }
-
-  async deleteThumbnail(formId) {
-    try {
-      const thumbnailPath = path.join(this.thumbnailDir, `form-${formId}.png`);
-      await fs.unlink(thumbnailPath);
-      console.log(`Deleted thumbnail for form ${formId}`);
-    } catch (error) {
-      console.error(`Error deleting thumbnail for form ${formId}:`, error);
-    }
-  }
-
-  async generateAnalyticsThumbnail(formId, analyticsData = {}, force = false) {
-    try {
-      const thumbnailPath = path.join(
-        this.thumbnailDir,
-        `analytics-${formId}.png`
-      );
-
-      // Check if thumbnail exists
-      if (!force) {
-        try {
-          await fs.access(thumbnailPath);
-          // If file exists, return path immediately
-          return `/api/thumbnails/analytics-${formId}.png`;
-        } catch (err) {
-          // File doesn't exist, proceed to generate
-        }
-      }
-
-      await this.ensureThumbnailDirectory();
-
       const canvas = createCanvas(this.width, this.height);
       const ctx = canvas.getContext("2d");
 
@@ -299,7 +229,6 @@ class ThumbnailService {
       ctx.roundRect(card1X, card1Y, cardWidth, cardHeight, 10);
       ctx.fill();
 
-      // Card 1 icon and text
       ctx.fillStyle = "#FFFFFF";
       ctx.font = "bold 12px Arial";
       ctx.textAlign = "left";
@@ -385,93 +314,49 @@ class ThumbnailService {
       ctx.font = "bold 14px Arial";
       ctx.fillText("Response Rate", gaugeX, gaugeY + 45);
 
-      // RIGHT: Response Breakdown Donut Chart - shifted left to make room for legend
+      // RIGHT: Response Breakdown Donut Chart
       const donutX = this.width * 0.6;
       const donutY = chartsY + 70;
       const donutOuterRadius = 60;
       const donutInnerRadius = 35;
 
-      // Calculate total for proper percentages
       const total =
         responseBreakdown.positive.count +
         responseBreakdown.neutral.count +
         responseBreakdown.negative.count;
 
       if (total > 0) {
-        let currentAngle = -Math.PI / 2; // Start at top
+        let currentAngle = -Math.PI / 2;
 
-        // Positive segment (dark blue)
         const positiveAngle =
           (responseBreakdown.positive.count / total) * 2 * Math.PI;
         ctx.fillStyle = "#1E3A8A";
         ctx.beginPath();
-        ctx.arc(
-          donutX,
-          donutY,
-          donutOuterRadius,
-          currentAngle,
-          currentAngle + positiveAngle
-        );
-        ctx.arc(
-          donutX,
-          donutY,
-          donutInnerRadius,
-          currentAngle + positiveAngle,
-          currentAngle,
-          true
-        );
+        ctx.arc(donutX, donutY, donutOuterRadius, currentAngle, currentAngle + positiveAngle);
+        ctx.arc(donutX, donutY, donutInnerRadius, currentAngle + positiveAngle, currentAngle, true);
         ctx.closePath();
         ctx.fill();
         currentAngle += positiveAngle;
 
-        // Neutral segment (medium blue)
         const neutralAngle =
           (responseBreakdown.neutral.count / total) * 2 * Math.PI;
         ctx.fillStyle = "#3B82F6";
         ctx.beginPath();
-        ctx.arc(
-          donutX,
-          donutY,
-          donutOuterRadius,
-          currentAngle,
-          currentAngle + neutralAngle
-        );
-        ctx.arc(
-          donutX,
-          donutY,
-          donutInnerRadius,
-          currentAngle + neutralAngle,
-          currentAngle,
-          true
-        );
+        ctx.arc(donutX, donutY, donutOuterRadius, currentAngle, currentAngle + neutralAngle);
+        ctx.arc(donutX, donutY, donutInnerRadius, currentAngle + neutralAngle, currentAngle, true);
         ctx.closePath();
         ctx.fill();
         currentAngle += neutralAngle;
 
-        // Negative segment (light blue)
         const negativeAngle =
           (responseBreakdown.negative.count / total) * 2 * Math.PI;
         ctx.fillStyle = "#93C5FD";
         ctx.beginPath();
-        ctx.arc(
-          donutX,
-          donutY,
-          donutOuterRadius,
-          currentAngle,
-          currentAngle + negativeAngle
-        );
-        ctx.arc(
-          donutX,
-          donutY,
-          donutInnerRadius,
-          currentAngle + negativeAngle,
-          currentAngle,
-          true
-        );
+        ctx.arc(donutX, donutY, donutOuterRadius, currentAngle, currentAngle + negativeAngle);
+        ctx.arc(donutX, donutY, donutInnerRadius, currentAngle + negativeAngle, currentAngle, true);
         ctx.closePath();
         ctx.fill();
       } else {
-        // Empty state - gray donut
         ctx.fillStyle = "#E5E7EB";
         ctx.beginPath();
         ctx.arc(donutX, donutY, donutOuterRadius, 0, 2 * Math.PI);
@@ -480,7 +365,7 @@ class ThumbnailService {
         ctx.fill();
       }
 
-      // Donut legend - moved to the right of the donut
+      // Donut legend
       const legendX = donutX + donutOuterRadius + 30;
       const legendY = donutY - 25;
       const legendSpacing = 25;
@@ -488,35 +373,20 @@ class ThumbnailService {
       ctx.textAlign = "left";
       ctx.font = "12px Arial";
 
-      // Positive legend
       ctx.fillStyle = "#1E3A8A";
       ctx.fillRect(legendX, legendY, 12, 12);
       ctx.fillStyle = "#1E3A8A";
-      ctx.fillText(
-        `Positive: ${responseBreakdown.positive.count}`,
-        legendX + 20,
-        legendY + 10
-      );
+      ctx.fillText(`Positive: ${responseBreakdown.positive.count}`, legendX + 20, legendY + 10);
 
-      // Neutral legend
       ctx.fillStyle = "#3B82F6";
       ctx.fillRect(legendX, legendY + legendSpacing, 12, 12);
       ctx.fillStyle = "#3B82F6";
-      ctx.fillText(
-        `Neutral: ${responseBreakdown.neutral.count}`,
-        legendX + 20,
-        legendY + legendSpacing + 10
-      );
+      ctx.fillText(`Neutral: ${responseBreakdown.neutral.count}`, legendX + 20, legendY + legendSpacing + 10);
 
-      // Negative legend
       ctx.fillStyle = "#93C5FD";
       ctx.fillRect(legendX, legendY + legendSpacing * 2, 12, 12);
       ctx.fillStyle = "#93C5FD";
-      ctx.fillText(
-        `Negative: ${responseBreakdown.negative.count}`,
-        legendX + 20,
-        legendY + legendSpacing * 2 + 10
-      );
+      ctx.fillText(`Negative: ${responseBreakdown.negative.count}`, legendX + 20, legendY + legendSpacing * 2 + 10);
 
       // Response Breakdown title above donut
       ctx.fillStyle = "#1E3A8A";
@@ -524,54 +394,25 @@ class ThumbnailService {
       ctx.textAlign = "center";
       ctx.fillText("Response Breakdown", donutX, chartsY + 10);
 
-      // No bottom title needed as DashboardCard provides it
-
-      // Save thumbnail
-      const buffer = canvas.toBuffer("image/png");
-      await fs.writeFile(thumbnailPath, buffer);
-
-      // Verify file size
-      const stats = await fs.stat(thumbnailPath);
-      if (stats.size === 0) {
-        await fs.unlink(thumbnailPath);
-        throw new Error("Generated analytics thumbnail is 0 bytes");
-      }
-
-      console.log(`✅ Generated analytics thumbnail for form ${formId}`);
-      return `/api/thumbnails/analytics-${formId}.png`;
+      console.log(`✅ Generated analytics thumbnail buffer`);
+      return canvas.toBuffer("image/png");
     } catch (error) {
       console.error(
-        `❌ Error generating analytics thumbnail for form ${formId}:`,
+        `❌ Error generating analytics thumbnail:`,
         error.message
       );
-      console.error(`Stack trace:`, error.stack);
-      // Return a placeholder
-      return `https://placehold.co/800x450/3B82F6/ffffff?text=Analytics`;
+      return null;
     }
   }
 
-  async generateCertificateThumbnail(
-    certificateId,
-    userName,
-    certificateType = "participation"
-  ) {
+  /**
+   * Generate a certificate thumbnail and return it as a PNG Buffer.
+   * @param {string} userName
+   * @param {string} certificateType
+   * @returns {Promise<Buffer|null>}
+   */
+  async generateCertificateThumbnail(userName, certificateType = "participation") {
     try {
-      const thumbnailPath = path.join(
-        this.thumbnailDir,
-        `certificate-${certificateId}.png`
-      );
-
-      // Check if thumbnail exists
-      try {
-        await fs.access(thumbnailPath);
-        // If file exists, return path immediately
-        return `/api/thumbnails/certificate-${certificateId}.png`;
-      } catch (err) {
-        // File doesn't exist, proceed to generate
-      }
-
-      await this.ensureThumbnailDirectory();
-
       const canvas = createCanvas(this.width, this.height);
       const ctx = canvas.getContext("2d");
 
@@ -601,9 +442,7 @@ class ThumbnailService {
       // Certificate type
       ctx.font = "24px Arial";
       ctx.fillText(
-        `of ${
-          certificateType.charAt(0).toUpperCase() + certificateType.slice(1)
-        }`,
+        `of ${certificateType.charAt(0).toUpperCase() + certificateType.slice(1)}`,
         this.width / 2,
         140
       );
@@ -639,16 +478,8 @@ class ThumbnailService {
       // Certificate description
       ctx.fillStyle = "#3a3a3a";
       ctx.font = "20px Arial";
-      ctx.fillText(
-        "has successfully completed the requirements",
-        this.width / 2,
-        310
-      );
-      ctx.fillText(
-        "and is hereby recognized for their achievement",
-        this.width / 2,
-        340
-      );
+      ctx.fillText("has successfully completed the requirements", this.width / 2, 310);
+      ctx.fillText("and is hereby recognized for their achievement", this.width / 2, 340);
 
       // Date section
       ctx.font = "16px Arial";
@@ -660,39 +491,25 @@ class ThumbnailService {
       });
       ctx.fillText(`Date: ${currentDate}`, this.width / 2, 390);
 
-      // Save thumbnail
-      const buffer = canvas.toBuffer("image/png");
-      await fs.writeFile(thumbnailPath, buffer);
-
-      // Verify file size
-      const stats = await fs.stat(thumbnailPath);
-      if (stats.size === 0) {
-        await fs.unlink(thumbnailPath);
-        throw new Error("Generated certificate thumbnail is 0 bytes");
-      }
-
-      console.log(
-        `✅ Generated certificate thumbnail for ${certificateId}: ${userName}`
-      );
-      return `/api/thumbnails/certificate-${certificateId}.png`;
+      console.log(`✅ Generated certificate thumbnail buffer for: ${userName}`);
+      return canvas.toBuffer("image/png");
     } catch (error) {
       console.error(
-        `❌ Error generating certificate thumbnail for ${certificateId}:`,
+        `❌ Error generating certificate thumbnail for "${userName}":`,
         error.message
       );
-      console.error(`Stack trace:`, error.stack);
-      // Return a placeholder
-      const encodedName = encodeURIComponent(userName || "Certificate");
-      return `https://placehold.co/800x450/d4a855/5a4a1f?text=${encodedName}`;
+      return null;
     }
   }
 
+  /**
+   * Generate a MIS thumbnail and return it as a PNG Buffer.
+   * @param {string} type
+   * @param {object} data
+   * @returns {Promise<Buffer|null>}
+   */
   async generateMisThumbnail(type, data = {}) {
     try {
-      const thumbnailPath = path.join(this.thumbnailDir, `${type}.png`);
-
-      await this.ensureThumbnailDirectory();
-
       const canvas = createCanvas(this.width, this.height);
       const ctx = canvas.getContext("2d");
 
@@ -740,11 +557,7 @@ class ThumbnailService {
       // Subtitle
       ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
       ctx.font = "24px Arial";
-      ctx.fillText(
-        data.subtitle || "Click to view details",
-        this.width / 2,
-        330
-      );
+      ctx.fillText(data.subtitle || "Click to view details", this.width / 2, 330);
 
       // Decorative bottom bar
       ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
@@ -761,27 +574,31 @@ class ThumbnailService {
         ctx.fillText("View Details →", this.width / 2, this.height - 22);
       }
 
-      // Save thumbnail
-      const buffer = canvas.toBuffer("image/png");
-      await fs.writeFile(thumbnailPath, buffer);
-
-      // Verify file size
-      const stats = await fs.stat(thumbnailPath);
-      if (stats.size === 0) {
-        await fs.unlink(thumbnailPath);
-        throw new Error(`Generated ${type} thumbnail is 0 bytes`);
-      }
-
-      console.log(`✅ Generated MIS thumbnail: ${type}`);
-      return `/api/thumbnails/${type}.png`;
+      console.log(`✅ Generated MIS thumbnail buffer: ${type}`);
+      return canvas.toBuffer("image/png");
     } catch (error) {
       console.error(
-        `❌ Error generating MIS thumbnail ${type}:`,
+        `❌ Error generating MIS thumbnail "${type}":`,
         error.message
       );
-      console.error(`Stack trace:`, error.stack);
       return null;
     }
+  }
+
+  /**
+   * @deprecated No-op kept for backward compatibility.
+   * Thumbnails are now generated in-memory on each request.
+   */
+  async deleteThumbnail(formId) {
+    console.log(`[thumbnailService] deleteThumbnail called for ${formId} — no-op (in-memory mode)`);
+  }
+
+  /**
+   * @deprecated Returns a placehold.co fallback URL.
+   * Thumbnails are now generated in-memory on each request via the route.
+   */
+  async getThumbnailPath(formId) {
+    return `https://placehold.co/800x450/1e3a8a/ffffff?text=Report`;
   }
 }
 

@@ -1,362 +1,289 @@
 const express = require("express");
-const path = require("path");
-const fs = require("fs");
 const router = express.Router();
 const Form = require("../../models/Form");
 const Certificate = require("../../models/Certificate");
 const thumbnailService = require("../../services/thumbnail/thumbnailService");
 const { requireAuth } = require("../../middlewares/auth");
 
+/**
+ * Helper: send a PNG buffer as an HTTP response with caching headers.
+ * Cache-Control is set to 5 minutes so browsers don't hammer the server,
+ * but thumbnails still refresh reasonably quickly.
+ */
+function sendPngBuffer(res, buffer) {
+  res.set("Content-Type", "image/png");
+  res.set("Cache-Control", "public, max-age=300"); // 5 minutes
+  return res.send(buffer);
+}
+
+/**
+ * Helper: redirect to a placehold.co placeholder when thumbnail generation fails.
+ */
+function sendPlaceholder(res, text = "Report", colors = "1e3a8a/ffffff") {
+  const encoded = encodeURIComponent(text);
+  return res.redirect(`https://placehold.co/800x450/${colors}?text=${encoded}`);
+}
+
 router.get("/:filename", requireAuth, async (req, res) => {
   const filename = req.params.filename;
 
   // Security check to prevent directory traversal
-  // Allow alphanumeric, dashes, and .png extension
+  // Allow alphanumeric, dashes, and .png extension only
   if (!filename.match(/^[a-zA-Z0-9-]+\.png$/)) {
     return res.status(400).send("Invalid filename");
   }
 
-  // Path to server/public/thumbnails
-  const thumbnailPath = path.join(
-    __dirname,
-    "../../../public/thumbnails",
-    filename,
-  );
-
-  // Handle MIS-specific static thumbnails
+  // ── MIS static thumbnails ──────────────────────────────────────────────────
   if (filename === "user-stats.png" || filename === "system-health.png") {
-    // Only MIS users can access these
     if (req.user.role !== "mis") {
       return res.status(403).send("Access denied");
     }
 
-    // Check if a recent cached version exists (less than 5 minutes old)
-    if (fs.existsSync(thumbnailPath)) {
-      const stats = fs.statSync(thumbnailPath);
-      const ageMinutes = (Date.now() - stats.mtimeMs) / 60000;
-      if (ageMinutes < 5) {
-        return res.sendFile(thumbnailPath);
-      }
-    }
-
     try {
-      // Generate MIS thumbnails dynamically
+      let buffer;
       if (filename === "user-stats.png") {
-        await thumbnailService.generateMisThumbnail("user-stats", {
+        buffer = await thumbnailService.generateMisThumbnail("user-stats", {
           title: "User Statistics",
           icon: "📊",
           subtitle: "View user analytics and trends",
         });
-      } else if (filename === "system-health.png") {
-        await thumbnailService.generateMisThumbnail("system-health", {
+      } else {
+        buffer = await thumbnailService.generateMisThumbnail("system-health", {
           title: "System Health",
           icon: "🖥️",
           subtitle: "Monitor system performance",
         });
       }
 
-      if (fs.existsSync(thumbnailPath)) {
-        return res.sendFile(thumbnailPath);
-      }
+      if (buffer) return sendPngBuffer(res, buffer);
     } catch (error) {
       console.error(`Error generating MIS thumbnail ${filename}:`, error);
     }
 
-    // Return a placeholder if generation fails
-    const placeholderPath = path.join(
-      __dirname,
-      "../../../public/thumbnails/default.png",
-    );
-    if (fs.existsSync(placeholderPath)) {
-      return res.sendFile(placeholderPath);
-    }
+    return sendPlaceholder(res, filename.replace(".png", ""), "4B5563/ffffff");
+  }
+
+  // ── Extract type and ID from filename ─────────────────────────────────────
+  // Supported formats: form-{id}.png | certificate-{id}.png | analytics-{id}.png
+  const match = filename.match(/^(form|certificate|analytics)-([a-zA-Z0-9]+)\.png$/);
+
+  if (!match) {
     return res.status(404).send("Thumbnail not found");
   }
 
-  // If thumbnail exists, serve it
-  if (fs.existsSync(thumbnailPath)) {
-    const stats = fs.statSync(thumbnailPath);
-    console.log(`Serving thumbnail: ${filename}, Size: ${stats.size} bytes`);
-    return res.sendFile(thumbnailPath);
-  }
+  const [, type, id] = match;
 
-  // Extract ID from filename (format: form-{id}.png, certificate-{id}.png, or analytics-{id}.png)
-  const match = filename.match(
-    /^(form|certificate|analytics)-([a-zA-Z0-9]+)\.png$/,
-  );
+  try {
+    // ── Form report thumbnail ────────────────────────────────────────────────
+    if (type === "form") {
+      const userId = req.user._id;
+      const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : "";
+      const userRole = req.user.role;
 
-  if (match) {
-    const [, type, id] = match;
+      let form = await Form.findOne({ _id: id, createdBy: userId }).select("title");
 
-    try {
-      if (type === "form") {
-        // Check permissions: user must be the creator or have access to the form
-        const userId = req.user._id;
-        const userEmail = req.user.email
-          ? req.user.email.toLowerCase().trim()
-          : "";
-        const userRole = req.user.role;
-
-        let form = await Form.findOne({
+      if (!form && userRole === "participant") {
+        form = await Form.findOne({
           _id: id,
-          createdBy: userId,
+          status: "published",
+          "attendeeList.email": userEmail,
         }).select("title");
-
-        // If not creator, check if user is assigned to the form (for participants)
-        if (!form && userRole === "participant") {
-          form = await Form.findOne({
-            _id: id,
-            status: "published",
-            "attendeeList.email": userEmail,
-          }).select("title");
-        }
-
-        // For admin and shared roles, allow access to all forms
-        if (
-          !form &&
-          [
-            "psas",
-            "club-officer",
-            "school-admin",
-            "senior-management",
-            "club-adviser",
-            "mis",
-            "evaluator",
-            "guest-speaker",
-          ].includes(userRole)
-        ) {
-          form = await Form.findById(id).select("title");
-        }
-
-        if (form) {
-          console.log(
-            `Generating thumbnail for form ${id}: ${form.title} (accessed by ${userRole})`,
-          );
-          await thumbnailService.generateReportThumbnail(id, form.title);
-
-          // Check if it was generated successfully
-          if (fs.existsSync(thumbnailPath)) {
-            return res.sendFile(thumbnailPath);
-          }
-        } else {
-          console.log(
-            `Access denied: User ${userId} (${userRole}) cannot access form ${id}`,
-          );
-          return res.status(403).send("Access denied");
-        }
-      } else if (type === "analytics") {
-        // Check permissions: user must have access to the form
-        const userId = req.user._id;
-        const userEmail = req.user.email
-          ? req.user.email.toLowerCase().trim()
-          : "";
-        const userRole = req.user.role;
-
-        let form = await Form.findOne({
-          _id: id,
-          createdBy: userId,
-        }).select("title attendeeList responses");
-
-        // If not creator, check if user is assigned to the form (for participants)
-        if (!form && userRole === "participant") {
-          form = await Form.findOne({
-            _id: id,
-            status: "published",
-            "attendeeList.email": userEmail,
-          }).select("title attendeeList responses");
-        }
-
-        // For admin and shared roles, allow access to all forms
-        if (
-          !form &&
-          [
-            "psas",
-            "club-officer",
-            "school-admin",
-            "senior-management",
-            "club-adviser",
-            "mis",
-            "evaluator",
-            "guest-speaker",
-          ].includes(userRole)
-        ) {
-          form = await Form.findById(id).select("title attendeeList responses");
-        }
-
-        if (form) {
-          console.log(
-            `Generating analytics thumbnail for form ${id}: ${form.title}`,
-          );
-
-          // Calculate accurate analytics data (same logic as analytics controller)
-          const totalAttendees = form.attendeeList
-            ? form.attendeeList.length
-            : 0;
-          const totalResponses = form.responses ? form.responses.length : 0;
-
-          const responseRate =
-            totalAttendees > 0
-              ? Math.round((totalResponses / totalAttendees) * 100 * 100) / 100
-              : 0;
-
-          // Calculate remaining non-responses
-          const respondedAttendees = form.attendeeList
-            ? form.attendeeList.filter((attendee) => attendee.hasResponded)
-                .length
-            : 0;
-          const remainingNonResponses = totalAttendees - respondedAttendees;
-
-          // Calculate sentiment breakdown from actual responses (simplified for thumbnail)
-          let sentimentBreakdown = {
-            positive: { percentage: 0, count: 0 },
-            neutral: { percentage: 0, count: 0 },
-            negative: { percentage: 0, count: 0 },
-          };
-
-          if (
-            totalResponses > 0 &&
-            form.responses &&
-            form.responses.length > 0
-          ) {
-            // Simple sentiment analysis for thumbnail (faster than full analysis)
-            let positiveCount = 0;
-            let neutralCount = 0;
-            let negativeCount = 0;
-
-            form.responses.forEach((response) => {
-              // Check for positive/negative keywords in responses
-              const text = JSON.stringify(response).toLowerCase();
-              if (
-                text.includes("good") ||
-                text.includes("great") ||
-                text.includes("excellent") ||
-                text.includes("amazing") ||
-                text.includes("love") ||
-                text.includes("perfect")
-              ) {
-                positiveCount++;
-              } else if (
-                text.includes("bad") ||
-                text.includes("poor") ||
-                text.includes("terrible") ||
-                text.includes("hate") ||
-                text.includes("awful") ||
-                text.includes("worst")
-              ) {
-                negativeCount++;
-              } else {
-                neutralCount++;
-              }
-            });
-
-            sentimentBreakdown = {
-              positive: {
-                percentage: Math.round((positiveCount / totalResponses) * 100),
-                count: positiveCount,
-              },
-              neutral: {
-                percentage: Math.round((neutralCount / totalResponses) * 100),
-                count: neutralCount,
-              },
-              negative: {
-                percentage: Math.round((negativeCount / totalResponses) * 100),
-                count: negativeCount,
-              },
-            };
-          }
-
-          const thumbnailData = {
-            totalAttendees,
-            totalResponses,
-            responseRate,
-            remainingNonResponses,
-            responseBreakdown: sentimentBreakdown,
-          };
-
-          console.log(
-            `✅ Using accurate analytics data for form ${id}:`,
-            thumbnailData,
-          );
-
-          // Generate thumbnail with accurate data
-          await thumbnailService.generateAnalyticsThumbnail(id, thumbnailData);
-
-          if (fs.existsSync(thumbnailPath)) {
-            return res.sendFile(thumbnailPath);
-          }
-        }
-      } else if (type === "certificate") {
-        // Check permissions: user must own the certificate or be an admin
-        const userId = req.user._id;
-        const userRole = req.user.role;
-
-        let certificate;
-
-        if (
-          [
-            "psas",
-            "club-officer",
-            "school-admin",
-            "senior-management",
-            "club-adviser",
-            "mis",
-            "evaluator",
-            "guest-speaker",
-          ].includes(userRole)
-        ) {
-          // Admins can view all certificates
-          certificate = await Certificate.findById(id)
-            .populate("userId", "name")
-            .select("userId certificateType");
-        } else {
-          // Regular users can only view their own certificates
-          certificate = await Certificate.findOne({
-            _id: id,
-            userId: userId,
-          })
-            .populate("userId", "name")
-            .select("userId certificateType");
-        }
-
-        if (certificate) {
-          const userName = certificate.userId?.name || "Participant";
-          const certType = certificate.certificateType || "participation";
-          console.log(
-            `Generating thumbnail for certificate ${id}: ${userName}`,
-          );
-          await thumbnailService.generateCertificateThumbnail(
-            id,
-            userName,
-            certType,
-          );
-
-          // Check if it was generated successfully
-          if (fs.existsSync(thumbnailPath)) {
-            return res.sendFile(thumbnailPath);
-          }
-        } else {
-          console.log(
-            `Access denied: User ${userId} (${userRole}) cannot access certificate ${id}`,
-          );
-          return res.status(403).send("Access denied");
-        }
       }
-    } catch (error) {
-      console.error(`Error generating thumbnail for ${filename}:`, error);
+
+      if (
+        !form &&
+        [
+          "psas",
+          "club-officer",
+          "school-admin",
+          "senior-management",
+          "club-adviser",
+          "mis",
+          "evaluator",
+          "guest-speaker",
+        ].includes(userRole)
+      ) {
+        form = await Form.findById(id).select("title");
+      }
+
+      if (!form) {
+        console.log(`Access denied: User ${userId} (${userRole}) cannot access form ${id}`);
+        return res.status(403).send("Access denied");
+      }
+
+      console.log(`Generating report thumbnail for form ${id}: ${form.title} (role: ${userRole})`);
+      const buffer = await thumbnailService.generateReportThumbnail(form.title);
+
+      if (buffer) return sendPngBuffer(res, buffer);
+      return sendPlaceholder(res, form.title || "Report");
     }
+
+    // ── Analytics thumbnail ──────────────────────────────────────────────────
+    if (type === "analytics") {
+      const userId = req.user._id;
+      const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : "";
+      const userRole = req.user.role;
+
+      let form = await Form.findOne({ _id: id, createdBy: userId }).select(
+        "title attendeeList responses"
+      );
+
+      if (!form && userRole === "participant") {
+        form = await Form.findOne({
+          _id: id,
+          status: "published",
+          "attendeeList.email": userEmail,
+        }).select("title attendeeList responses");
+      }
+
+      if (
+        !form &&
+        [
+          "psas",
+          "club-officer",
+          "school-admin",
+          "senior-management",
+          "club-adviser",
+          "mis",
+          "evaluator",
+          "guest-speaker",
+        ].includes(userRole)
+      ) {
+        form = await Form.findById(id).select("title attendeeList responses");
+      }
+
+      if (!form) {
+        console.log(`Access denied: User ${userId} (${userRole}) cannot access analytics for form ${id}`);
+        return res.status(403).send("Access denied");
+      }
+
+      // Calculate analytics data
+      const totalAttendees = form.attendeeList ? form.attendeeList.length : 0;
+      const totalResponses = form.responses ? form.responses.length : 0;
+      const responseRate =
+        totalAttendees > 0
+          ? Math.round((totalResponses / totalAttendees) * 100 * 100) / 100
+          : 0;
+      const respondedAttendees = form.attendeeList
+        ? form.attendeeList.filter((a) => a.hasResponded).length
+        : 0;
+      const remainingNonResponses = totalAttendees - respondedAttendees;
+
+      let sentimentBreakdown = {
+        positive: { percentage: 0, count: 0 },
+        neutral: { percentage: 0, count: 0 },
+        negative: { percentage: 0, count: 0 },
+      };
+
+      if (totalResponses > 0 && form.responses && form.responses.length > 0) {
+        let positiveCount = 0;
+        let neutralCount = 0;
+        let negativeCount = 0;
+
+        form.responses.forEach((response) => {
+          const text = JSON.stringify(response).toLowerCase();
+          if (
+            text.includes("good") ||
+            text.includes("great") ||
+            text.includes("excellent") ||
+            text.includes("amazing") ||
+            text.includes("love") ||
+            text.includes("perfect")
+          ) {
+            positiveCount++;
+          } else if (
+            text.includes("bad") ||
+            text.includes("poor") ||
+            text.includes("terrible") ||
+            text.includes("hate") ||
+            text.includes("awful") ||
+            text.includes("worst")
+          ) {
+            negativeCount++;
+          } else {
+            neutralCount++;
+          }
+        });
+
+        sentimentBreakdown = {
+          positive: {
+            percentage: Math.round((positiveCount / totalResponses) * 100),
+            count: positiveCount,
+          },
+          neutral: {
+            percentage: Math.round((neutralCount / totalResponses) * 100),
+            count: neutralCount,
+          },
+          negative: {
+            percentage: Math.round((negativeCount / totalResponses) * 100),
+            count: negativeCount,
+          },
+        };
+      }
+
+      const thumbnailData = {
+        totalAttendees,
+        totalResponses,
+        responseRate,
+        remainingNonResponses,
+        responseBreakdown: sentimentBreakdown,
+      };
+
+      console.log(`Generating analytics thumbnail for form ${id}: ${form.title}`);
+      const buffer = await thumbnailService.generateAnalyticsThumbnail(thumbnailData);
+
+      if (buffer) return sendPngBuffer(res, buffer);
+      return sendPlaceholder(res, "Analytics", "3B82F6/ffffff");
+    }
+
+    // ── Certificate thumbnail ────────────────────────────────────────────────
+    if (type === "certificate") {
+      const userId = req.user._id;
+      const userRole = req.user.role;
+
+      let certificate;
+
+      if (
+        [
+          "psas",
+          "club-officer",
+          "school-admin",
+          "senior-management",
+          "club-adviser",
+          "mis",
+          "evaluator",
+          "guest-speaker",
+        ].includes(userRole)
+      ) {
+        certificate = await Certificate.findById(id)
+          .populate("userId", "name")
+          .select("userId certificateType");
+      } else {
+        certificate = await Certificate.findOne({ _id: id, userId })
+          .populate("userId", "name")
+          .select("userId certificateType");
+      }
+
+      if (!certificate) {
+        console.log(`Access denied: User ${userId} (${userRole}) cannot access certificate ${id}`);
+        return res.status(403).send("Access denied");
+      }
+
+      const userName = certificate.userId?.name || "Participant";
+      const certType = certificate.certificateType || "participation";
+
+      console.log(`Generating certificate thumbnail for ${id}: ${userName}`);
+      const buffer = await thumbnailService.generateCertificateThumbnail(userName, certType);
+
+      if (buffer) return sendPngBuffer(res, buffer);
+      return sendPlaceholder(res, userName, "d4a855/5a4a1f");
+    }
+  } catch (error) {
+    console.error(`Error generating thumbnail for ${filename}:`, error);
+    return sendPlaceholder(res, "Error");
   }
 
-  // Try to serve default.png if specific thumbnail not found
-  const defaultPath = path.join(
-    __dirname,
-    "../../../public/thumbnails/default.png",
-  );
-
-  if (fs.existsSync(defaultPath)) {
-    return res.sendFile(defaultPath);
-  }
-
-  res.status(404).send("Thumbnail not found");
+  return res.status(404).send("Thumbnail not found");
 });
 
 module.exports = router;
