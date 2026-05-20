@@ -173,6 +173,9 @@ console.log(
   `[EMAIL-INIT] Brevo API key present: ${!!process.env.BREVO_API_KEY}`,
 );
 console.log(
+  `[EMAIL-INIT] Brevo API key preview: ${process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.substring(0, 10) + "..." : "NOT SET"}`,
+);
+console.log(
   `[EMAIL-INIT] SendGrid API key present: ${!!process.env.SENDGRID_API_KEY}`,
 );
 console.log(
