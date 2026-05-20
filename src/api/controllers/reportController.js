@@ -1984,11 +1984,8 @@ const generateReport = async (req, res) => {
       }
     }
 
-    // Generate thumbnail
-    const thumbnail = await ThumbnailService.generateReportThumbnail(
-      form._id,
-      form.title || "Event Evaluation Report",
-    );
+    // Generate thumbnail URL path dynamically
+    const thumbnail = `/api/thumbnails/form-${form._id}.png`;
 
     const reportData = {
       formId: form._id,

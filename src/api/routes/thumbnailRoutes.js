@@ -6,14 +6,27 @@ const thumbnailService = require("../../services/thumbnail/thumbnailService");
 const { requireAuth } = require("../../middlewares/auth");
 
 /**
- * Helper: send a PNG buffer as an HTTP response with caching headers.
- * Cache-Control is set to 5 minutes so browsers don't hammer the server,
- * but thumbnails still refresh reasonably quickly.
+ * Helper: send a PNG buffer or SVG string as an HTTP response with caching headers.
  */
-function sendPngBuffer(res, buffer) {
-  res.set("Content-Type", "image/png");
+function sendImage(res, result) {
   res.set("Cache-Control", "public, max-age=300"); // 5 minutes
-  return res.send(buffer);
+  
+  if (result && result.type === "svg") {
+    res.set("Content-Type", "image/svg+xml");
+    return res.send(result.content);
+  }
+  
+  let buffer = result;
+  if (result && result.type === "png") {
+    buffer = result.content;
+  }
+  
+  if (buffer && Buffer.isBuffer(buffer)) {
+    res.set("Content-Type", "image/png");
+    return res.send(buffer);
+  }
+  
+  return null;
 }
 
 /**
@@ -31,6 +44,17 @@ router.get("/:filename", requireAuth, async (req, res) => {
   // Allow alphanumeric, dashes, and .png extension only
   if (!filename.match(/^[a-zA-Z0-9-]+\.png$/)) {
     return res.status(400).send("Invalid filename");
+  }
+
+  // ── Handle default-report.png fallback ─────────────────────────────────────
+  if (filename === "default-report.png") {
+    try {
+      const result = await thumbnailService.generateReportThumbnail("Event Evaluation Report");
+      if (result) return sendImage(res, result);
+    } catch (error) {
+      console.error("Error generating default-report thumbnail:", error);
+    }
+    return sendPlaceholder(res, "Event Evaluation Report");
   }
 
   // ── MIS static thumbnails ──────────────────────────────────────────────────
@@ -55,7 +79,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
         });
       }
 
-      if (buffer) return sendPngBuffer(res, buffer);
+      if (buffer) return sendImage(res, buffer);
     } catch (error) {
       console.error(`Error generating MIS thumbnail ${filename}:`, error);
     }
@@ -101,6 +125,9 @@ router.get("/:filename", requireAuth, async (req, res) => {
           "mis",
           "evaluator",
           "guest-speaker",
+          "speaker",
+          "guest",
+          "guest-speaker",
         ].includes(userRole)
       ) {
         form = await Form.findById(id).select("title");
@@ -114,7 +141,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
       console.log(`Generating report thumbnail for form ${id}: ${form.title} (role: ${userRole})`);
       const buffer = await thumbnailService.generateReportThumbnail(form.title);
 
-      if (buffer) return sendPngBuffer(res, buffer);
+      if (buffer) return sendImage(res, buffer);
       return sendPlaceholder(res, form.title || "Report");
     }
 
@@ -146,6 +173,9 @@ router.get("/:filename", requireAuth, async (req, res) => {
           "club-adviser",
           "mis",
           "evaluator",
+          "guest-speaker",
+          "speaker",
+          "guest",
           "guest-speaker",
         ].includes(userRole)
       ) {
@@ -232,7 +262,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
       console.log(`Generating analytics thumbnail for form ${id}: ${form.title}`);
       const buffer = await thumbnailService.generateAnalyticsThumbnail(thumbnailData);
 
-      if (buffer) return sendPngBuffer(res, buffer);
+      if (buffer) return sendImage(res, buffer);
       return sendPlaceholder(res, "Analytics", "3B82F6/ffffff");
     }
 
@@ -252,6 +282,9 @@ router.get("/:filename", requireAuth, async (req, res) => {
           "club-adviser",
           "mis",
           "evaluator",
+          "guest-speaker",
+          "speaker",
+          "guest",
           "guest-speaker",
         ].includes(userRole)
       ) {
@@ -275,7 +308,7 @@ router.get("/:filename", requireAuth, async (req, res) => {
       console.log(`Generating certificate thumbnail for ${id}: ${userName}`);
       const buffer = await thumbnailService.generateCertificateThumbnail(userName, certType);
 
-      if (buffer) return sendPngBuffer(res, buffer);
+      if (buffer) return sendImage(res, buffer);
       return sendPlaceholder(res, userName, "d4a855/5a4a1f");
     }
   } catch (error) {

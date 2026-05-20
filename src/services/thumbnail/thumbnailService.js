@@ -1,9 +1,327 @@
-const { createCanvas } = require("canvas");
+let createCanvas;
+try {
+  createCanvas = require("canvas").createCanvas;
+} catch (e) {
+  console.warn("⚠️ Canvas package is not available. Falling back to dynamic SVG generation.");
+  createCanvas = null;
+}
 
 class ThumbnailService {
   constructor() {
     this.width = 800;
     this.height = 450;
+  }
+
+  escapeXml(unsafe) {
+    if (typeof unsafe !== "string") return "";
+    return unsafe.replace(/[<>&'"]/g, (c) => {
+      switch (c) {
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '&': return '&amp;';
+        case '\'': return '&apos;';
+        case '"': return '&quot;';
+        default: return c;
+      }
+    });
+  }
+
+  wrapText(text, maxChars = 35) {
+    if (typeof text !== "string") return [];
+    const words = text.split(" ");
+    let currentLine = "";
+    let lines = [];
+    words.forEach((word) => {
+      const testLine = currentLine + (currentLine ? " " : "") + word;
+      if (testLine.length > maxChars && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    return lines;
+  }
+
+  generateReportThumbnailSVG(formTitle) {
+    const lines = this.wrapText(formTitle, 35);
+    const titleY = 180;
+    const lineHeight = 45;
+    
+    let titleElements = "";
+    lines.forEach((line, index) => {
+      const y = titleY + index * lineHeight;
+      titleElements += `<text x="400" y="${y}" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#000000" text-anchor="middle">${this.escapeXml(line)}</text>`;
+    });
+
+    const underlineY = titleY + lines.length * lineHeight + 15;
+    const descriptionY = underlineY + 30;
+    const eventSectionY = descriptionY + 70;
+
+    const svg = `<svg width="800" height="450" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <style>
+          .header-text { font-family: Arial, sans-serif; fill: #FFFFFF; }
+          .body-text { font-family: Arial, sans-serif; fill: #000000; text-anchor: middle; }
+        </style>
+      </defs>
+      <!-- Background -->
+      <rect width="800" height="450" fill="#FFFFFF"/>
+      
+      <!-- Header -->
+      <rect width="800" height="100" fill="#1e3a8a"/>
+      
+      <!-- Gold Stripes -->
+      <path d="M 740 0 L 800 0 L 800 100 L 760 100 Z" fill="#f59e0b"/>
+      <path d="M 0 0 L 60 0 L 80 100 L 0 100 Z" fill="#f59e0b"/>
+      
+      <!-- Header Text -->
+      <text x="140" y="40" class="header-text" font-size="24" font-weight="bold">LA VERDAD</text>
+      <text x="140" y="65" class="header-text" font-size="18">CHRISTIAN COLLEGE, INC.</text>
+      <text x="140" y="85" class="header-text" font-size="12">Apalit, Pampanga</text>
+      
+      <!-- Title Lines -->
+      ${titleElements}
+      
+      <!-- Underline -->
+      <line x1="50" y1="${underlineY}" x2="750" y2="${underlineY}" stroke="#D8D8D8" stroke-width="2"/>
+      
+      <!-- Description -->
+      <text x="400" y="${descriptionY}" class="body-text" font-size="14">This evaluation report serves as a guide for the institution to acknowledge the impact of the said event</text>
+      <text x="400" y="${descriptionY + 20}" class="body-text" font-size="14">on the welfare and enjoyment of the students at La Verdad Christian College - Apalit, Pampanga.</text>
+      
+      <!-- Event Section -->
+      <text x="400" y="${eventSectionY}" class="body-text" font-size="16" font-weight="bold">${this.escapeXml(formTitle.toUpperCase())}</text>
+      <text x="400" y="${eventSectionY + 30}" class="body-text" font-size="18" font-weight="bold">EVALUATION RESULT</text>
+      <text x="400" y="${eventSectionY + 55}" class="body-text" font-size="16">College Level</text>
+    </svg>`;
+    
+    return { type: "svg", content: svg };
+  }
+
+  generateAnalyticsThumbnailSVG(analyticsData = {}) {
+    const {
+      totalAttendees = 0,
+      totalResponses = 0,
+      responseRate = 0,
+      remainingNonResponses = 0,
+      responseBreakdown = {
+        positive: { percentage: 0, count: 0 },
+        neutral: { percentage: 0, count: 0 },
+        negative: { percentage: 0, count: 0 },
+      },
+    } = analyticsData;
+
+    const posCount = responseBreakdown.positive?.count || 0;
+    const neuCount = responseBreakdown.neutral?.count || 0;
+    const negCount = responseBreakdown.negative?.count || 0;
+    const totalSentiments = posCount + neuCount + negCount;
+
+    const donutCircumference = 298.45;
+    let donutSlices = "";
+
+    if (totalSentiments > 0) {
+      const posPct = posCount / totalSentiments;
+      const neuPct = neuCount / totalSentiments;
+      const negPct = negCount / totalSentiments;
+
+      const posDash = posPct * donutCircumference;
+      const neuDash = neuPct * donutCircumference;
+      const negDash = negPct * donutCircumference;
+
+      const posRot = -90;
+      const neuRot = -90 + posPct * 360;
+      const negRot = -90 + (posPct + neuPct) * 360;
+
+      donutSlices += `<circle cx="480" cy="285" r="47.5" fill="none" stroke="#1E3A8A" stroke-width="25" stroke-dasharray="${posDash} ${donutCircumference}" transform="rotate(${posRot}, 480, 285)"/>`;
+      donutSlices += `<circle cx="480" cy="285" r="47.5" fill="none" stroke="#3B82F6" stroke-width="25" stroke-dasharray="${neuDash} ${donutCircumference}" transform="rotate(${neuRot}, 480, 285)"/>`;
+      donutSlices += `<circle cx="480" cy="285" r="47.5" fill="none" stroke="#93C5FD" stroke-width="25" stroke-dasharray="${negDash} ${donutCircumference}" transform="rotate(${negRot}, 480, 285)"/>`;
+    } else {
+      donutSlices = `<circle cx="480" cy="285" r="47.5" fill="none" stroke="#E5E7EB" stroke-width="25"/>`;
+    }
+
+    const gaugeCircumference = 439.82;
+    const gaugeHalf = gaugeCircumference / 2;
+    const gaugeDash = (responseRate / 100) * gaugeHalf;
+
+    const svg = `<svg width="800" height="450" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#F1F5F9"/>
+          <stop offset="100%" stop-color="#E2E8F0"/>
+        </linearGradient>
+        <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1E40AF"/>
+          <stop offset="100%" stop-color="#1E3A8A"/>
+        </linearGradient>
+        <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+          <feDropShadow dx="0" dy="4" stdDeviation="10" flood-opacity="0.1"/>
+        </filter>
+      </defs>
+      
+      <!-- Background -->
+      <rect width="800" height="450" fill="url(#bgGradient)"/>
+      
+      <!-- Container -->
+      <rect x="30" y="30" width="740" height="390" rx="20" fill="#FFFFFF" filter="url(#shadow)"/>
+      
+      <!-- Title -->
+      <text x="400" y="65" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#1E3A8A" text-anchor="middle">Evaluation Summary</text>
+      
+      <!-- Card 1 (Total Event Attendees) -->
+      <rect x="50" y="85" width="220" height="90" rx="10" fill="url(#blueGradient)"/>
+      <text x="65" y="115" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF">Total Event Attendees</text>
+      <text x="65" y="155" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">${totalAttendees}</text>
+      
+      <!-- Card 2 (Total Responses) -->
+      <rect x="290" y="85" width="220" height="90" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="2"/>
+      <text x="305" y="115" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1E3A8A">Total Responses</text>
+      <text x="305" y="155" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#1E3A8A">${totalResponses}</text>
+      
+      <!-- Card 3 (Non-Responses) -->
+      <rect x="530" y="85" width="220" height="90" rx="10" fill="url(#blueGradient)"/>
+      <text x="545" y="115" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF">Non-Responses</text>
+      <text x="545" y="155" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">${remainingNonResponses}</text>
+      
+      <!-- Left: Response Rate Gauge -->
+      <circle cx="240" cy="295" r="70" fill="none" stroke="#E5E7EB" stroke-width="20" stroke-dasharray="${gaugeHalf} ${gaugeCircumference}" transform="rotate(-180, 240, 295)"/>
+      <circle cx="240" cy="295" r="70" fill="none" stroke="#1E40AF" stroke-width="20" stroke-dasharray="${gaugeDash} ${gaugeCircumference}" transform="rotate(-180, 240, 295)"/>
+      <text x="240" y="285" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#1E3A8A" text-anchor="middle">${Math.round(responseRate)}%</text>
+      <text x="240" y="340" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#64748B" text-anchor="middle">Response Rate</text>
+      
+      <!-- Right: Response Breakdown Donut -->
+      <text x="480" y="225" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1E3A8A" text-anchor="middle">Response Breakdown</text>
+      ${donutSlices}
+      
+      <!-- Donut Legend -->
+      <rect x="580" y="240" width="12" height="12" fill="#1E3A8A"/>
+      <text x="600" y="251" font-family="Arial, sans-serif" font-size="12" fill="#1E3A8A">Positive: ${posCount}</text>
+      
+      <rect x="580" y="265" width="12" height="12" fill="#3B82F6"/>
+      <text x="600" y="276" font-family="Arial, sans-serif" font-size="12" fill="#3B82F6">Neutral: ${neuCount}</text>
+      
+      <rect x="580" y="290" width="12" height="12" fill="#93C5FD"/>
+      <text x="600" y="301" font-family="Arial, sans-serif" font-size="12" fill="#93C5FD">Negative: ${negCount}</text>
+    </svg>`;
+
+    return { type: "svg", content: svg };
+  }
+
+  generateCertificateThumbnailSVG(userName, certificateType = "participation") {
+    const displayName = userName || "Participant";
+    const certTypeStr = certificateType.charAt(0).toUpperCase() + certificateType.slice(1);
+    const currentDate = new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    const svg = `<svg width="800" height="450" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="certBg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#f4e4c1"/>
+          <stop offset="100%" stop-color="#e5c896"/>
+        </linearGradient>
+      </defs>
+      
+      <!-- Background -->
+      <rect width="800" height="450" fill="url(#certBg)"/>
+      
+      <!-- Decorative outer border -->
+      <rect x="20" y="20" width="760" height="410" fill="none" stroke="#8b6914" stroke-width="8"/>
+      
+      <!-- Decorative inner border -->
+      <rect x="30" y="30" width="740" height="390" fill="none" stroke="#d4a855" stroke-width="2"/>
+      
+      <!-- Header -->
+      <text x="400" y="100" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#5a4a1f" text-anchor="middle">CERTIFICATE</text>
+      <text x="400" y="140" font-family="Arial, sans-serif" font-size="24" fill="#5a4a1f" text-anchor="middle">of ${certTypeStr}</text>
+      
+      <!-- Decorative line -->
+      <line x1="250" y1="160" x2="550" y2="160" stroke="#8b6914" stroke-width="2"/>
+      
+      <!-- "This is to certify that" -->
+      <text x="400" y="210" font-family="Arial, sans-serif" font-size="20" font-style="italic" fill="#3a3a3a" text-anchor="middle">This is to certify that</text>
+      
+      <!-- Recipient name -->
+      <text x="400" y="260" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#1a1a1a" text-anchor="middle">${this.escapeXml(displayName)}</text>
+      <line x1="200" y1="275" x2="600" y2="275" stroke="#8b6914" stroke-width="2"/>
+      
+      <!-- Description -->
+      <text x="400" y="310" font-family="Arial, sans-serif" font-size="20" fill="#3a3a3a" text-anchor="middle">has successfully completed the requirements</text>
+      <text x="400" y="340" font-family="Arial, sans-serif" font-size="20" fill="#3a3a3a" text-anchor="middle">and is hereby recognized for their achievement</text>
+      
+      <!-- Date -->
+      <text x="400" y="390" font-family="Arial, sans-serif" font-size="16" fill="#5a5a5a" text-anchor="middle">Date: ${currentDate}</text>
+    </svg>`;
+
+    return { type: "svg", content: svg };
+  }
+
+  generateMisThumbnailSVG(type, data = {}) {
+    let startColor = "#4B5563";
+    let endColor = "#6B7280";
+    let ctaText = "View Details →";
+
+    if (type === "user-stats") {
+      startColor = "#1E40AF";
+      endColor = "#3B82F6";
+      ctaText = "View User Analytics →";
+    } else if (type === "system-health") {
+      startColor = "#059669";
+      endColor = "#10B981";
+      ctaText = "View System Reports →";
+    }
+
+    const icon = data.icon || "📊";
+    const title = data.title || "Dashboard";
+    const subtitle = data.subtitle || "Click to view details";
+
+    const circles = [
+      { cx: 120, cy: 80, r: 40 },
+      { cx: 700, cy: 150, r: 60 },
+      { cx: 300, cy: 350, r: 30 },
+      { cx: 620, cy: 300, r: 50 },
+      { cx: 80, cy: 260, r: 45 },
+    ];
+
+    let circleElements = "";
+    circles.forEach((c) => {
+      circleElements += `<circle cx="${c.cx}" cy="${c.cy}" r="${c.r}" fill="rgba(255, 255, 255, 0.05)"/>`;
+    });
+
+    const svg = `<svg width="800" height="450" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="misBg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${startColor}"/>
+          <stop offset="100%" stop-color="${endColor}"/>
+        </linearGradient>
+      </defs>
+      
+      <!-- Background -->
+      <rect width="800" height="450" fill="url(#misBg)"/>
+      
+      <!-- Decorative Circles -->
+      ${circleElements}
+      
+      <!-- Icon -->
+      <text x="400" y="180" font-family="Arial, sans-serif" font-size="120" text-anchor="middle">${icon}</text>
+      
+      <!-- Title -->
+      <text x="400" y="280" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#FFFFFF" text-anchor="middle">${this.escapeXml(title)}</text>
+      
+      <!-- Subtitle -->
+      <text x="400" y="330" font-family="Arial, sans-serif" font-size="24" fill="rgba(255, 255, 255, 0.8)" text-anchor="middle">${this.escapeXml(subtitle)}</text>
+      
+      <!-- Bottom Bar -->
+      <rect x="0" y="390" width="800" height="60" fill="rgba(255, 255, 255, 0.2)"/>
+      <text x="400" y="428" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#FFFFFF" text-anchor="middle">${this.escapeXml(ctaText)}</text>
+    </svg>`;
+
+    return { type: "svg", content: svg };
   }
 
   /**
@@ -12,6 +330,14 @@ class ThumbnailService {
    * @returns {Promise<Buffer|null>}
    */
   async generateReportThumbnail(formTitle) {
+    if (!formTitle || typeof formTitle !== "string") {
+      formTitle = String(formTitle || "Event Evaluation Report");
+    }
+
+    if (!createCanvas) {
+      return this.generateReportThumbnailSVG(formTitle);
+    }
+
     try {
       const canvas = createCanvas(this.width, this.height);
       const ctx = canvas.getContext("2d");
@@ -133,10 +459,10 @@ class ThumbnailService {
       return canvas.toBuffer("image/png");
     } catch (error) {
       console.error(
-        `❌ Error generating report thumbnail for "${formTitle}":`,
+        `❌ Canvas error generating report thumbnail for "${formTitle}", falling back to SVG:`,
         error.message
       );
-      return null;
+      return this.generateReportThumbnailSVG(formTitle);
     }
   }
 
@@ -146,6 +472,10 @@ class ThumbnailService {
    * @returns {Promise<Buffer|null>}
    */
   async generateAnalyticsThumbnail(analyticsData = {}) {
+    if (!createCanvas) {
+      return this.generateAnalyticsThumbnailSVG(analyticsData);
+    }
+
     try {
       const canvas = createCanvas(this.width, this.height);
       const ctx = canvas.getContext("2d");
@@ -398,10 +728,10 @@ class ThumbnailService {
       return canvas.toBuffer("image/png");
     } catch (error) {
       console.error(
-        `❌ Error generating analytics thumbnail:`,
+        `❌ Canvas error generating analytics thumbnail, falling back to SVG:`,
         error.message
       );
-      return null;
+      return this.generateAnalyticsThumbnailSVG(analyticsData);
     }
   }
 
@@ -412,6 +742,10 @@ class ThumbnailService {
    * @returns {Promise<Buffer|null>}
    */
   async generateCertificateThumbnail(userName, certificateType = "participation") {
+    if (!createCanvas) {
+      return this.generateCertificateThumbnailSVG(userName, certificateType);
+    }
+
     try {
       const canvas = createCanvas(this.width, this.height);
       const ctx = canvas.getContext("2d");
@@ -495,10 +829,10 @@ class ThumbnailService {
       return canvas.toBuffer("image/png");
     } catch (error) {
       console.error(
-        `❌ Error generating certificate thumbnail for "${userName}":`,
+        `❌ Canvas error generating certificate thumbnail for "${userName}", falling back to SVG:`,
         error.message
       );
-      return null;
+      return this.generateCertificateThumbnailSVG(userName, certificateType);
     }
   }
 
@@ -509,6 +843,10 @@ class ThumbnailService {
    * @returns {Promise<Buffer|null>}
    */
   async generateMisThumbnail(type, data = {}) {
+    if (!createCanvas) {
+      return this.generateMisThumbnailSVG(type, data);
+    }
+
     try {
       const canvas = createCanvas(this.width, this.height);
       const ctx = canvas.getContext("2d");
@@ -578,10 +916,10 @@ class ThumbnailService {
       return canvas.toBuffer("image/png");
     } catch (error) {
       console.error(
-        `❌ Error generating MIS thumbnail "${type}":`,
+        `❌ Canvas error generating MIS thumbnail "${type}", falling back to SVG:`,
         error.message
       );
-      return null;
+      return this.generateMisThumbnailSVG(type, data);
     }
   }
 
