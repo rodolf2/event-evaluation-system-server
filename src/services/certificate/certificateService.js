@@ -268,24 +268,29 @@ class CertificateService {
       formCustomizations?.customSubtitle || "OF PARTICIPATION";
     const primaryColor = formCustomizations?.primaryColor || "#0f3b66";
 
+    // Title: fontSize 36 → line height ~44px. Start at y=120.
     doc.font("Helvetica-Bold").fontSize(36).fillColor(primaryColor);
     doc.text(customTitle, 0, 120, { align: "center", width: pageWidth });
+
+    // Subtitle: give 50px gap from title start (120+50=170) to avoid overlap
     doc.font("Helvetica").fontSize(18).fillColor(primaryColor);
-    doc.text(customSubtitle, 0, 160, {
+    doc.text(customSubtitle, 0, 175, {
       align: "center",
       width: pageWidth,
       characterSpacing: 1.2,
     });
 
+    // "Presented to" line: give subtitle 28px gap (175+28=203 → use 215)
     doc.font("Helvetica").fontSize(15).fillColor("#374151");
-    doc.text("This certificate is proudly presented to", 0, 220, {
+    doc.text("This certificate is proudly presented to", 0, 218, {
       align: "center",
       width: pageWidth,
     });
 
+    // Name: 15px font line height ~18px + gap → use 255
     const nameText = (userName || "Participant Name").toUpperCase();
     doc.font("Helvetica-Bold").fontSize(34).fillColor("#c89d28");
-    const nameY = 270;
+    const nameY = 250;
     doc.text(nameText, 0, nameY, { align: "center", width: pageWidth });
 
     const nameWidth = doc.widthOfString(nameText);
@@ -365,9 +370,11 @@ class CertificateService {
       .stroke();
     doc.restore();
 
-    // Signature spacing - more elegant layout
-    const signatureSpacing = 28;
-    const titleSpacing = 18;
+    // Signature name is fontSize 16 → line height ~19px.
+    // Give enough spacing: name at +5, title at +28 (19px name + 9px gap).
+    // For names that may wrap (e.g. "Luckie Kristine Villanueva"), increase spacing.
+    const signatureNameSpacing = 5;   // Y offset for name below the line
+    const signatureTitleSpacing = 30; // Y offset for title below the line (name ~19px + 11px gap)
 
     // Left signature - use custom names if provided
     const signature1Name =
@@ -376,16 +383,17 @@ class CertificateService {
       formCustomizations?.signature1Title || "Chancellor / Administrator";
 
     doc.save();
-    doc.font("Helvetica-Bold").fontSize(16).fillColor(primaryColor);
-    doc.text(signature1Name, leftX, signatureY + 5, {
+    doc.font("Helvetica-Bold").fontSize(14).fillColor(primaryColor);
+    doc.text(signature1Name, leftX, signatureY + signatureNameSpacing, {
       width: colWidth,
       align: "center",
+      lineGap: 0,
     });
     doc.restore();
 
     doc.save();
     doc.font("Helvetica").fontSize(11).fillColor("#6b7280");
-    doc.text(signature1Title, leftX, signatureY + signatureSpacing, {
+    doc.text(signature1Title, leftX, signatureY + signatureTitleSpacing, {
       width: colWidth,
       align: "center",
     });
@@ -398,16 +406,17 @@ class CertificateService {
       formCustomizations?.signature2Title || "PSAS Department Head";
 
     doc.save();
-    doc.font("Helvetica-Bold").fontSize(16).fillColor(primaryColor);
-    doc.text(signature2Name, rightX, signatureY + 5, {
+    doc.font("Helvetica-Bold").fontSize(14).fillColor(primaryColor);
+    doc.text(signature2Name, rightX, signatureY + signatureNameSpacing, {
       width: colWidth,
       align: "center",
+      lineGap: 0,
     });
     doc.restore();
 
     doc.save();
     doc.font("Helvetica").fontSize(11).fillColor("#6b7280");
-    doc.text(signature2Title, rightX, signatureY + signatureSpacing, {
+    doc.text(signature2Title, rightX, signatureY + signatureTitleSpacing, {
       width: colWidth,
       align: "center",
     });
